@@ -40,7 +40,7 @@ try:                            # per i loghi: ridimensiona e legge i jpg
 except ImportError:             # senza, si va di PhotoImage: solo png
     HA_PIL = False
 
-VERSIONE = "2.2"
+VERSIONE = "2.3"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"        # dove stanno le release, per l'avviso di aggiornamento
@@ -2046,6 +2046,9 @@ class TV(object):
         self.et_titolo.pack(side="left", fill="y")
         self.et_ora = tk.Label(self.riga_stato, text="", bg=STATO, fg="#ffffff")
         self.et_ora.pack(side="left", fill="y")
+        # il formato del file (mp3, mkv...), del colore del canale
+        self.et_formato = tk.Label(self.riga_stato, text="", bg=STATO, fg=TESTO)
+        self.et_formato.pack(side="left", fill="y")
         # il pallino rosso che pulsa mentre si registra, poi REC e il tempo
         self.et_recdot = tk.Label(self.riga_stato, bg=STATO, bd=0)
         self.et_recdot.pack(side="left", fill="y", padx=(10, 0))
@@ -2156,6 +2159,8 @@ class TV(object):
             # default al posto di quello di Tk, e da li' in poi il primo
             # errore X innocuo (BadWindow) chiude tutta l'app
             force_window="yes",
+            # la copertina dentro agli mp3 (python-mpv la spegne di suo)
+            audio_display="embedded-first",
             volume_max=150,                 # per il boost
             screenshot_directory=os.path.join(CASA, "Pictures", "xvb"),
             screenshot_template="xvb-%tY-%tm-%td_%tH-%tM-%tS",
@@ -2579,6 +2584,8 @@ class TV(object):
         self.file_in_onda = f
         self.nome = self.nome_in_onda = nome or os.path.splitext(os.path.basename(f))[0]
         self.ide_in_onda = None
+        est = os.path.splitext(f)[1][1:].lower()
+        self.et_formato.config(text=("  -  " + est) if est else "")
         self.varianti, self.quale = [], -1
         self.da_riallineare = False
         self.attesa_da = time.time()
@@ -3018,6 +3025,7 @@ class TV(object):
             self.ferma_registrazione()          # cambio canale: si chiude il file
         if self.file_in_onda:
             self.file_in_onda = None
+        self.et_formato.config(text="")
         self.nome_in_onda, self.ide_in_onda = nome, ide
         self.attesa_da = time.time()
         self.colora_stato(self.colore_canale(nome, url))    # come il pallino
@@ -3839,6 +3847,7 @@ class TV(object):
         self.linea.itemconfig(self.pieno_linea, fill=colore)
         self.et_titolo.config(fg=colore)
         self.et_orologio.config(fg=colore)
+        self.et_formato.config(fg=colore)
         self.colore_barra = colore
         self.disegna_fondo_barra()
 
@@ -3989,6 +3998,22 @@ class TV(object):
             pass
         if "error" in motivo.lower():
             self.root.after(0, self.canale_morto)
+        elif "eof" in motivo.lower() and self.file_in_onda:
+            self.root.after(0, self.prossimo_file)
+
+    def prossimo_file(self):
+        """Un file e' finito da solo: si passa al prossimo dell'elenco a
+        sinistra (cartella, importati, registrazioni), come una playlist.
+        All'ultimo ci si ferma."""
+        f = self.file_in_onda
+        i = next((k for k, c in enumerate(self.visti) if c[1] == f), -1)
+        if i < 0 or i + 1 >= len(self.visti):
+            return
+        if self.elenco.exists(str(i + 1)):
+            self.elenco.selection_set(str(i + 1))
+            self.elenco.see(str(i + 1))
+        nome, url, ide = self.visti[i + 1]
+        self.apri(nome, url, ide)
 
     def canale_morto(self):
         """Il canale non va: avanti col prossimo, ma non all'infinito. Se
