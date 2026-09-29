@@ -18,9 +18,12 @@ cp xvb.py "$D/usr/lib/xvb/"
 cp -r icone "$D/usr/lib/xvb/"
 cp icon.png "$D/usr/share/icons/hicolor/512x512/apps/xvb.png"
 
+# l'interprete passa da un link chiamato xvb: cosi' il processo si chiama
+# xvb (non python3) e il monitor di sistema gli da' l'icona giusta
+ln -s /usr/bin/python3 "$D/usr/lib/xvb/xvb"
 cat > "$D/usr/bin/xvb" <<'FINE'
 #!/bin/sh
-exec python3 /usr/lib/xvb/xvb.py "$@"
+exec /usr/lib/xvb/xvb /usr/lib/xvb/xvb.py "$@"
 FINE
 chmod 755 "$D/usr/bin/xvb"
 

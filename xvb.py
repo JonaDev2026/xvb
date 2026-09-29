@@ -39,7 +39,7 @@ try:                            # per i loghi: ridimensiona e legge i jpg
 except ImportError:             # senza, si va di PhotoImage: solo png
     HA_PIL = False
 
-VERSIONE = "1.2"
+VERSIONE = "1.3"
 REPO = "JonaDev2026/xvb"        # dove stanno le release, per l'avviso di aggiornamento
 UA = "Mozilla/5.0 (X11; Linux x86_64)"
 IN_AFFANNO = 3.0            # secondi di buffer sotto i quali si scende
