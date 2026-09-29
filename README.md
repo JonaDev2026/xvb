@@ -32,7 +32,7 @@ interface, drawn entirely by the app, with no GUI dependency beyond Tk.
 Download `xvb_<version>_all.deb` from the latest [release](../../releases/latest) and:
 
 ```
-sudo apt install ./xvb_1.7_all.deb
+sudo apt install ./xvb_*_all.deb
 ```
 
 apt pulls in the dependencies by itself (`python3-tk`, `python3-pil`,
@@ -385,7 +385,7 @@ disegnata dall'app, senza dipendenze grafiche oltre a Tk.
 Scarica `xvb_<versione>_all.deb` dall'ultima [release](../../releases/latest) e:
 
 ```
-sudo apt install ./xvb_1.7_all.deb
+sudo apt install ./xvb_*_all.deb
 ```
 
 apt tira dentro da solo le dipendenze (`python3-tk`, `python3-pil`,
