@@ -40,10 +40,11 @@ try:                            # per i loghi: ridimensiona e legge i jpg
 except ImportError:             # senza, si va di PhotoImage: solo png
     HA_PIL = False
 
-VERSIONE = "1.7"
+VERSIONE = "1.8"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"        # dove stanno le release, per l'avviso di aggiornamento
+DONA = "https://www.paypal.com/paypalme/Jonathanuk"
 UA = "Mozilla/5.0 (X11; Linux x86_64)"
 IN_AFFANNO = 3.0            # secondi di buffer sotto i quali si scende
 TRANQUILLO = 15.0           # buffer pieno: si puo' risalire
@@ -123,6 +124,7 @@ TESTI = {
         "new version %s available": "nuova versione %s disponibile",
         "new version %s available: About > Download": "nuova versione %s disponibile: Info > Scarica",
         "Check for updates": "Cerca aggiornamenti",
+        "Donate": "Dona",
         "Download %s": "Scarica la %s",
         "Up to date": "Aggiornata",
         "cannot check for updates: %s": "non riesco a controllare gli aggiornamenti: %s",
@@ -237,6 +239,7 @@ TESTI = {
         "new version %s available": "nueva versión %s disponible",
         "new version %s available: About > Download": "nueva versión %s disponible: Acerca de > Descargar",
         "Check for updates": "Buscar actualizaciones",
+        "Donate": "Donar",
         "Download %s": "Descargar la %s",
         "Up to date": "Actualizada",
         "cannot check for updates: %s": "no puedo comprobar actualizaciones: %s",
@@ -351,6 +354,7 @@ TESTI = {
         "new version %s available": "nouvelle version %s disponible",
         "new version %s available: About > Download": "nouvelle version %s disponible : À propos > Télécharger",
         "Check for updates": "Rechercher des mises à jour",
+        "Donate": "Faire un don",
         "Download %s": "Télécharger la %s",
         "Up to date": "À jour",
         "cannot check for updates: %s": "impossible de vérifier les mises à jour : %s",
@@ -1740,7 +1744,9 @@ class TV(object):
             None,
             (_("Check for updates"), self.controlla_versione),
             (_("Download %s") % self.nuova if self.nuova else _("Up to date"),
-             self.apri_release if self.nuova else None)])
+             self.apri_release if self.nuova else None),
+            None,
+            (_("Donate"), self.dona)])
         self.menu("Language", lambda: [
             (("*  " if codice == LINGUA else "   ") + nome,
              lambda c=codice: self.cambia_lingua(c)) for codice, nome in LINGUE])
@@ -3344,7 +3350,17 @@ class TV(object):
                             anchor="w", cursor="hand2")
             link.pack(fill="x", pady=(10, 0))
             link.bind("<Button-1>", lambda e: subprocess.Popen(["xdg-open", "https://github.com/" + REPO]))
+            dona = tk.Label(dentro, text="\u2665 " + _("Donate"), bg=PANNELLO, fg=ACCENTO,
+                            anchor="w", cursor="hand2")
+            dona.pack(fill="x")
+            dona.bind("<Button-1>", lambda e: self.dona())
         Finestrella(self.root, _("About XVB..."), corpo)
+
+    def dona(self):
+        try:
+            subprocess.Popen(["xdg-open", DONA])
+        except Exception as e:
+            self.scrivi(_("cannot open %s: %s") % (DONA, e))
 
     def apri_release(self):
         if self.pagina_nuova:

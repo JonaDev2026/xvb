@@ -24,6 +24,8 @@ interface, drawn entirely by the app, with no GUI dependency beyond Tk.
 - [Where things go](#where-things-go)
 - [Updates and versions](#updates-and-versions)
 - [Troubleshooting](#troubleshooting)
+- [Donate](#donate)
+- [Legal & responsible use](#legal--responsible-use)
 
 ## Install
 
@@ -346,6 +348,18 @@ by hand in the list's `#EXTINF` line.
 gave a black screen on some streams). On a normal PC a 1080p stream
 stays under 10%.
 
+## Donate
+
+XVB is free and will stay free. If it's useful to you, a coffee helps:
+[paypal.me/Jonathanuk](https://www.paypal.com/paypalme/Jonathanuk). There's
+also a Donate entry in the About menu.
+
+## Legal & responsible use
+
+XVB is a neutral playback tool: it does not provide channels, credentials,
+or content. Use XVB only with streams you are authorized to access. Avoid
+piracy or any method to bypass copyright protections.
+
 ## Licence
 
 MIT. © 2026 Jonathan Sanfilippo.
@@ -377,6 +391,8 @@ disegnata dall'app, senza dipendenze grafiche oltre a Tk.
 - [Dove finiscono le cose](#dove-finiscono-le-cose)
 - [Aggiornamenti e versioni](#aggiornamenti-e-versioni)
 - [Se qualcosa non va](#se-qualcosa-non-va)
+- [Donazioni](#donazioni)
+- [Uso legale e responsabile](#uso-legale-e-responsabile)
 
 ## Installazione
 
@@ -694,6 +710,18 @@ dice quali.
 **Alta CPU** – la decodifica è software (`hwdec=no`, l'accelerazione dava
 schermo nero su alcuni flussi). Su un PC normale un 1080p sta sotto il
 10%.
+
+## Donazioni
+
+XVB è gratis e resta gratis. Se ti torna utile, un caffè aiuta:
+[paypal.me/Jonathanuk](https://www.paypal.com/paypalme/Jonathanuk). C'è
+anche la voce Donate nel menu Info.
+
+## Uso legale e responsabile
+
+XVB è uno strumento di riproduzione neutro: non fornisce canali, credenziali
+o contenuti. Usa XVB solo con flussi a cui sei autorizzato ad accedere.
+Niente pirateria né metodi per aggirare le protezioni del copyright.
 
 ## Licenza
 
