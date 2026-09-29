@@ -40,7 +40,7 @@ try:                            # per i loghi: ridimensiona e legge i jpg
 except ImportError:             # senza, si va di PhotoImage: solo png
     HA_PIL = False
 
-VERSIONE = "2.0"
+VERSIONE = "2.1"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"        # dove stanno le release, per l'avviso di aggiornamento
@@ -2140,6 +2140,11 @@ class TV(object):
             network_timeout=30,
             ytdl=False,
             hwdec="no",
+            # la finestra video resta viva anche a lettore fermo: quando
+            # mpv la smonta (a fine file) rimette il gestore errori X di
+            # default al posto di quello di Tk, e da li' in poi il primo
+            # errore X innocuo (BadWindow) chiude tutta l'app
+            force_window="yes",
             volume_max=150,                 # per il boost
             screenshot_directory=os.path.join(CASA, "Pictures", "xvb"),
             screenshot_template="xvb-%tY-%tm-%td_%tH-%tM-%tS",
@@ -2192,6 +2197,11 @@ class TV(object):
         self.et_carico.pack(side="left", padx=(10, 0), before=self.stato)
         # icone/screen.png sopra al video quando non c'e' niente che va
         self.sfondo = tk.Label(self.video, bg="black", bd=0)
+        # un fratello di un pixel: serve solo per poter rialzare lo sfondo
+        # sopra la finestra di mpv (Tk non manda l'ordine a X se crede di
+        # essere gia' in cima)
+        self.sotto = tk.Frame(self.video, bg="black", width=1, height=1)
+        self.sotto.place(x=0, y=0)
         self.sfondo_file = os.path.join(QUI, "icone", "screen.png")
         self.sfondo_misura, self.sfondo_img, self.sfondo_su = None, None, False
         self.video.bind("<Configure>", lambda e: self.rifai_sfondo())
@@ -3865,9 +3875,23 @@ class TV(object):
         if si:
             self.rifai_sfondo()
             self.sfondo.place(x=0, y=0, relwidth=1, relheight=1)
-            tk.Misc.tkraise(self.sfondo)
+            self.rialza_sfondo()
+            # la finestra di mpv (force-window) nasce per conto suo, anche
+            # dopo: si torna sopra un paio di volte per non finirci sotto
+            for t in (300, 1500, 4000):
+                self.root.after(t, lambda: self.sfondo_su and self.rialza_sfondo())
         else:
             self.sfondo.place_forget()
+
+    def rialza_sfondo(self):
+        """Lo sfondo sopra a tutto nel riquadro del video, finestra di mpv
+        compresa: prima sotto al fratello e poi in cima, cosi' Tk manda
+        davvero l'ordine a X."""
+        try:
+            self.sfondo.lower(self.sotto)
+            self.sfondo.lift()
+        except tk.TclError:
+            pass
 
     def rifai_sfondo(self):
         """L'immagine adattata al riquadro del video, proporzioni tenute."""
