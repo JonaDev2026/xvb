@@ -49,15 +49,29 @@ so the system monitor shows its own name and icon.
 
 ### Without the package
 
+Any distribution. It needs libmpv, Python 3 with tkinter, Pillow with
+its Tk module, and python-mpv:
+
 ```
+# Debian, Ubuntu, Linux Mint
 sudo apt install -y libmpv2 python3-tk python3-pil python3-pil.imagetk python3-mpv
+# Fedora
+sudo dnf install -y mpv-libs python3-tkinter python3-pillow python3-pillow-tk python3-pip && pip install --user python-mpv
+# Arch, Manjaro
+sudo pacman -S --needed mpv tk python-pillow python-mpv
+# openSUSE
+sudo zypper install -y libmpv2 python3-tk python3-Pillow python3-Pillow-tk python3-pip && pip install --user python-mpv
+```
+
+then:
+
+```
 git clone https://github.com/JonaDev2026/xvb.git ~/xvb
 python3 ~/xvb/xvb.py
 ```
 
 Playlists then live in `~/xvb/playlists/`. If `libmpv2` doesn't exist on
-your release use `libmpv1`; if `python3-mpv` is missing, `pip install
-python-mpv --break-system-packages`. A playlist can be passed at
+your release use `libmpv1`; if pip refuses, add `--break-system-packages`. A playlist can be passed at
 start-up: `python3 xvb.py ~/list.m3u`.
 
 ### Building the package
@@ -415,15 +429,29 @@ monitor di sistema ha nome e icona suoi.
 
 ### Senza pacchetto
 
+Qualsiasi distribuzione. Servono libmpv, Python 3 con tkinter, Pillow col
+suo modulo Tk, e python-mpv:
+
 ```
+# Debian, Ubuntu, Linux Mint
 sudo apt install -y libmpv2 python3-tk python3-pil python3-pil.imagetk python3-mpv
+# Fedora
+sudo dnf install -y mpv-libs python3-tkinter python3-pillow python3-pillow-tk python3-pip && pip install --user python-mpv
+# Arch, Manjaro
+sudo pacman -S --needed mpv tk python-pillow python-mpv
+# openSUSE
+sudo zypper install -y libmpv2 python3-tk python3-Pillow python3-Pillow-tk python3-pip && pip install --user python-mpv
+```
+
+poi:
+
+```
 git clone https://github.com/JonaDev2026/xvb.git ~/xvb
 python3 ~/xvb/xvb.py
 ```
 
 Così le playlist vanno in `~/xvb/playlists/`. Se `libmpv2` non c'è sulla
-tua versione usa `libmpv1`; se manca `python3-mpv`, `pip install
-python-mpv --break-system-packages`. Si può passare una lista all'avvio:
+tua versione usa `libmpv1`; se pip si rifiuta, aggiungi `--break-system-packages`. Si può passare una lista all'avvio:
 `python3 xvb.py ~/lista.m3u`.
 
 ### Fare il pacchetto
