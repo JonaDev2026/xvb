@@ -61,8 +61,10 @@ playlists/
 Una lista da internet si aggiunge con Playlists → Add URL, col nome che
 scegli: resta un url, la copia sta in `~/.cache/xvb/liste/` e si
 riscarica quando la apri se ha più di sei ore (Playlists → Reload la
-riscarica subito); si toglie con Playlists → Remove <nome>. Una lista
-su disco si toglie spostando o cancellando il file. Accanto a ogni lista c'è `icone/default.png`; i canali hanno
+riscarica subito); si toglie con Playlists → Remove <nome> o con la ✕ sulla sua riga. La ✕
+c'è su ogni riga della barra a destra (liste, guide, registrazioni):
+chiede conferma, e per le liste su disco e le registrazioni cancella
+davvero i file. Accanto a ogni lista c'è `icone/default.png`; i canali hanno
 ognuno un pallino colorato stile etichette del Mac, sempre lo stesso per
 lo stesso nome.
 
@@ -79,10 +81,10 @@ lo stesso nome.
 | Audio | menu Audio: traccia audio e sottotitoli del flusso (quando ne ha più d'una), volume extra +50%, normalizzazione del volume, ritardo audio |
 | Ritardo audio | `+` ritarda l'audio di 100 ms (audio in anticipo sul video), `-` lo anticipa; anche dal menu Audio. Resta salvato per quel canale |
 | Preferiti | il cuore mette o toglie il canale in onda dai preferiti |
-| Registrare | il bottone rec registra il canale in onda in `~/Videos/xvb/` così com'è, senza ricodificare; ripremi per fermare, cambiando canale si ferma. Record → Schedule... imposta inizio e fine: all'ora giusta l'app apre il canale e registra (deve restare aperta) |
+| Registrare | il bottone rec registra il canale in onda in `~/Videos/xvb/` così com'è, senza ricodificare, col nome del programma (dalla guida) e data; ripremi per fermare, cambiando canale si ferma. Ogni canale ha la sua sottocartella (`~/Videos/xvb/Rai 1/...`). A destra, sotto "Recordings", una voce per canale e giorno ("Rai 1 · 29/09/2026"): cliccandola, a sinistra compaiono i programmi registrati quel giorno con l'ora, doppio clic e parte nel lettore; per tornare ai canali scegli una playlist. Record → Schedule... imposta inizio e fine: all'ora giusta l'app apre il canale e registra (deve restare aperta) |
 | Guida TV | TV guide → Add URL: l'url o il file di una guida XMLTV, anche `.gz`; se ne possono aggiungere più d'una (una per paese) e si uniscono; ognuna ha la sua voce "Remove …" e la sua riga sotto EPG. Sotto il video compaiono il programma in onda e l'orario, la riga sopra i comandi è il tempo che manca alla fine. I canali si trovano col `tvg-id` della lista, o per nome |
 | Schermo intero | il bottone, F11 o View → Fullscreen; Esc per uscire |
-| Barre laterali | il primo bottone a sinistra le toglie e le rimette, in finestra e a schermo intero; con le barre chiuse comandi e mouse spariscono da soli dopo tre secondi |
+| Barre laterali | il primo bottone a sinistra le toglie e le rimette, in finestra e a schermo intero; con le barre chiuse comandi e mouse spariscono da soli dopo tre secondi. Si allargano trascinando la striscia fra la barra e il video; la larghezza resta salvata |
 | Lingua | menu Language: English, Italiano, Español, Français |
 | Aggiornamenti | all'avvio controlla su GitHub se c'è una release nuova e lo scrive nella riga di stato; About → Download apre la pagina, About → About XVB… mostra la versione |
 

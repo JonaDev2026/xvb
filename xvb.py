@@ -19,6 +19,7 @@ Uso:  python3 xvb.py [lista.m3u]
 import gzip
 import hashlib
 import json
+import math
 import os
 import re
 import subprocess
@@ -39,7 +40,7 @@ try:                            # per i loghi: ridimensiona e legge i jpg
 except ImportError:             # senza, si va di PhotoImage: solo png
     HA_PIL = False
 
-VERSIONE = "1.6"
+VERSIONE = "1.7"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"        # dove stanno le release, per l'avviso di aggiornamento
@@ -74,6 +75,16 @@ LINGUE = (("en", "English"), ("it", "Italiano"), ("es", "Español"), ("fr", "Fra
 LINGUA = "en"
 TESTI = {
     "it": {
+        "until %s": "fino alle %s",
+        "Delete": "Elimina",
+        "Delete %s": "Elimina %s",
+        "The guide will be removed from the list.": "La guida verrà tolta dall'elenco.",
+        "%d recording(s) will be deleted from disk. This cannot be undone.": "%d registrazione/i verranno cancellate dal disco. Non si può annullare.",
+        "The playlist will be removed from the list.": "La playlist verrà tolta dall'elenco.",
+        "The file %s will be deleted from disk. This cannot be undone.": "Il file %s verrà cancellato dal disco. Non si può annullare.",
+        "cannot delete %s: %s": "non riesco a cancellare %s: %s",
+        "%s - %d recordings": "%s - %d registrazioni",
+        "Recordings": "Registrazioni",
         "Video": "Video",
         "Speed x%g": "Velocità x%g",
         "Aspect %s": "Proporzioni %s",
@@ -178,6 +189,16 @@ TESTI = {
         "Show playlists": "Mostra playlist", "Language": "Lingua",
     },
     "es": {
+        "until %s": "hasta las %s",
+        "Delete": "Eliminar",
+        "Delete %s": "Eliminar %s",
+        "The guide will be removed from the list.": "La guía se quitará de la lista.",
+        "%d recording(s) will be deleted from disk. This cannot be undone.": "%d grabación/es se borrarán del disco. No se puede deshacer.",
+        "The playlist will be removed from the list.": "La lista se quitará del elenco.",
+        "The file %s will be deleted from disk. This cannot be undone.": "El archivo %s se borrará del disco. No se puede deshacer.",
+        "cannot delete %s: %s": "no puedo borrar %s: %s",
+        "%s - %d recordings": "%s - %d grabaciones",
+        "Recordings": "Grabaciones",
         "Video": "Vídeo",
         "Speed x%g": "Velocidad x%g",
         "Aspect %s": "Proporción %s",
@@ -282,6 +303,16 @@ TESTI = {
         "Show playlists": "Mostrar listas", "Language": "Idioma",
     },
     "fr": {
+        "until %s": "jusqu'à %s",
+        "Delete": "Supprimer",
+        "Delete %s": "Supprimer %s",
+        "The guide will be removed from the list.": "Le guide sera retiré de la liste.",
+        "%d recording(s) will be deleted from disk. This cannot be undone.": "%d enregistrement(s) seront supprimés du disque. Irréversible.",
+        "The playlist will be removed from the list.": "La liste sera retirée.",
+        "The file %s will be deleted from disk. This cannot be undone.": "Le fichier %s sera supprimé du disque. Irréversible.",
+        "cannot delete %s: %s": "impossible de supprimer %s : %s",
+        "%s - %d recordings": "%s - %d enregistrements",
+        "Recordings": "Enregistrements",
         "Video": "Vidéo",
         "Speed x%g": "Vitesse x%g",
         "Aspect %s": "Format %s",
@@ -871,6 +902,40 @@ def piu_nuova(a, b):
     return pezzi(a) > pezzi(b)
 
 
+def registrazioni():
+    """Le registrazioni su disco, raggruppate per canale e giorno:
+    [((canale, giorno), [(ora, titolo, percorso), ...])], dal giorno piu'
+    recente. Il canale e' la sottocartella (i file sciolti vanno sotto
+    'xvb'), giorno e ora si leggono dal nome del file, se no dalla data
+    del file."""
+    gruppi = {}
+    try:
+        voci = os.listdir(REGISTRAZIONI)
+    except Exception:
+        return []
+    for n in voci:
+        p = os.path.join(REGISTRAZIONI, n)
+        if os.path.isdir(p):
+            canale, file_ = n, [os.path.join(p, f) for f in os.listdir(p)]
+        else:
+            canale, file_ = "xvb", [p]
+        for f in file_:
+            if not f.lower().endswith((".mkv", ".mp4", ".ts")):
+                continue
+            base = os.path.splitext(os.path.basename(f))[0]
+            m = re.search(r"(\d{4})-(\d{2})-(\d{2}) (\d{2})-(\d{2})$", base)
+            if m:
+                giorno = "%s-%s-%s" % m.group(1, 2, 3)
+                ora = "%s:%s" % m.group(4, 5)
+                titolo = base[:m.start()].rstrip(" -") or base
+            else:
+                t = time.localtime(os.path.getmtime(f))
+                giorno, ora, titolo = time.strftime("%Y-%m-%d", t), time.strftime("%H:%M", t), base
+            gruppi.setdefault((canale, giorno), []).append((ora, titolo, f))
+    fuori = sorted(gruppi.items(), key=lambda kv: (kv[0][1], kv[0][0]), reverse=True)
+    return [(k, sorted(v)) for k, v in fuori]
+
+
 def nome_dentro(f):
     """Il nome del file scritto dentro all'archivio gzip (chi comprime ce
     lo lascia: guida.xml.gz -> 'guida.xml'). None se non c'e' o non e' gz."""
@@ -1305,6 +1370,123 @@ class Guida(tk.Toplevel):
         self.destroy()
 
 
+class Tendina(object):
+    """Il menu a tendina disegnato noi, nello stile delle finestrelle:
+    scuro, bordo sottile, voci con aria, spunta lilla su quella attiva,
+    separatori fra i gruppi. Si chiude scegliendo, cliccando fuori o con
+    Esc. Una sola aperta alla volta."""
+
+    ALTA = 30                   # altezza di una voce
+
+    def __init__(self, root):
+        self.root, self.top, self.al_chiudere, self.chi = root, None, None, None
+        self.altrove = None
+
+    def aperta(self):
+        return self.top is not None
+
+    def apri(self, x, y, voci, sopra=False, destra=False, al_chiudere=None, chi=None,
+             altrove=None):
+        """voci: (testo, cosa) - cosa None = voce spenta; None = separatore.
+        Un testo che comincia con '*  ' e' spuntato, con '   ' no.
+        sopra: la tendina cresce verso l'alto da y; destra: il bordo
+        destro sta a x."""
+        self.chiudi()
+        self.al_chiudere, self.chi, self.altrove = al_chiudere, chi, altrove
+        top = tk.Toplevel(self.root, bg=SCELTO)
+        top.overrideredirect(True)
+        top.geometry("+-9000+-9000")        # nasce fuori dallo schermo, niente lampo
+        dentro = tk.Frame(top, bg=PANNELLO)
+        dentro.pack(padx=1, pady=1)
+        larga = max([len(v[0]) for v in voci if v] + [18]) * 8 + 60
+        for voce in voci:
+            if voce is None:
+                tk.Frame(dentro, bg=SCELTO, height=1).pack(fill="x", padx=10, pady=4)
+                continue
+            testo, cosa = voce
+            spunta = testo.startswith("*  ")
+            if testo[:3] in ("*  ", "   "):
+                testo = testo[3:]
+            riga = tk.Frame(dentro, bg=PANNELLO, height=self.ALTA, width=larga)
+            riga.pack(fill="x")
+            riga.pack_propagate(False)
+            colore = TESTO if cosa else GRIGIO
+            segno = tk.Label(riga, text="\u2713" if spunta else "", bg=PANNELLO,
+                             fg=ACCENTO, width=2, anchor="center")
+            segno.pack(side="left", padx=(8, 0))
+            et = tk.Label(riga, text=testo, bg=PANNELLO, fg=colore, anchor="w")
+            et.pack(side="left", fill="both", expand=True, padx=(4, 16))
+            if cosa:
+                for w in (riga, segno, et):
+                    w.bind("<Enter>", lambda e, r=riga, a=segno, b=et: self.accendi(r, a, b, True))
+                    w.bind("<Leave>", lambda e, r=riga, a=segno, b=et: self.accendi(r, a, b, False))
+                    w.bind("<Button-1>", lambda e, c=cosa: self.scegli(c))
+        top.update_idletasks()
+        w, h = top.winfo_reqwidth(), top.winfo_reqheight()
+        if sopra:
+            y -= h
+        if destra:
+            x -= w
+        # dentro allo schermo
+        x = max(0, min(x, top.winfo_screenwidth() - w))
+        y = max(0, min(y, top.winfo_screenheight() - h))
+        top.geometry("+%d+%d" % (x, y))
+        top.bind("<Button-1>", self.fuori)
+        top.bind("<Escape>", lambda e: self.chiudi())
+        self.top = top
+        # il grab solo quando la finestra e' davvero a video, se no Tk
+        # si arrabbia (e X anche); e mai su una finestra gia' chiusa
+        top.after(30, lambda: self.prendi(top))
+
+    def prendi(self, top):
+        if self.top is not top or not top.winfo_exists():
+            return
+        try:
+            top.focus_set()
+            top.grab_set()
+        except tk.TclError:
+            pass
+
+    def accendi(self, riga, a, b, si):
+        c = SCELTO if si else PANNELLO
+        for w in (riga, a, b):
+            w.config(bg=c)
+        b.config(fg="#ffffff" if si else TESTO)
+
+    def scegli(self, cosa):
+        self.chiudi()
+        self.root.after(40, cosa)           # la voce parte a tendina gia' chiusa
+
+    def fuori(self, ev):
+        """Un clic fuori dalla tendina la chiude (col grab arriva a lei)."""
+        t = self.top
+        if t is None:
+            return
+        if not (0 <= ev.x < t.winfo_width() and 0 <= ev.y < t.winfo_height()):
+            altrove = self.altrove
+            self.chiudi()
+            if altrove:
+                # col grab il clic e' arrivato a noi: se era su un'altra
+                # voce della barra in alto, si apre quella
+                self.root.after(60, lambda: altrove(ev.x_root, ev.y_root))
+
+    def chiudi(self):
+        if self.top is None:
+            return
+        top, self.top = self.top, None
+        try:
+            top.grab_release()
+        except tk.TclError:
+            pass
+        # si distrugge dopo che l'evento in corso e' finito: distruggerla
+        # dentro al suo stesso clic e' quello che faceva saltare X
+        self.root.after_idle(lambda: top.winfo_exists() and top.destroy())
+        f, self.al_chiudere = self.al_chiudere, None
+        self.chi = None
+        if f:
+            f()
+
+
 class Finestrella(tk.Toplevel):
     """Una finestrella nostra, scura come i pannelli, centrata sulla
     finestra dell'app, al posto di quelle grigie di Tk. Invio = OK,
@@ -1312,8 +1494,9 @@ class Finestrella(tk.Toplevel):
     che si e' scritto (None se si annulla); senza, e' solo da leggere."""
 
     def __init__(self, root, titolo, corpo, chiedi=None, valore="",
-                 ok=None, annulla=None, larga=420):
+                 ok=None, annulla=None, larga=420, domanda=False):
         tk.Toplevel.__init__(self, root, bg=PANNELLO)
+        self.withdraw()                     # si fa vedere solo quando e' al centro
         self.title(titolo)
         self.transient(root)
         self.resizable(False, False)
@@ -1343,7 +1526,7 @@ class Finestrella(tk.Toplevel):
             b.pack(side="right", padx=(8, 0))
             return b
         bottone(ok or _("OK"), self.va_bene, primario=True)
-        if chiedi is not None:
+        if chiedi is not None or domanda:
             bottone(annulla or _("Cancel"), self.lascia)
         self.bind("<Return>", lambda e: self.va_bene())
         self.bind("<Escape>", lambda e: self.lascia())
@@ -1353,6 +1536,7 @@ class Finestrella(tk.Toplevel):
         x = root.winfo_rootx() + (root.winfo_width() - self.winfo_reqwidth()) // 2
         y = root.winfo_rooty() + (root.winfo_height() - self.winfo_reqheight()) // 2
         self.geometry("+%d+%d" % (max(0, x), max(0, y)))
+        self.deiconify()
         if chiedi is not None:
             self.casella.focus_set()
         else:
@@ -1394,8 +1578,11 @@ class TV(object):
         self.riga_mostrata = ("", "", "")
         self.da_riallineare, self.suonato_da = False, 0.0
         self.registrando, self.fine_rec = "", 0.0    # file in corso, quando fermarsi
+        self.inizio_rec = 0.0
         self.nuova, self.pagina_nuova = "", ""      # versione nuova su GitHub, se c'e'
         self.velocita = 1
+        self.file_in_onda = None            # la registrazione in riproduzione
+        self.iid_reg, self.reg, self.reg_in_uso = {}, [], None
         self.icona_finestra, self.icona_file = None, ""
         self.piano = None                            # (nome, url, ide, inizio, fine)
         self.ultima_discesa = 0.0
@@ -1484,20 +1671,20 @@ class TV(object):
         self.cima.pack(side="top", fill="x")
         self.cima.pack_propagate(False)
         self.menu_cima = {}
-        self.menu_aperto = tk.Menu(self.root, tearoff=0, bg=TASTO, fg=TESTO,
-                                   activebackground=SCELTO,
-                                   activeforeground="#ffffff", bd=0,
-                                   relief="flat")
+        self.tendina = Tendina(self.root)
         self.menu("Playlists", lambda: [
             (_("Add URL"), self.chiedi_lista_url),
             (_("Open folder"), self.apri_cartella_liste),
-            (_("Reload"), self.ricarica_liste)] + [
+            (_("Reload"), self.ricarica_liste)] + (
+            [None] if self.cfg.get("liste_url") else []) + [
             (_("Remove %s") % n, lambda u=u: self.togli_lista_url(u))
             for u, n in self.cfg.get("liste_url", {}).items()])
         self.menu("TV guide", lambda: [
             (_("Programme guide"), self.apri_guida),
+            None,
             (_("Add URL"), self.chiedi_epg),
-            (_("Reload"), self.ricarica_epg if self.cfg.get("epg") else None)] + [
+            (_("Reload"), self.ricarica_epg if self.cfg.get("epg") else None)] + (
+            [None] if self.cfg.get("epg") else []) + [
             (_("Remove %s") % self.nome_guida(d), lambda d=d: self.togli_epg(d))
             for d in self.cfg.get("epg", [])])
         self.menu("View", lambda: [
@@ -1508,17 +1695,21 @@ class TV(object):
              lambda: self.nascondi(self.destra))])
         self.menu("Record", lambda: [
             (_("Stop recording") if self.registrando else _("Record now"), self.registra),
+            None,
             (_("Schedule..."), self.pianifica),
             (_("Cancel schedule"), self.annulla_piano if self.piano else None),
+            None,
             (_("Open recordings folder"), self.apri_registrazioni)])
         self.menu("Video", lambda: [
             (("*  " if v == self.velocita else "   ") + _("Speed x%g") % v,
-             lambda v=v: self.metti_velocita(v)) for v in sorted(VELOCITA)] + [
+             lambda v=v: self.metti_velocita(v)) for v in sorted(VELOCITA)] + [None] + [
             (("*  " if self.cfg.get("proporzioni", "-1") == val and not self.cfg.get("riempi")
               else "   ") + _("Aspect %s") % nome, lambda val=val: self.metti_proporzioni(val))
             for nome, val in PROPORZIONI] + [
             (("*  " if self.cfg.get("riempi") else "   ") + _("Fill screen (crop)"), self.riempi),
+            None,
             (("*  " if self.cfg.get("deinterlaccia") else "   ") + _("Deinterlace"), self.deinterlaccia),
+            None,
             (_("Brightness +"), lambda: self.regola("brightness", +10)),
             (_("Brightness -"), lambda: self.regola("brightness", -10)),
             (_("Contrast +"), lambda: self.regola("contrast", +10)),
@@ -1526,24 +1717,27 @@ class TV(object):
             (_("Saturation +"), lambda: self.regola("saturation", +10)),
             (_("Saturation -"), lambda: self.regola("saturation", -10)),
             (_("Reset picture"), self.azzera_immagine),
+            None,
             (_("Screenshot"), self.istantanea),
             (("*  " if self.cfg.get("in_cima") else "   ") + _("Always on top"), self.sempre_in_cima)])
         self.menu("Audio", lambda: [
             (("*  " if t["selected"] else "   ") + _("Track: %s") % self.nome_traccia(t),
              lambda i=t["id"]: self.metti_traccia("aid", i))
-            for t in self.tracce("audio")] + [
+            for t in self.tracce("audio")] + ([None] if self.tracce("audio") else []) + [
             (("*  " if not any(t["selected"] for t in self.tracce("sub")) else "   ") + _("Subtitles off"),
              lambda: self.metti_traccia("sid", "no"))] + [
             (("*  " if t["selected"] else "   ") + _("Subtitles: %s") % self.nome_traccia(t),
              lambda i=t["id"]: self.metti_traccia("sid", i))
-            for t in self.tracce("sub")] + [
+            for t in self.tracce("sub")] + [None] + [
             (("*  " if self.cfg.get("boost") else "   ") + _("Volume boost +50%"), self.boost),
             (("*  " if self.cfg.get("normalizza") else "   ") + _("Normalize loudness"), self.normalizza),
+            None,
             (_("Delay +100 ms"), lambda: self.ritardo_audio(+0.1)),
             (_("Delay -100 ms"), lambda: self.ritardo_audio(-0.1)),
             (_("Reset delay"), self.azzera_ritardo)])
         self.menu("About", lambda: [
             (_("About XVB..."), self.informazioni),
+            None,
             (_("Check for updates"), self.controlla_versione),
             (_("Download %s") % self.nuova if self.nuova else _("Up to date"),
              self.apri_release if self.nuova else None)])
@@ -1551,7 +1745,8 @@ class TV(object):
             (("*  " if codice == LINGUA else "   ") + nome,
              lambda c=codice: self.cambia_lingua(c)) for codice, nome in LINGUE])
 
-        self.sinistra = tk.Frame(self.root, bg=PANNELLO, width=220)
+        self.sinistra = tk.Frame(self.root, bg=PANNELLO,
+                                 width=int(self.cfg.get("larga_sx", 220)))
         self.sinistra.pack(side="left", fill="y")
         self.sinistra.pack_propagate(False)
         self.cerca = Ricerca(self.sinistra, self.filtra, vuota=_("Search channels"))
@@ -1585,9 +1780,15 @@ class TV(object):
         self.elenco.bind("<Return>", lambda e: self.parti())
 
         # --- a destra: le liste
-        self.destra = tk.Frame(self.root, bg=PANNELLO, width=220)
+        self.destra = tk.Frame(self.root, bg=PANNELLO,
+                               width=int(self.cfg.get("larga_dx", 220)))
+        # le maniglie fra le barre laterali e il video: si trascinano
+        self.maniglia_sx = self.maniglia(self.sinistra, "larga_sx", +1)
+        self.maniglia_dx = self.maniglia(self.destra, "larga_dx", -1)
+        self.maniglia_sx.pack(side="left", fill="y")
         self.destra.pack(side="right", fill="y")
         self.destra.pack_propagate(False)
+        self.maniglia_dx.pack(side="right", fill="y")   # dopo la barra: le sta a sinistra
         self.et_liste = tk.Label(self.destra, text=_("Playlists"), bg=PANNELLO,
                                  fg=GRIGIO, anchor="w")
         self.et_liste.pack(fill="x", padx=10, pady=(10, 4))
@@ -1632,9 +1833,12 @@ class TV(object):
                 pass
         self.el_liste = ttk.Treeview(self.destra, show="tree",
                                      style=stile_liste,
-                                     selectmode="browse")
-        self.el_liste.column("#0", width=200, stretch=True)
+                                     selectmode="browse", columns=("x",))
+        self.el_liste.column("#0", width=170, stretch=True)
+        # la x a destra di ogni riga: la toglie, chiedendo prima
+        self.el_liste.column("x", width=26, stretch=False, anchor="center")
         self.el_liste.pack(fill="both", expand=True, padx=8, pady=(0, 8))
+        self.el_liste.bind("<Button-1>", self.clic_liste)
         self.el_liste.bind("<<TreeviewSelect>>", lambda e: (
             self.scegli_lista(), self.non_sul_verde(self.el_liste, "usata")))
         self.el_liste.tag_configure("usata", background=IN_ONDA,
@@ -1660,8 +1864,20 @@ class TV(object):
         self.et_titolo.pack(side="left", fill="y")
         self.et_ora = tk.Label(self.riga_stato, text="", bg=STATO, fg="#ffffff")
         self.et_ora.pack(side="left", fill="y")
+        # il pallino rosso che pulsa mentre si registra, poi REC e il tempo
+        self.et_recdot = tk.Label(self.riga_stato, bg=STATO, bd=0)
+        self.et_recdot.pack(side="left", fill="y", padx=(10, 0))
         self.et_rec = tk.Label(self.riga_stato, text="", bg=STATO, fg="#ff453a")
         self.et_rec.pack(side="left", fill="y")
+        self.dot_rec = []                   # i fotogrammi del pallino, dal pieno allo spento
+        if HA_PIL:
+            r0, g0, b0 = (int(STATO[k:k + 2], 16) for k in (1, 3, 5))
+            for i in range(12):
+                t = 0.5 + 0.5 * math.cos(2 * math.pi * i / 12)   # 1 -> 0 -> 1
+                c = "#%02x%02x%02x" % (int(r0 + (0xff - r0) * t), int(g0 + (0x45 - g0) * t),
+                                       int(b0 + (0x3a - b0) * t))
+                self.dot_rec.append(pallino(c, lato=16))
+        self.fase_rec = 0
         self.barra = tk.Frame(self.root, bg=BARRA, height=40)
         self.barra.pack(side="bottom", fill="x")
         self.barra.pack_propagate(False)        # altezza fissa, comandi al centro
@@ -1712,12 +1928,7 @@ class TV(object):
         self.b_velocita = self.tasto("x1", "x1", self.gira_velocita, 4, lato="right")
         self.tasto("switch", _("Switch"), self.switch, 6, lato="right",
                    padx=(6, 2))
-        self.menu_qualita = tk.Menu(self.root, tearoff=0, bg=TASTO, fg=TESTO,
-                                    activebackground=SCELTO,
-                                    activeforeground="#ffffff", bd=0,
-                                    relief="flat")
-        # un bottone normale che apre il menu lui, sopra di se': il
-        # Menubutton di Tk a volte non si apre, questo si'
+        # l'ingranaggio apre la tendina delle qualita' sopra di se'
         self.b_qualita = self.tasto("setting", _("quality"), self.apri_menu_qualita,
                                     lato="right")
         self.volume = Cursore(self.barra, self.alza_volume, larga=85)
@@ -1947,6 +2158,7 @@ class TV(object):
         self.liste = self.tutte_le_liste()
         self.el_liste.delete(*self.el_liste.get_children())
         self.iid_di = {}                    # percorso -> riga nell'albero
+        self.iid_epg = {}                   # riga -> guida
         adesso = self.cfg.get("lista")
 
         posto = [0]                         # globi e cartelle: un giro solo
@@ -1967,7 +2179,7 @@ class TV(object):
                     self.globi[colore] = globo(colore) or self.vuoto
                 img = self.globi[colore]
             iid = self.el_liste.insert(padre, "end", text=" " + nome_di(d),
-                                       image=img,
+                                       image=img, values=("\u2715",),
                                        tags=("usata",) if d == adesso else ())
             self.iid_di[d] = iid
 
@@ -1984,8 +2196,30 @@ class TV(object):
                 if im is not None:
                     self.img_liste[f] = im
             for d in self.cfg["epg"]:
-                self.el_liste.insert(padre, "end", image=self.img_liste.get(f, self.vuoto),
-                                     text=" " + self.nome_guida(d))
+                iid = self.el_liste.insert(padre, "end", image=self.img_liste.get(f, self.vuoto),
+                                           text=" " + self.nome_guida(d), values=("\u2715",))
+                self.iid_epg[iid] = d
+        # le registrazioni: una cartella grigia con i file di ~/Videos/xvb,
+        # dal piu' recente; cliccando uno si riproduce nel lettore
+        self.iid_reg = {}
+        self.reg = registrazioni()
+        if self.reg:
+            aperta = self.reg_in_uso is not None
+            padre = self.el_liste.insert("", "end", text=" " + _("Recordings"),
+                                         image=self.icona_cartella(GRIGIO, aperta),
+                                         open=aperta)
+            self.cartella_di[padre] = GRIGIO
+            f_img = immagine_lista("")
+            for (canale, giorno), _v in self.reg:
+                try:
+                    bello = time.strftime("%d/%m/%Y", time.strptime(giorno, "%Y-%m-%d"))
+                except ValueError:
+                    bello = giorno
+                iid = self.el_liste.insert(padre, "end", text=" %s \u00b7 %s" % (canale, bello),
+                                           image=self.img_liste.get(f_img, self.vuoto),
+                                           values=("\u2715",),
+                                           tags=("usata",) if (canale, giorno) == self.reg_in_uso else ())
+                self.iid_reg[iid] = (canale, giorno)
         # poi le liste sciolte, e le categorie con le loro dentro
         gia = set()
         for nome, dentro in categorie():
@@ -2087,11 +2321,58 @@ class TV(object):
         return None
 
     def scegli_lista(self):
+        s = self.el_liste.selection()
+        if s and s[0] in self.iid_reg:
+            self.mostra_registrazioni(self.iid_reg[s[0]])
+            return
         d = self.lista_selezionata()
-        if d and d != self.cfg.get("lista"):
+        # si ricarica anche se e' la stessa di prima, quando a sinistra ci
+        # sono le registrazioni: serve per tornare ai canali
+        if d and (d != self.cfg.get("lista") or self.reg_in_uso is not None):
+            self.reg_in_uso = None
             self.carica(d)
 
+    def mostra_registrazioni(self, chiave):
+        """A sinistra, al posto dei canali, i programmi registrati su quel
+        canale quel giorno: '21:00 Tg1'. Doppio clic e parte."""
+        self.reg_in_uso = chiave
+        voci = dict(self.reg).get(chiave, [])
+        self.canali = [("%s  %s" % (ora, titolo), f, None) for ora, titolo, f in voci]
+        self.filtra()
+        for iid, k in self.iid_reg.items():
+            if self.el_liste.exists(iid):
+                self.el_liste.item(iid, tags=("usata",) if k == chiave else ())
+        for d, iid in self.iid_di.items():
+            if self.el_liste.exists(iid):
+                self.el_liste.item(iid, tags=())
+        self.non_sul_verde(self.el_liste, "usata")
+        self.scrivi(_("%s - %d recordings") % ("%s %s" % chiave, len(voci)))
+
+    def riproduci(self, f, nome=None):
+        """Una registrazione nel lettore: al posto del canale, finche' non
+        se ne sceglie un altro. La progress e' quanto del file e' passato."""
+        if self.registrando:
+            self.ferma_registrazione()
+        self.file_in_onda = f
+        self.nome = self.nome_in_onda = nome or os.path.splitext(os.path.basename(f))[0]
+        self.ide_in_onda = None
+        self.varianti, self.quale = [], -1
+        self.da_riallineare = False
+        self.attesa_da = time.time()
+        self.mostra_carico(True)
+        self.colora_stato(self.colore_canale(self.nome, f))
+        self.segna_in_onda(f)
+        self.icona_preferito()
+        try:
+            self.mpv["audio-files"] = []
+            self.mpv.play(f)
+        except Exception as e:
+            self.scrivi(_("cannot read %s: %s") % (self.nome, e))
+            return
+        self.scrivi_riga()
+
     def carica(self, dove):
+        self.reg_in_uso = None              # a sinistra tornano i canali
         # ci si segna subito quale, non a fine caricamento: se si chiude
         # prima che abbia finito, la lista e' ricordata lo stesso
         self.cfg["lista"] = dove
@@ -2176,6 +2457,85 @@ class TV(object):
             scrivi_config(self.cfg)
         self.rifai_liste(scegli=dove)
 
+    def clic_liste(self, ev):
+        """Un clic nella barra delle liste: se e' sulla x della riga si
+        toglie quella cosa (dopo conferma), senza selezionarla."""
+        if self.el_liste.identify_column(ev.x) != "#1":
+            return
+        iid = self.el_liste.identify_row(ev.y)
+        if not iid or not self.el_liste.set(iid, "x"):
+            return
+        self.togli_riga(iid)
+        return "break"
+
+    def conferma(self, titolo, testo):
+        """Una domanda con Delete e Cancel: True se si e' detto Delete."""
+        def corpo(dentro):
+            tk.Label(dentro, text=titolo, bg=PANNELLO, fg=TESTO, anchor="w",
+                     font=("TkDefaultFont", 11, "bold")).pack(fill="x")
+            tk.Label(dentro, text=testo, bg=PANNELLO, fg=GRIGIO, anchor="w",
+                     justify="left", wraplength=380).pack(fill="x", pady=(8, 0))
+        f = Finestrella(self.root, titolo, corpo, ok=_("Delete"), annulla=_("Cancel"),
+                        domanda=True)
+        self.root.wait_window(f)
+        return bool(f.risposta)
+
+    def togli_riga(self, iid):
+        """Cosa c'e' su quella riga, e come si toglie."""
+        nome = self.el_liste.item(iid, "text").strip()
+        if iid in self.iid_epg:
+            if self.conferma(_("Remove %s") % nome, _("The guide will be removed from the list.")):
+                self.togli_epg(self.iid_epg[iid])
+            return
+        if iid in self.iid_reg:
+            canale, giorno = self.iid_reg[iid]
+            file_ = [f for _o, _t, f in dict(self.reg).get((canale, giorno), [])]
+            if not self.conferma(_("Delete %s") % nome,
+                                 _("%d recording(s) will be deleted from disk. This cannot be undone.") % len(file_)):
+                return
+            for f in file_:
+                try:
+                    if self.file_in_onda == f:
+                        self.mpv.command("stop")
+                        self.file_in_onda = None
+                    os.remove(f)
+                except Exception as e:
+                    self.scrivi(_("cannot delete %s: %s") % (os.path.basename(f), e))
+            try:
+                os.rmdir(os.path.dirname(file_[0]))       # la cartella del canale, se vuota
+            except Exception:
+                pass
+            if self.reg_in_uso == (canale, giorno):
+                self.reg_in_uso = None
+                self.rifai_liste(scegli=self.cfg.get("lista"))
+            else:
+                self.rifai_albero()
+            return
+        for d, i in self.iid_di.items():
+            if i != iid:
+                continue
+            if re.match(r"https?://", d, re.I):
+                if self.conferma(_("Remove %s") % nome, _("The playlist will be removed from the list.")):
+                    self.togli_lista_url(d)
+                return
+            if not self.conferma(_("Delete %s") % nome,
+                                 _("The file %s will be deleted from disk. This cannot be undone.") % d):
+                return
+            try:
+                os.remove(d)
+                cartella = os.path.dirname(d)
+                if os.path.basename(cartella) == PREFERITI:
+                    os.rmdir(cartella)
+            except Exception as e:
+                self.scrivi(_("cannot delete %s: %s") % (nome, e))
+                return
+            self.cfg["liste"] = [x for x in self.cfg.get("liste", []) if x != d]
+            if self.cfg.get("lista") == d:
+                self.cfg.pop("lista", None)
+            scrivi_config(self.cfg)
+            self.rifai_liste()
+            return
+
     def togli_lista(self):
         """Toglie la lista selezionata. Il file sul disco non si tocca."""
         dove = self.lista_selezionata()
@@ -2196,7 +2556,7 @@ class TV(object):
         q = self.cerca.get().lower()
         self.visti = [c for c in self.canali if q in c[0].lower()]
         self.elenco.delete(*self.elenco.get_children())
-        adesso = self.cfg.get("canale")
+        adesso = self.file_in_onda or self.cfg.get("canale")
         da_fare = []
         for i, (nome, url, _ide) in enumerate(self.visti[:3000]):
             self.elenco.insert("", "end", iid=str(i), text=" " + nome,
@@ -2208,10 +2568,15 @@ class TV(object):
             self.coda_colori.extend(da_fare)
         if adesso and self.nome_in_onda:
             self.segna_in_onda(adesso)
+        elif self.file_in_onda:
+            self.segna_in_onda(self.file_in_onda)
 
     def colore_canale(self, nome, url):
         """Il colore del canale: quello preso dal suo logo, se lo si ha;
-        se no quello dal nome."""
+        se no quello dal nome. Una registrazione ha quello del suo canale
+        (la cartella in cui sta)."""
+        if url.startswith(REGISTRAZIONI + os.sep):
+            return colore_di(os.path.basename(os.path.dirname(url)))
         return self.colori.get(url) or colore_di(nome)
 
     def pallino_di(self, nome, url):
@@ -2275,7 +2640,7 @@ class TV(object):
         """Il canale prima o dopo, nell'elenco come lo si vede adesso."""
         if not self.visti:
             return
-        adesso = self.cfg.get("canale")
+        adesso = self.file_in_onda or self.cfg.get("canale")
         i = getattr(self, "indice", -1)
         if not (0 <= i < len(self.visti) and self.visti[i][1] == adesso):
             i = next((k for k, c in enumerate(self.visti) if c[1] == adesso), -1)
@@ -2344,11 +2709,16 @@ class TV(object):
         self.apri(nome, url)
 
     def apri(self, nome, url, ide=None):
+        if url.startswith(REGISTRAZIONI + os.sep):
+            self.riproduci(url, nome)
+            return
         # ci si ricorda del canale di prima, per lo switch
         if self.cfg.get("canale") and self.cfg.get("canale") != url:
             self.precedente = (self.nome_in_onda, self.cfg.get("canale"))
         if self.registrando and self.cfg.get("canale") != url:
             self.ferma_registrazione()          # cambio canale: si chiude il file
+        if self.file_in_onda:
+            self.file_in_onda = None
         self.nome_in_onda, self.ide_in_onda = nome, ide
         self.attesa_da = time.time()
         self.colora_stato(self.colore_canale(nome, url))    # come il pallino
@@ -2421,28 +2791,16 @@ class TV(object):
         self.scrivi_riga()
 
     def apri_menu_qualita(self):
-        """Il menu si apre sopra al bottone, allineato a sinistra."""
-        m = self.menu_qualita
-        if m.winfo_ismapped():
-            m.unpost()
+        """La tendina delle qualita' sopra all'ingranaggio, col bordo destro
+        sull'ingranaggio; la rotella fa mezzo giro e torna alla chiusura."""
+        if self.tendina.aperta() and self.tendina.chi is self.b_qualita:
+            self.tendina.chiudi()
             return
-        m.delete(0, "end")
-        for testo, cosa in self.voci_qualita():
-            m.add_command(label=testo, command=cosa,
-                          state="normal" if cosa else "disabled")
-        m.update_idletasks()
-        x = self.b_qualita.winfo_rootx()
-        y = self.b_qualita.winfo_rooty() - m.winfo_reqheight() - 4
         self.gira_ingranaggio(+1)
-        m.tk_popup(x, max(0, y))     # si richiude da solo cliccando fuori
-        self.root.after(150, self.menu_chiuso)
-
-    def menu_chiuso(self):
-        """Quando il menu sparisce, la rotella torna indietro."""
-        if self.menu_qualita.winfo_ismapped():
-            self.root.after(150, self.menu_chiuso)
-        else:
-            self.gira_ingranaggio(-1)
+        b = self.b_qualita
+        self.tendina.apri(b.winfo_rootx() + b.winfo_width(), b.winfo_rooty() - 4,
+                          self.voci_qualita(), sopra=True, destra=True,
+                          al_chiudere=lambda: self.gira_ingranaggio(-1), chi=b)
 
     def gira_ingranaggio(self, verso):
         """Mezzo giro della rotella: in un senso aprendo, nell'altro
@@ -2490,7 +2848,8 @@ class TV(object):
         p = self.programma()
         if not p:
             # con la guida caricata ma senza questo canale lo si dice
-            return (self.nome, "", _("not in the guide") if self.epg and self.nome else "")
+            return (self.nome, "", _("not in the guide") if self.epg and self.nome
+                    and not self.file_in_onda else "")
         inizio, fine, titolo = p
         return (self.nome, titolo or "?", "%s - %s" % (
             time.strftime("%H:%M", time.localtime(inizio)),
@@ -2644,20 +3003,46 @@ class TV(object):
         if hasattr(self, "b_muto"):
             self.icona_volume()
 
+    def maniglia(self, pannello, chiave, verso):
+        """Una striscia sottile accanto al pannello: trascinandola il
+        pannello si allarga o si stringe; la larghezza resta salvata."""
+        m = tk.Frame(self.root, bg=PANNELLO, width=5, cursor="sb_h_double_arrow")
+        m.bind("<Enter>", lambda e: m.config(bg=SCELTO))
+        m.bind("<Leave>", lambda e: m.config(bg=PANNELLO))
+
+        def trascina(ev):
+            if verso > 0:
+                larga = ev.x_root - pannello.winfo_rootx()
+            else:
+                larga = pannello.winfo_rootx() + pannello.winfo_width() - ev.x_root
+            larga = max(140, min(int(self.root.winfo_width() * 0.6), larga))
+            pannello.config(width=larga)
+            self.cfg[chiave] = larga
+
+        def fine(ev):
+            scrivi_config(self.cfg)
+            self.disegna_fondo_barra()
+        m.bind("<B1-Motion>", trascina)
+        m.bind("<ButtonRelease-1>", fine)
+        return m
+
     def disponi(self, pieno):
         """Mette i pezzi al loro posto, nell'ordine giusto. L'ordine conta:
         i pannelli prima, il video per ultimo, che si prende il resto."""
         avviso_aperto = self.avviso.winfo_ismapped()
         for w in (self.cima, self.sinistra, self.destra, self.riga_stato,
-                  self.barra, self.avviso, self.video):
+                  self.barra, self.avviso, self.video, self.maniglia_sx,
+                  self.maniglia_dx):
             w.pack_forget()
         if not pieno:
             self.cima.pack(side="top", fill="x")
         # le barre laterali: aperte o chiuse, uguale a schermo intero e no
         if not self.nascosti.get(self.sinistra):
             self.sinistra.pack(side="left", fill="y")
+            self.maniglia_sx.pack(side="left", fill="y")
         if not self.nascosti.get(self.destra):
             self.destra.pack(side="right", fill="y")
+            self.maniglia_dx.pack(side="right", fill="y")
         if not pieno:
             self.riga_stato.pack(side="bottom", fill="x")
             self.barra.pack(side="bottom", fill="x")
@@ -2721,20 +3106,27 @@ class TV(object):
                       padx=10, cursor="hand2")
         et.pack(side="left", fill="y")
         et.bind("<Enter>", lambda e: et.config(bg=SCELTO))
-        et.bind("<Leave>", lambda e: et.config(bg=BARRA))
+        et.bind("<Leave>", lambda e: self.tendina.chi is not et and et.config(bg=BARRA))
         et.bind("<Button-1>", lambda e: self.apri_menu_cima(et, voci))
         self.menu_cima[titolo] = (et, voci)
 
     def apri_menu_cima(self, et, voci):
-        m = self.menu_aperto
-        if m.winfo_ismapped():
-            m.unpost()
+        if self.tendina.aperta() and self.tendina.chi is et:
+            self.tendina.chiudi()
             return
-        m.delete(0, "end")
-        for testo, cosa in voci():
-            m.add_command(label=testo, command=cosa,
-                          state="normal" if cosa else "disabled")
-        m.tk_popup(et.winfo_rootx(), et.winfo_rooty() + et.winfo_height())
+        self.tendina.apri(et.winfo_rootx(), et.winfo_rooty() + et.winfo_height(), voci(),
+                          al_chiudere=lambda: et.config(bg=BARRA), chi=et,
+                          altrove=self.clic_altrove)
+        et.config(bg=SCELTO)
+
+    def clic_altrove(self, x, y):
+        """Con una tendina aperta si e' cliccato fuori: se era su un'altra
+        voce della barra in alto, si apre la sua tendina."""
+        for titolo, (et, voci) in self.menu_cima.items():
+            x0, y0 = et.winfo_rootx(), et.winfo_rooty()
+            if x0 <= x < x0 + et.winfo_width() and y0 <= y < y0 + et.winfo_height():
+                self.root.after(10, lambda et=et, voci=voci: self.apri_menu_cima(et, voci))
+                return
 
     def cambia_lingua(self, codice):
         """La lingua nuova subito, senza riavviare: si riscrive quello che
@@ -3096,7 +3488,7 @@ class TV(object):
     def programma(self):
         """Il programma in onda sul canale: (inizio, fine, titolo), o
         None. Il canale si trova per tvg-id, se no per nome."""
-        if not self.epg:
+        if not self.epg or self.file_in_onda:
             return None
         ide = self.ide_in_onda
         if not ide or ide not in self.epg:
@@ -3154,7 +3546,13 @@ class TV(object):
         """Ogni mezzo secondo: la riga colorata e' quanto del programma in
         onda e' passato. Senza guida resta vuota."""
         parte = 0.0
-        if self.cfg.get("canale") and not self.sfondo_su:
+        if self.file_in_onda:
+            try:
+                pos, dur = float(self.mpv.time_pos or 0.0), float(self.mpv.duration or 0.0)
+                parte = max(0.0, min(1.0, pos / dur)) if dur > 0 else 0.0
+            except Exception:
+                parte = 0.0
+        elif self.cfg.get("canale") and not self.sfondo_su:
             p = self.programma()
             if p:
                 # con la guida: quanto del programma e' passato, vuota
@@ -3285,8 +3683,8 @@ class TV(object):
         if self.registrando:
             self.ferma_registrazione()
             return
-        if not self.cfg.get("canale") or not self.nome_in_onda:
-            return
+        if not self.cfg.get("canale") or not self.nome_in_onda or self.file_in_onda:
+            return                          # niente canale, o e' una registrazione
         self.avvia_registrazione(self.nome_in_onda, 0.0)
 
     def avvia_registrazione(self, nome, fine):
@@ -3294,14 +3692,21 @@ class TV(object):
         (secondi dal 1970) si ferma da sola a quell'ora."""
         try:
             os.makedirs(REGISTRAZIONI, exist_ok=True)
-            pulito = re.sub(r"[^\w\-]+", "_", nome).strip("_") or "xvb"
-            f = os.path.join(REGISTRAZIONI, "%s_%s.mkv" % (
-                pulito, time.strftime("%Y-%m-%d_%H-%M")))
+            # il nome: il programma in onda (dalla guida), se no il canale
+            p = self.programma()
+            titolo = (p[2] if p and p[2] else "") or nome
+            pulisci = lambda t: re.sub(r"[\\/:*?\"<>|]+", "", t).strip() or "xvb"
+            cartella = os.path.join(REGISTRAZIONI, pulisci(nome))   # una per canale
+            os.makedirs(cartella, exist_ok=True)
+            f = os.path.join(cartella, "%s - %s.mkv" % (
+                pulisci(titolo), time.strftime("%Y-%m-%d %H-%M")))
             self.mpv.stream_record = f
         except Exception as e:
             self.scrivi(_("cannot record: %s") % e)
             return
         self.registrando, self.fine_rec = f, fine
+        self.inizio_rec = time.time()
+        self.pulsa_rec()
         self.faccia(self.b_rec, "rec_stop", _("Stop"))
         self.mostra_rec()
 
@@ -3315,17 +3720,32 @@ class TV(object):
         self.faccia(self.b_rec, "rec", _("Record"))
         self.mostra_rec()
         self.scrivi(_("saved %s") % os.path.basename(f))
+        self.rifai_albero()                 # compare fra le registrazioni
         self.root.after(4000, self.scrivi_riga)
+
+    def pulsa_rec(self):
+        """Il pallino rosso accanto a REC si accende e si spegne piano,
+        finche' si registra."""
+        if not self.registrando or not self.dot_rec:
+            return
+        self.et_recdot.config(image=self.dot_rec[self.fase_rec])
+        self.fase_rec = (self.fase_rec + 1) % len(self.dot_rec)
+        self.root.after(100, self.pulsa_rec)
 
     def mostra_rec(self):
         """In fondo alla riga di stato, in rosso: REC, con l'ora a cui si
         ferma se e' pianificata. Vuoto se non si registra."""
         if not self.registrando:
             t = ""
-        elif self.fine_rec:
-            t = "  -  " + _("REC until %s") % time.strftime("%H:%M", time.localtime(self.fine_rec))
+            self.et_recdot.config(image="")
         else:
-            t = "  -  REC"
+            durata = int(time.time() - self.inizio_rec)
+            ore, resto = divmod(durata, 3600)
+            cronometro = "%d:%02d:%02d" % (ore, resto // 60, resto % 60) if ore else \
+                         "%02d:%02d" % (resto // 60, resto % 60)
+            t = " REC " + cronometro
+            if self.fine_rec:
+                t += "  " + _("until %s") % time.strftime("%H:%M", time.localtime(self.fine_rec))
         self.et_rec.config(text=t)
 
     def pianifica(self):
@@ -3384,6 +3804,8 @@ class TV(object):
                     self.avvia_registrazione(nome, t1)
         if self.registrando and self.fine_rec and adesso >= self.fine_rec:
             self.ferma_registrazione()
+        elif self.registrando:
+            self.mostra_rec()               # il cronometro avanza
         self.root.after(1000, self.controlla_registrazione)
 
     def apri_registrazioni(self):
