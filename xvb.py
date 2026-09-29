@@ -40,7 +40,7 @@ try:                            # per i loghi: ridimensiona e legge i jpg
 except ImportError:             # senza, si va di PhotoImage: solo png
     HA_PIL = False
 
-VERSIONE = "1.8"
+VERSIONE = "1.9"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"        # dove stanno le release, per l'avviso di aggiornamento
@@ -154,7 +154,7 @@ TESTI = {
         "guide loaded: %d channels, %d programmes": "guida caricata: %d canali, %d programmi",
         "not in the guide": "non in guida",
         "Search channels": "Cerca un canale",
-        "Playlists": "Playlist",
+        "File": "File", "Playlists": "Playlist",
         "ready": "pronto",
         "unnamed": "senza nome",
         "single quality": "una sola qualita'",
@@ -165,6 +165,14 @@ TESTI = {
         "%s - %d channels": "%s - %d canali",
         "Choose a playlist": "Scegli una playlist",
         "All files": "Tutti i file",
+        "Open file...": "Apri file...", "Choose a file": "Scegli un file",
+        "Media files": "File multimediali", "Open folder...": "Apri cartella...",
+        "Choose a folder": "Scegli una cartella", "Imported media": "Media importati",
+        "Open": "Apri", "%s - %d files": "%s - %d file",
+        "The folder will be removed from the list. Files are not touched.":
+            "La cartella viene tolta dall'elenco. I file non si toccano.",
+        "The imported files will be removed from the list. Files are not touched.":
+            "I file importati vengono tolti dall'elenco. I file non si toccano.",
         "%s does not look like an m3u playlist": "%s non sembra una playlist m3u",
         "select the playlist to remove first": "prima seleziona la playlist da togliere",
         "this one lives in playlists/: remove it by moving the file":
@@ -269,7 +277,7 @@ TESTI = {
         "guide loaded: %d channels, %d programmes": "guía cargada: %d canales, %d programas",
         "not in the guide": "no está en la guía",
         "Search channels": "Buscar canal",
-        "Playlists": "Listas",
+        "File": "Archivo", "Playlists": "Listas",
         "ready": "listo",
         "unnamed": "sin nombre",
         "single quality": "una sola calidad",
@@ -280,6 +288,14 @@ TESTI = {
         "%s - %d channels": "%s - %d canales",
         "Choose a playlist": "Elige una lista",
         "All files": "Todos los archivos",
+        "Open file...": "Abrir archivo...", "Choose a file": "Elige un archivo",
+        "Media files": "Archivos multimedia", "Open folder...": "Abrir carpeta...",
+        "Choose a folder": "Elige una carpeta", "Imported media": "Medios importados",
+        "Open": "Abrir", "%s - %d files": "%s - %d archivos",
+        "The folder will be removed from the list. Files are not touched.":
+            "La carpeta se quita de la lista. Los archivos no se tocan.",
+        "The imported files will be removed from the list. Files are not touched.":
+            "Los archivos importados se quitan de la lista. Los archivos no se tocan.",
         "%s does not look like an m3u playlist": "%s no parece una lista m3u",
         "select the playlist to remove first": "primero selecciona la lista a quitar",
         "this one lives in playlists/: remove it by moving the file":
@@ -384,7 +400,7 @@ TESTI = {
         "guide loaded: %d channels, %d programmes": "guide chargé : %d chaînes, %d programmes",
         "not in the guide": "absent du guide",
         "Search channels": "Rechercher une chaîne",
-        "Playlists": "Listes",
+        "File": "Fichier", "Playlists": "Listes",
         "ready": "prêt",
         "unnamed": "sans nom",
         "single quality": "une seule qualité",
@@ -395,6 +411,14 @@ TESTI = {
         "%s - %d channels": "%s - %d chaînes",
         "Choose a playlist": "Choisir une liste",
         "All files": "Tous les fichiers",
+        "Open file...": "Ouvrir un fichier...", "Choose a file": "Choisir un fichier",
+        "Media files": "Fichiers multimédias", "Open folder...": "Ouvrir un dossier...",
+        "Choose a folder": "Choisir un dossier", "Imported media": "Médias importés",
+        "Open": "Ouvrir", "%s - %d files": "%s - %d fichiers",
+        "The folder will be removed from the list. Files are not touched.":
+            "Le dossier est retiré de la liste. Les fichiers ne sont pas touchés.",
+        "The imported files will be removed from the list. Files are not touched.":
+            "Les fichiers importés sont retirés de la liste. Les fichiers ne sont pas touchés.",
         "%s does not look like an m3u playlist": "%s ne ressemble pas à une liste m3u",
         "select the playlist to remove first": "sélectionne d'abord la liste à retirer",
         "this one lives in playlists/: remove it by moving the file":
@@ -862,6 +886,34 @@ def scrivi_preferiti(canali):
 
 CACHE_EPG = os.path.join(CASA, ".cache", "xvb", "epg")
 CACHE_VARIANTE = os.path.join(CASA, ".cache", "xvb")
+MEDIA = ("mkv", "mp4", "avi", "mov", "webm", "ts", "m2ts", "mpg", "mpeg", "wmv", "flv",
+         "ogv", "m4v", "mp3", "flac", "ogg", "opus", "m4a", "aac", "wav", "wma", "ape")
+
+
+def e_media(f):
+    return os.path.splitext(f)[1][1:].lower() in MEDIA
+
+
+def media_in(cartella):
+    """I file audio/video dentro a una cartella, primo livello, per nome:
+    (nome senza estensione, percorso, None) come i canali."""
+    try:
+        nomi = sorted(os.listdir(cartella), key=str.lower)
+    except Exception:
+        return []
+    return [(os.path.splitext(n)[0], os.path.join(cartella, n), None)
+            for n in nomi if not n.startswith(".") and e_media(n)
+            and os.path.isfile(os.path.join(cartella, n))]
+
+
+def ore_min_sec(secondi):
+    """1:02:03 o 02:03, come il cronometro del REC."""
+    secondi = int(max(0, secondi))
+    ore, resto = divmod(secondi, 3600)
+    return ("%d:%02d:%02d" % (ore, resto // 60, resto % 60) if ore
+            else "%02d:%02d" % (resto // 60, resto % 60))
+
+
 REGISTRAZIONI = os.path.join(CASA, "Videos", "xvb")
 EPG_VECCHIA = 6 * 3600          # dopo sei ore la guida si riscarica
 
@@ -1556,6 +1608,112 @@ class Finestrella(tk.Toplevel):
         self.destroy()
 
 
+def sfoglia(root, titolo, da, file_=True):
+    """Sceglie un file (file_) o una cartella, con una finestra nostra al
+    posto di quella grigia di Tk: il percorso in cima, su, l'elenco con
+    le cartelle prima e poi i file multimediali. Doppio clic su una
+    cartella per entrarci, su un file per prenderlo. Torna il percorso o
+    None."""
+    dove = [da if os.path.isdir(da) else CASA]
+    voci = []                                   # (percorso, e' cartella)
+    scelto = [None]
+
+    def corpo(dentro):
+        tk.Label(dentro, text=_("Choose a file") if file_ else _("Choose a folder"),
+                 bg=PANNELLO, fg=TESTO, anchor="w",
+                 font=("TkDefaultFont", 11, "bold")).pack(fill="x")
+        testa = tk.Frame(dentro, bg=PANNELLO)
+        testa.pack(fill="x", pady=(10, 4))
+        su = tk.Button(testa, text="\u2191", relief="flat", bd=0, highlightthickness=0,
+                       cursor="hand2", padx=10, pady=3, bg=TASTO, fg=TESTO,
+                       activebackground=SCELTO, activeforeground="#ffffff")
+        su.pack(side="left", padx=(0, 6))
+        percorso = tk.Entry(testa, bg=TASTO, fg=TESTO, insertbackground=ACCENTO,
+                            relief="flat", bd=0, highlightthickness=1,
+                            highlightbackground=SCELTO, highlightcolor=ACCENTO,
+                            font=("TkDefaultFont", 10))
+        percorso.pack(side="left", fill="x", expand=True, ipady=5)
+        # l'elenco e' un albero come quello dei canali, stesso stile, con
+        # la cartellina disegnata davanti alle cartelle
+        riquadro = tk.Frame(dentro, bg=TASTO, width=520, height=PUNTO * 12 + 8)
+        riquadro.pack(fill="both", expand=True, pady=(0, 2))
+        riquadro.pack_propagate(False)
+        elenco = ttk.Treeview(riquadro, show="tree", style="Canali.Treeview",
+                              selectmode="browse")
+        elenco.pack(fill="both", expand=True, padx=4, pady=4)
+        icone[0] = cartellina(GRIGIO, False) or tk.PhotoImage(width=PUNTO, height=PUNTO)
+        icone[1] = tk.PhotoImage(width=PUNTO, height=PUNTO)
+
+        def riempi():
+            del voci[:]
+            sel[0] = None
+            elenco.delete(*elenco.get_children())
+            percorso.delete(0, "end")
+            percorso.insert(0, dove[0])
+            try:
+                nomi = sorted(os.listdir(dove[0]), key=str.lower)
+            except Exception:
+                nomi = []
+            nomi = [n for n in nomi if not n.startswith(".")]
+            for n in nomi:
+                p = os.path.join(dove[0], n)
+                if os.path.isdir(p):
+                    elenco.insert("", "end", iid=str(len(voci)), text=" " + n, image=icone[0])
+                    voci.append((p, True))
+            if file_:
+                for n in nomi:
+                    p = os.path.join(dove[0], n)
+                    if os.path.isfile(p) and e_media(n):
+                        elenco.insert("", "end", iid=str(len(voci)), text=" " + n, image=icone[1])
+                        voci.append((p, False))
+
+        def vai(p):
+            if os.path.isdir(p):
+                dove[0] = os.path.abspath(p)
+                riempi()
+
+        def entra(ev=None):
+            s = elenco.selection()
+            if not s:
+                return "break"
+            p, cartella = voci[int(s[0])]
+            if cartella:
+                vai(p)
+            else:
+                scelto[0] = p
+                finestra[0].va_bene()
+            return "break"
+
+        su.config(command=lambda: vai(os.path.dirname(dove[0])))
+        percorso.bind("<Return>", lambda e: (vai(os.path.expanduser(percorso.get())), "break")[1])
+        elenco.bind("<Double-Button-1>", entra)
+        elenco.bind("<Return>", entra)
+        elenco.bind("<BackSpace>", lambda e: vai(os.path.dirname(dove[0])))
+        # ci si segna la selezione man mano: a OK premuto la finestra e'
+        # gia' distrutta e non si puo' piu' chiedere all'albero
+        elenco.bind("<<TreeviewSelect>>", lambda e: sel.__setitem__(
+            0, voci[int(elenco.selection()[0])] if elenco.selection() else None))
+        riempi()
+        dentro.after(50, elenco.focus_set)      # i tasti vanno subito all'elenco
+
+    sel, icone = [None], {}
+    finestra = [None]
+    finestra[0] = Finestrella(root, titolo, corpo, ok=_("Open"), annulla=_("Cancel"),
+                              domanda=True)
+    root.wait_window(finestra[0])
+    if not finestra[0].risposta:
+        return None
+    if scelto[0]:
+        return scelto[0]
+    if sel[0]:
+        p, cartella = sel[0]
+        if file_ and not cartella:
+            return p
+        if not file_ and cartella:
+            return p
+    return None if file_ else dove[0]
+
+
 class TV(object):
     def __init__(self, lista=None):
         self.cfg = leggi_config()
@@ -1587,6 +1745,7 @@ class TV(object):
         self.velocita = 1
         self.file_in_onda = None            # la registrazione in riproduzione
         self.iid_reg, self.reg, self.reg_in_uso = {}, [], None
+        self.iid_media, self.media_in_uso = {}, None     # cartelle e importati
         self.icona_finestra, self.icona_file = None, ""
         self.piano = None                            # (nome, url, ide, inizio, fine)
         self.ultima_discesa = 0.0
@@ -1676,6 +1835,9 @@ class TV(object):
         self.cima.pack_propagate(False)
         self.menu_cima = {}
         self.tendina = Tendina(self.root)
+        self.menu("File", lambda: [
+            (_("Open file..."), self.apri_file),
+            (_("Open folder..."), self.apri_cartella_media)])
         self.menu("Playlists", lambda: [
             (_("Add URL"), self.chiedi_lista_url),
             (_("Open folder"), self.apri_cartella_liste),
@@ -2226,6 +2388,23 @@ class TV(object):
                                            values=("\u2715",),
                                            tags=("usata",) if (canale, giorno) == self.reg_in_uso else ())
                 self.iid_reg[iid] = (canale, giorno)
+        # le cartelle di video e musica, e i file importati: icone/player.png
+        self.iid_media = {}
+        f_pl = os.path.join(QUI, "icone", "player.png")
+        if os.path.isfile(f_pl) and f_pl not in self.img_liste:
+            im = carica_logo(f_pl, PUNTO, PUNTO)
+            if im is not None:
+                self.img_liste[f_pl] = im
+        img_pl = self.img_liste.get(f_pl, self.vuoto)
+        media = [(("cartella", c), os.path.basename(c.rstrip(os.sep)) or c)
+                 for c in self.cfg.get("cartelle", [])]
+        if self.cfg.get("importati"):
+            media.append((("importati", None), _("Imported media")))
+        for chiave, nome in media:
+            iid = self.el_liste.insert("", "end", text=" " + nome, image=img_pl,
+                                       values=("\u2715",),
+                                       tags=("usata",) if chiave == self.media_in_uso else ())
+            self.iid_media[iid] = chiave
         # poi le liste sciolte, e le categorie con le loro dentro
         gia = set()
         for nome, dentro in categorie():
@@ -2301,6 +2480,9 @@ class TV(object):
         for d, iid in self.iid_di.items():
             if self.el_liste.exists(iid):
                 self.el_liste.item(iid, tags=("usata",) if d == dove else ())
+        for iid in list(self.iid_reg) + list(self.iid_media):
+            if self.el_liste.exists(iid):
+                self.el_liste.item(iid, tags=())
         self.non_sul_verde(self.el_liste, "usata")
 
     def icona_cartella(self, colore, aperta):
@@ -2331,24 +2513,28 @@ class TV(object):
         if s and s[0] in self.iid_reg:
             self.mostra_registrazioni(self.iid_reg[s[0]])
             return
+        if s and s[0] in self.iid_media:
+            self.mostra_media(self.iid_media[s[0]])
+            return
         d = self.lista_selezionata()
         # si ricarica anche se e' la stessa di prima, quando a sinistra ci
-        # sono le registrazioni: serve per tornare ai canali
-        if d and (d != self.cfg.get("lista") or self.reg_in_uso is not None):
-            self.reg_in_uso = None
+        # sono le registrazioni o i file: serve per tornare ai canali
+        if d and (d != self.cfg.get("lista") or self.reg_in_uso is not None
+                  or self.media_in_uso is not None):
+            self.reg_in_uso = self.media_in_uso = None
             self.carica(d)
 
     def mostra_registrazioni(self, chiave):
         """A sinistra, al posto dei canali, i programmi registrati su quel
-        canale quel giorno: '21:00 Tg1'. Doppio clic e parte."""
-        self.reg_in_uso = chiave
+        canale quel giorno: '21:00 Evening News'. Doppio clic e parte."""
+        self.reg_in_uso, self.media_in_uso = chiave, None
         voci = dict(self.reg).get(chiave, [])
         self.canali = [("%s  %s" % (ora, titolo), f, None) for ora, titolo, f in voci]
         self.filtra()
         for iid, k in self.iid_reg.items():
             if self.el_liste.exists(iid):
                 self.el_liste.item(iid, tags=("usata",) if k == chiave else ())
-        for d, iid in self.iid_di.items():
+        for iid in list(self.iid_media) + list(self.iid_di.values()):
             if self.el_liste.exists(iid):
                 self.el_liste.item(iid, tags=())
         self.non_sul_verde(self.el_liste, "usata")
@@ -2378,7 +2564,7 @@ class TV(object):
         self.scrivi_riga()
 
     def carica(self, dove):
-        self.reg_in_uso = None              # a sinistra tornano i canali
+        self.reg_in_uso = self.media_in_uso = None      # a sinistra tornano i canali
         # ci si segna subito quale, non a fine caricamento: se si chiude
         # prima che abbia finito, la lista e' ricordata lo stesso
         self.cfg["lista"] = dove
@@ -2456,6 +2642,61 @@ class TV(object):
                 return
             self.aggiungi(f)
 
+    def apri_file(self):
+        """Un video o un brano dal disco: finisce fra gli Importati nella
+        barra di destra (come la playlist di VLC) e parte subito."""
+        f = sfoglia(self.root, _("Open file..."), self.cfg.get("ultima_cartella", CASA))
+        if not f:
+            return
+        self.cfg["ultima_cartella"] = os.path.dirname(f)
+        importati = [x for x in self.cfg.get("importati", []) if x != f] + [f]
+        self.cfg["importati"] = importati
+        scrivi_config(self.cfg)
+        self.rifai_albero()
+        self.mostra_media(("importati", None))
+        i = next((k for k, c in enumerate(self.visti) if c[1] == f), -1)
+        if i >= 0 and self.elenco.exists(str(i)):
+            self.elenco.selection_set(str(i))
+            self.elenco.see(str(i))
+        self.riproduci(f)
+
+    def apri_cartella_media(self):
+        """Una cartella di video o musica: entra nella barra di destra con
+        l'icona del player; a sinistra i file che ci sono dentro."""
+        c = sfoglia(self.root, _("Open folder..."), self.cfg.get("ultima_cartella", CASA),
+                    file_=False)
+        if not c:
+            return
+        self.cfg["ultima_cartella"] = c
+        if c not in self.cfg.get("cartelle", []):
+            self.cfg.setdefault("cartelle", []).append(c)
+            scrivi_config(self.cfg)
+        self.rifai_albero()
+        self.mostra_media(("cartella", c))
+
+    def mostra_media(self, chiave):
+        """A sinistra, al posto dei canali, i file di quella cartella o
+        gli importati. Doppio clic e parte."""
+        tipo, c = chiave
+        self.reg_in_uso, self.media_in_uso = None, chiave
+        if tipo == "cartella":
+            self.canali, nome = media_in(c), os.path.basename(c.rstrip(os.sep)) or c
+        else:
+            self.canali = [(os.path.splitext(os.path.basename(f))[0], f, None)
+                           for f in self.cfg.get("importati", []) if os.path.isfile(f)]
+            nome = _("Imported media")
+        self.filtra()
+        for iid, k in self.iid_media.items():
+            if self.el_liste.exists(iid):
+                self.el_liste.item(iid, tags=("usata",) if k == chiave else ())
+                if k == chiave:
+                    self.el_liste.see(iid)
+        for iid in list(self.iid_reg) + list(self.iid_di.values()):
+            if self.el_liste.exists(iid):
+                self.el_liste.item(iid, tags=())
+        self.non_sul_verde(self.el_liste, "usata")
+        self.scrivi(_("%s - %d files") % (nome, len(self.canali)))
+
     def aggiungi(self, dove):
         dove = os.path.abspath(dove)
         if dove not in self.tutte_le_liste():
@@ -2474,17 +2715,20 @@ class TV(object):
         self.togli_riga(iid)
         return "break"
 
-    def conferma(self, titolo, testo):
+    def conferma(self, titolo, testo, ok=None):
         """Una domanda con Delete e Cancel: True se si e' detto Delete."""
         def corpo(dentro):
             tk.Label(dentro, text=titolo, bg=PANNELLO, fg=TESTO, anchor="w",
                      font=("TkDefaultFont", 11, "bold")).pack(fill="x")
             tk.Label(dentro, text=testo, bg=PANNELLO, fg=GRIGIO, anchor="w",
                      justify="left", wraplength=380).pack(fill="x", pady=(8, 0))
-        f = Finestrella(self.root, titolo, corpo, ok=_("Delete"), annulla=_("Cancel"),
+        f = Finestrella(self.root, titolo, corpo, ok=ok or _("Delete"), annulla=_("Cancel"),
                         domanda=True)
         self.root.wait_window(f)
         return bool(f.risposta)
+
+    def conferma_via(self, nome, testo):
+        return self.conferma(_("Remove %s") % nome, testo, ok=_("Remove"))
 
     def togli_riga(self, iid):
         """Cosa c'e' su quella riga, e come si toglie."""
@@ -2492,6 +2736,23 @@ class TV(object):
         if iid in self.iid_epg:
             if self.conferma(_("Remove %s") % nome, _("The guide will be removed from the list.")):
                 self.togli_epg(self.iid_epg[iid])
+            return
+        if iid in self.iid_media:
+            tipo, c = self.iid_media[iid]
+            if tipo == "cartella":
+                if not self.conferma_via(nome, _("The folder will be removed from the list. Files are not touched.")):
+                    return
+                self.cfg["cartelle"] = [x for x in self.cfg.get("cartelle", []) if x != c]
+            else:
+                if not self.conferma_via(nome, _("The imported files will be removed from the list. Files are not touched.")):
+                    return
+                self.cfg["importati"] = []
+            scrivi_config(self.cfg)
+            if self.media_in_uso == (tipo, c):
+                self.media_in_uso = None
+                self.rifai_liste(scegli=self.cfg.get("lista"))
+            else:
+                self.rifai_albero()
             return
         if iid in self.iid_reg:
             canale, giorno = self.iid_reg[iid]
@@ -2715,7 +2976,8 @@ class TV(object):
         self.apri(nome, url)
 
     def apri(self, nome, url, ide=None):
-        if url.startswith(REGISTRAZIONI + os.sep):
+        if url.startswith(REGISTRAZIONI + os.sep) or (
+                os.path.isabs(url) and e_media(url) and os.path.isfile(url)):
             self.riproduci(url, nome)
             return
         # ci si ricorda del canale di prima, per lo switch
@@ -3566,6 +3828,8 @@ class TV(object):
             try:
                 pos, dur = float(self.mpv.time_pos or 0.0), float(self.mpv.duration or 0.0)
                 parte = max(0.0, min(1.0, pos / dur)) if dur > 0 else 0.0
+                if dur > 0:
+                    self.et_ora.config(text="  -  %s / %s" % (ore_min_sec(pos), ore_min_sec(dur)))
             except Exception:
                 parte = 0.0
         elif self.cfg.get("canale") and not self.sfondo_su:

@@ -122,6 +122,29 @@ has a ✕ at the edge: clicking it removes that item, after a
 confirmation. For lists on disk and recordings it really deletes the
 files; for URL lists and guides it only removes them from the list.
 
+**Local files.** The File menu works like a media player. File →
+Open folder… adds a folder of videos or music to the right-hand bar,
+with the player icon (`icone/player.png`) and the folder's name: click
+it and the left-hand bar lists the media files inside (first level,
+by name). File → Open file… plays one file right away and adds it to
+an "Imported media" entry, same icon, which keeps every file opened this way.
+Double-click plays, ‹ › go to the previous and next file, the progress
+line follows the file and the status row shows elapsed / total time.
+Click a playlist to get back to the channels. The ✕ removes the folder
+or empties Imported media, after confirmation: nothing is deleted from disk.
+The file and folder chooser is drawn by the app, dark like the rest:
+↑ or Backspace go up, double-click enters a folder or picks a file,
+the path on top can be typed. The formats are mpv's, that is ffmpeg's:
+
+- Video: mkv, mp4, m4v, avi, mov, webm, ts, m2ts, mpg, mpeg, wmv, flv, ogv.
+- Audio: mp3, flac, ogg, opus, m4a, aac, wav, wma, ape.
+- Subtitles: srt, ass, ssa, sub, vtt next to the video with the same
+  name are picked up by themselves; embedded ones from Audio → Subtitles.
+
+Playlists (m3u) with local paths in them play the same way.
+
+![Local files](preview2.png)
+
 **Memory.** The app remembers the last playlist and the last channel and
 restarts from there (if the channel is in another list, it opens that
 one). It also remembers volume, language, guides, sidebar widths and
@@ -255,7 +278,7 @@ All of these are kept in the config, except the speed, which restarts at x1.
 
 ## The window
 
-- **Top bar** with the menus: Playlists, TV guide, View, Record, Video,
+- **Top bar** with the menus: File, Playlists, TV guide, View, Record, Video,
   Audio, About, Language. Menus, dialogs and confirmations are drawn
   by the app, dark like the rest.
 - **Sidebars**: the first button on the left of the control bar hides
@@ -287,6 +310,7 @@ All of these are kept in the config, except the speed, which restarts at x1.
 
 | Menu | Entries |
 |---|---|
+| File | Open file…, Open folder… |
 | Playlists | Add URL, Open folder, Reload, Remove <URL list> |
 | TV guide | Programme guide, Add URL, Reload, Remove <guide> |
 | View | Fullscreen, Hide/Show channels, Hide/Show playlists |
@@ -499,6 +523,30 @@ ha una ✕ sul bordo: cliccandola si toglie quella cosa, dopo una
 conferma. Per le liste su disco e le registrazioni cancella davvero i
 file; per liste da url e guide le toglie solo dall'elenco.
 
+**File locali.** Il menu File lavora come un lettore multimediale.
+File → Open folder… aggiunge una cartella di video o musica alla barra
+di destra, con l'icona del player (`icone/player.png`) e il nome della
+cartella: cliccandola, a sinistra compaiono i file multimediali che ci
+sono dentro (primo livello, per nome). File → Open file… riproduce
+subito un file e lo aggiunge a una voce "Imported media", stessa icona, che
+tiene tutti i file aperti così. Doppio clic e parte, ‹ › vanno al file
+prima e dopo, la linea di avanzamento segue il file e la riga di stato
+mostra tempo passato / totale. Clic su una playlist per tornare ai
+canali. La ✕ toglie la cartella o svuota Imported media, dopo conferma: dal
+disco non si cancella niente. La finestra per scegliere file e cartelle
+è disegnata dall'app, scura come il resto: ↑ o Backspace salgono,
+doppio clic entra in una cartella o prende un file, il percorso in cima
+si può scrivere. I formati sono quelli di mpv, cioè di ffmpeg:
+
+- Video: mkv, mp4, m4v, avi, mov, webm, ts, m2ts, mpg, mpeg, wmv, flv, ogv.
+- Audio: mp3, flac, ogg, opus, m4a, aac, wav, wma, ape.
+- Sottotitoli: srt, ass, ssa, sub, vtt accanto al video con lo stesso
+  nome vengono presi da soli; quelli dentro il file da Audio → Subtitles.
+
+Anche le playlist (m3u) con dentro percorsi locali vanno allo stesso modo.
+
+![File locali](preview2.png)
+
 **Memoria.** L'app ricorda l'ultima playlist e l'ultimo canale e alla
 riapertura riparte da lì (se il canale sta in un'altra lista, apre
 quella). Ricorda anche volume, lingua, guide, larghezza delle barre e
@@ -631,7 +679,7 @@ riparte da x1.
 
 ## La finestra
 
-- **Barra in alto** con i menu: Playlists, TV guide, View, Record, Video,
+- **Barra in alto** con i menu: File, Playlists, TV guide, View, Record, Video,
   Audio, About, Language. I menu, le finestre di dialogo e le conferme
   sono disegnati dall'app, scuri come il resto.
 - **Barre laterali**: il primo bottone a sinistra nella barra dei comandi
@@ -663,6 +711,7 @@ riparte da x1.
 
 | Menu | Voci |
 |---|---|
+| File | Open file…, Open folder… |
 | Playlists | Add URL, Open folder, Reload, Remove <lista da url> |
 | TV guide | Programme guide, Add URL, Reload, Remove <guida> |
 | View | Fullscreen, Hide/Show channels, Hide/Show playlists |
