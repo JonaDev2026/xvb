@@ -40,7 +40,7 @@ try:                            # per i loghi: ridimensiona e legge i jpg
 except ImportError:             # senza, si va di PhotoImage: solo png
     HA_PIL = False
 
-VERSIONE = "2.1"
+VERSIONE = "2.2"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"        # dove stanno le release, per l'avviso di aggiornamento
@@ -2031,9 +2031,13 @@ class TV(object):
                            lambda e: self.apri_chiudi_cartella(False))
 
         # --- sotto: stato e comandi
-        self.riga_stato = tk.Frame(self.root, bg=STATO, height=42)
+        self.riga_stato = tk.Frame(self.root, bg=STATO, height=28)
         self.riga_stato.pack(side="bottom", fill="x")
-        self.riga_stato.pack_propagate(False)   # alta il doppio
+        self.riga_stato.pack_propagate(False)
+        # l'ora, a sinistra di tutto, del colore del canale
+        self.et_orologio = tk.Label(self.riga_stato, text=time.strftime("%H:%M"),
+                                    bg=STATO, fg=TESTO)
+        self.et_orologio.pack(side="left", padx=(10, 0), fill="y")
         self.stato = tk.Label(self.riga_stato, text=_("ready"), anchor="w",
                               bg=STATO, fg="#ffffff")
         self.stato.pack(side="left", padx=(8, 0), fill="y")
@@ -2088,30 +2092,37 @@ class TV(object):
         self.root.after(500, self.aggiorna_linea)
         self.root.after(1000, self.controlla_registrazione)
 
-        # a sinistra, a gruppi: [sidebar]  [< play >]
+        # a sinistra, a gruppi: [sidebar]  [< play rec switch >]
         self.b_sidebar = self.tasto("playlist", _("Playlists"), self.sidebar, 8)
-        self.tasto("prima", "<", lambda: self.salta(-1), 3, padx=(6, 2))
+        self.tasto("prima", "<", lambda: self.salta(-1), 3, padx=(24, 2))
         self.b_pausa = self.tasto("pausa", _("Pause"), self.pausa, 8)
+        self.b_rec = self.tasto("rec", _("Record"), self.registra)
+        self.tasto("switch", _("Switch"), self.switch, 6)
         self.tasto("dopo", ">", lambda: self.salta(+1), 3)
-        # a destra, da destra a sinistra: cuore, schermo intero, [switch
-        # rec], ingranaggio, volume col suo muto
+        # a destra, da destra a sinistra: cuore, schermo intero, [EPG x1],
+        # ingranaggio, volume col suo muto
         self.b_pref = self.tasto("favorite_off", _("Favorite"), self.preferito,
                                  lato="right")
         self.tasto("pieno", _("Fullscreen"), self.schermo_intero, 14,
                    lato="right")
-        # poi, da destra a sinistra, [switch rec] dopo l'ingranaggio
-        self.b_rec = self.tasto("rec", _("Record"), self.registra, lato="right",
-                                padx=(2, 6))
-        self.tasto("epg", "EPG", self.apri_guida, 4, lato="right")
-        self.b_velocita = self.tasto("x1", "x1", self.gira_velocita, 4, lato="right")
-        self.tasto("switch", _("Switch"), self.switch, 6, lato="right",
-                   padx=(6, 2))
+        self.tasto("epg", "EPG", self.apri_guida, 4, lato="right", padx=(2, 6))
+        self.b_velocita = self.tasto("x1", "x1", self.gira_velocita, 4, lato="right",
+                                     padx=(6, 2))
         # l'ingranaggio apre la tendina delle qualita' sopra di se'
         self.b_qualita = self.tasto("setting", _("quality"), self.apri_menu_qualita,
                                     lato="right")
         self.volume = Cursore(self.barra, self.alza_volume, larga=85)
-        self.volume.pack(side="right", padx=(0, 6))
+        self.volume.pack(side="right", padx=0)
         self.b_muto = self.tasto("volume", _("Mute"), self.muto, lato="right")
+        # come YouTube: il cursore sta chiuso, con l'altoparlante attaccato
+        # all'ingranaggio; passando col mouse sull'altoparlante si apre
+        # verso sinistra, spingendo l'altoparlante, e il resto non si muove.
+        # Si richiude quando il mouse va via da tutti e due
+        self.volume_largo, self.volume_dopo = 0, None
+        self.volume.config(width=0)
+        for w in (self.b_muto, self.volume):
+            w.bind("<Enter>", lambda e: self.apri_volume(), add="+")
+            w.bind("<Leave>", lambda e: self.chiudi_volume_tra_poco(), add="+")
         # i fotogrammi del mezzo giro, da 0 a 180 gradi
         self.giri_ingranaggio, self.passo_ingranaggio = [], 0
         self.verso_ingranaggio = 0
@@ -3282,6 +3293,29 @@ class TV(object):
             icona = "volume"                    # manca la png: quella di base
         self.faccia(self.b_muto, icona, _("Unmute") if muto else _("Mute"))
 
+    def apri_volume(self):
+        if self.volume_dopo:
+            self.root.after_cancel(self.volume_dopo)
+            self.volume_dopo = None
+        self.anima_volume(+1)
+
+    def chiudi_volume_tra_poco(self):
+        if self.volume_dopo:
+            self.root.after_cancel(self.volume_dopo)
+        self.volume_dopo = self.root.after(400, lambda: self.anima_volume(-1))
+
+    def anima_volume(self, verso):
+        """Il cursore si allarga (o si stringe) in cinque passi da 15 ms:
+        e' lui a cambiare larghezza, l'altoparlante si sposta di conseguenza."""
+        passo = self.volume.larga // 5
+        largo = max(0, min(self.volume.larga, self.volume_largo + verso * passo))
+        if largo == self.volume_largo:
+            return
+        self.volume_largo = largo
+        self.volume.config(width=largo)
+        if 0 < largo < self.volume.larga:
+            self.root.after(15, lambda: self.anima_volume(verso))
+
     def alza_volume(self, v):
         try:
             self.mpv.volume = float(v) * (1.5 if self.cfg.get("boost") else 1.0)
@@ -3804,6 +3838,7 @@ class TV(object):
         comandi del colore del pallino del canale."""
         self.linea.itemconfig(self.pieno_linea, fill=colore)
         self.et_titolo.config(fg=colore)
+        self.et_orologio.config(fg=colore)
         self.colore_barra = colore
         self.disegna_fondo_barra()
 
@@ -3865,6 +3900,9 @@ class TV(object):
                 self.scrivi_riga()          # e' cambiato programma
         w = self.linea.winfo_width()
         self.linea.coords(self.pieno_linea, 0, 0, int(w * parte), 2)
+        ora = time.strftime("%H:%M")
+        if self.et_orologio.cget("text") != ora:
+            self.et_orologio.config(text=ora)
         self.root.after(500, self.aggiorna_linea)
         self.root.after(1000, self.controlla_registrazione)
 

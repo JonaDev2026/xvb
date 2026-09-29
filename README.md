@@ -203,8 +203,9 @@ HD/FHD/4K suffix), so "NEWS 24 HD" and "News24" match. Times carry the
 guide's own time zone and are shown in the PC's local time, so they
 are right wherever you are.
 
-**In the row below the video:** channel, title of the programme on air
-(in the channel's colour) and time, "News 24 - Evening News (20:00 - 20:30)". The
+**In the row below the video:** the current time, the channel, the
+title of the programme on air and its slot, "20:05  News 24 - Evening
+News (20:00 - 20:30)"; time and title take the channel's colour. The
 line above the controls is the progress: how much of the programme
 has elapsed; it fills from the left and switches by itself to the next
 programme. If the channel isn't in the guide it says so; with no guide
@@ -286,10 +287,11 @@ All of these are kept in the config, except the speed, which restarts at x1.
   window and in full screen; View → Hide/Show handles them one at a
   time. They resize by dragging the strip between the bar and the
   video (from 140 px to 60% of the window); the width is saved.
-- **Controls**: [sidebars] [‹ pause ›] … [speaker, volume, gear]
-  [switch, rec] [x1, EPG] [full screen, heart]. The volume is a white
-  YouTube-style bar; the speaker icon follows the level (off, low,
-  medium, high, muted). Behind the controls there's a gradient in the
+- **Controls**: [sidebars] [‹ pause rec switch ›] … [speaker, gear]
+  [x1, EPG] [full screen, heart]. The volume works like YouTube's: the
+  bar is hidden and slides out to the left of the speaker when the mouse
+  is over it, then folds back; the speaker icon follows the level (off,
+  low, medium, high, muted). Behind the controls there's a gradient in the
   channel's colour, starting from the progress line and fading
   downwards; the icons sit on it with no background.
 - **Full screen**: the button, F11 or View → Fullscreen; Esc to leave.
@@ -603,8 +605,9 @@ coda), così "NEWS 24 HD" e "News24" combaciano. Gli orari hanno il fuso
 scritto nella guida e vengono mostrati nell'ora locale del PC, quindi
 sono giusti ovunque tu sia.
 
-**Nella riga sotto il video:** canale, titolo del programma in onda (col
-colore del canale) e orario, "News 24 - Evening News (20:00 - 20:30)". La riga
+**Nella riga sotto il video:** l'ora, il canale, il titolo del programma
+in onda e la sua fascia, "20:05  News 24 - Evening News (20:00 - 20:30)";
+ora e titolo prendono il colore del canale. La riga
 sopra i comandi è la progress: quanto del programma è passato, si
 riempie da sinistra e cambia da sola al programma dopo. Se il canale
 non è in guida lo dice; senza guida la progress resta vuota.
@@ -687,10 +690,12 @@ riparte da x1.
   chiuse), in finestra e a schermo intero; View → Hide/Show le gestisce
   una per una. Si allargano trascinando la striscia fra la barra e il
   video (da 140 px al 60% della finestra); la larghezza resta salvata.
-- **Comandi**: [sidebar] [‹ pausa ›] … [altoparlante, volume, ingranaggio]
-  [switch, rec] [x1, EPG] [schermo intero, cuore]. Il volume è una barra
-  bianca stile YouTube; l'icona dell'altoparlante cambia con il livello
-  (spento, basso, medio, alto, muto). Dietro ai comandi c'è una
+- **Comandi**: [sidebar] [‹ pausa rec switch ›] … [altoparlante,
+  ingranaggio] [x1, EPG] [schermo intero, cuore]. Il volume fa come
+  YouTube: la barra sta nascosta e scorre fuori a sinistra
+  dell'altoparlante quando ci passi col mouse, poi si richiude; l'icona
+  dell'altoparlante cambia con il livello (spento, basso, medio, alto,
+  muto). Dietro ai comandi c'è una
   sfumatura del colore del canale che parte dalla progress e si spegne
   verso il basso; le icone ci stanno sopra senza fondo.
 - **Schermo intero**: il bottone, F11 o View → Fullscreen; Esc per uscire.
