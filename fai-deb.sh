@@ -1,10 +1,13 @@
 #!/bin/sh
 # Fa il pacchetto .deb di XVB da questa cartella: xvb.py, icone/ e
 # icon.png cosi' come sono. Uso:  sh fai-deb.sh [versione]
+# Senza versione usa VERSIONE scritta in xvb.py.
 set -e
-VER="${1:-1.0}"
 QUI="$(cd "$(dirname "$0")" && pwd)"
 cd "$QUI"
+# la versione: quella passata, se no quella scritta in xvb.py (VERSIONE)
+VER="${1:-$(sed -n 's/^VERSIONE = "\(.*\)"/\1/p' xvb.py)}"
+[ -n "$VER" ] || VER=1.0
 for f in xvb.py icone icon.png; do
     [ -e "$f" ] || { echo "manca $f in $QUI"; exit 1; }
 done

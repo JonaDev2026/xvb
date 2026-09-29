@@ -26,7 +26,7 @@ import sys
 import threading
 import time
 import tkinter as tk
-from tkinter import filedialog, simpledialog, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
 import xml.etree.ElementTree as ET
 from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
@@ -39,6 +39,8 @@ try:                            # per i loghi: ridimensiona e legge i jpg
 except ImportError:             # senza, si va di PhotoImage: solo png
     HA_PIL = False
 
+VERSIONE = "1.1"
+REPO = "JonaDev2026/xvb"        # dove stanno le release, per l'avviso di aggiornamento
 UA = "Mozilla/5.0 (X11; Linux x86_64)"
 IN_AFFANNO = 3.0            # secondi di buffer sotto i quali si scende
 TRANQUILLO = 15.0           # buffer pieno: si puo' risalire
@@ -70,6 +72,19 @@ LINGUE = (("en", "English"), ("it", "Italiano"), ("es", "Español"), ("fr", "Fra
 LINGUA = "en"
 TESTI = {
     "it": {
+        "About": "Info",
+        "About XVB...": "Informazioni su XVB...",
+        "Version": "Versione",
+        "new version %s available": "nuova versione %s disponibile",
+        "new version %s available: About > Download": "nuova versione %s disponibile: Info > Scarica",
+        "Check for updates": "Cerca aggiornamenti",
+        "Download %s": "Scarica la %s",
+        "Up to date": "Aggiornata",
+        "cannot check for updates: %s": "non riesco a controllare gli aggiornamenti: %s",
+        "up to date (%s)": "aggiornata (%s)",
+        "Remove %s": "Rimuovi %s",
+        "removed %s": "rimossa %s",
+        "%s is already there": "%s c'è già",
         "Record": "Registra",
         "Stop": "Ferma",
         "Record now": "Registra ora",
@@ -124,11 +139,24 @@ TESTI = {
         "Fullscreen": "Schermo intero", "quality": "qualita'", "Mute": "Muto",
         "Unmute": "Audio", "Switch": "Scambia",
         "Open folder": "Apri cartella", "Reload": "Ricarica", "Add URL": "Aggiungi url",
-        "Remove": "Togli", "View": "Vista", "Hide channels": "Nascondi canali",
+        "Remove": "Rimuovi", "View": "Vista", "Hide channels": "Nascondi canali",
         "Show channels": "Mostra canali", "Hide playlists": "Nascondi playlist",
         "Show playlists": "Mostra playlist", "Language": "Lingua",
     },
     "es": {
+        "About": "Acerca de",
+        "About XVB...": "Acerca de XVB...",
+        "Version": "Versión",
+        "new version %s available": "nueva versión %s disponible",
+        "new version %s available: About > Download": "nueva versión %s disponible: Acerca de > Descargar",
+        "Check for updates": "Buscar actualizaciones",
+        "Download %s": "Descargar la %s",
+        "Up to date": "Actualizada",
+        "cannot check for updates: %s": "no puedo comprobar actualizaciones: %s",
+        "up to date (%s)": "actualizada (%s)",
+        "Remove %s": "Quitar %s",
+        "removed %s": "quitada %s",
+        "%s is already there": "%s ya está",
         "Record": "Grabar",
         "Stop": "Parar",
         "Record now": "Grabar ahora",
@@ -188,6 +216,19 @@ TESTI = {
         "Show playlists": "Mostrar listas", "Language": "Idioma",
     },
     "fr": {
+        "About": "À propos",
+        "About XVB...": "À propos de XVB...",
+        "Version": "Version",
+        "new version %s available": "nouvelle version %s disponible",
+        "new version %s available: About > Download": "nouvelle version %s disponible : À propos > Télécharger",
+        "Check for updates": "Rechercher des mises à jour",
+        "Download %s": "Télécharger la %s",
+        "Up to date": "À jour",
+        "cannot check for updates: %s": "impossible de vérifier les mises à jour : %s",
+        "up to date (%s)": "à jour (%s)",
+        "Remove %s": "Retirer %s",
+        "removed %s": "%s retiré",
+        "%s is already there": "%s est déjà là",
         "Record": "Enregistrer",
         "Stop": "Arrêter",
         "Record now": "Enregistrer maintenant",
@@ -550,13 +591,51 @@ def prendi_epg(dove):
     return f
 
 
+def piu_nuova(a, b):
+    """Se la versione a e' piu' nuova della b: si confrontano numero per
+    numero ('1.10' batte '1.9')."""
+    def pezzi(v):
+        return [int(x) if x.isdigit() else 0 for x in re.split(r"[.\-]", v)]
+    return pezzi(a) > pezzi(b)
+
+
+def nome_dentro(f):
+    """Il nome del file scritto dentro all'archivio gzip (chi comprime ce
+    lo lascia: guida.xml.gz -> 'guida.xml'). None se non c'e' o non e' gz."""
+    try:
+        with open(f, "rb") as h:
+            testa = h.read(4096)
+        if testa[:2] != b"\x1f\x8b":
+            return None
+        flag, p = testa[3], 10
+        if flag & 4:                              # FEXTRA
+            p += 2 + int.from_bytes(testa[p:p + 2], "little")
+        if flag & 8:                              # FNAME
+            fine = testa.index(b"\x00", p)
+            nome = os.path.basename(testa[p:fine].decode("latin-1").strip())
+            return nome or None
+    except Exception:
+        pass
+    return None
+
+
 def nome_epg(dove):
-    """Come chiamare la guida nella barra: se e' un url, il dominio; se e'
-    un file, il suo nome."""
+    """Come chiamare la guida quando non si sa ancora il nome del file
+    dentro all'archivio: l'ultima parola dell'url o del percorso, .xml."""
     if re.match(r"https?://", dove, re.I):
-        dominio = urlparse(dove).netloc.lower()
-        return dominio[4:] if dominio.startswith("www.") else dominio
-    return os.path.basename(dove.rstrip("/")) or dove
+        u = urlparse(dove)
+        dominio = u.netloc.lower()
+        if dominio.startswith("www."):
+            dominio = dominio[4:]
+        # l'ultimo pezzo dell'url: /epg/uk.xml.gz -> uk.xml, /gzip -> gzip;
+        # senza percorso resta il dominio
+        nome = os.path.basename(u.path.rstrip("/"))
+        if not nome:
+            return dominio
+    else:
+        nome = os.path.basename(dove.rstrip("/")) or dove
+    nome = re.sub(r"\.gz$", "", nome, flags=re.I)     # uk.xml.gz -> uk.xml
+    return nome if nome.lower().endswith(".xml") else nome + ".xml"   # sono sempre xml
 
 
 def nome_piatto(nome):
@@ -764,6 +843,9 @@ class TV(object):
         global LINGUA
         if self.cfg.get("lingua") in dict(LINGUE):
             LINGUA = self.cfg["lingua"]
+        # le guide: una lista di url o file (prima era una sola stringa)
+        e = self.cfg.get("epg")
+        self.cfg["epg"] = [e] if isinstance(e, str) and e else (e if isinstance(e, list) else [])
         # la cartella delle liste ci deve essere sempre: se manca la si
         # fa, cosi' uno sa subito dove mettere le cose
         for c in CARTELLE_LISTE:
@@ -781,6 +863,7 @@ class TV(object):
         self.riga_mostrata = ("", "", "")
         self.da_riallineare, self.suonato_da = False, 0.0
         self.registrando, self.fine_rec = "", 0.0    # file in corso, quando fermarsi
+        self.nuova, self.pagina_nuova = "", ""      # versione nuova su GitHub, se c'e'
         self.piano = None                            # (nome, url, ide, inizio, fine)
         self.ultima_discesa = 0.0
         self.tranquillo_da = time.time()
@@ -849,8 +932,9 @@ class TV(object):
             (_("Reload"), lambda: self.rifai_liste(scegli=self.cfg.get("lista")))])
         self.menu("TV guide", lambda: [
             (_("Add URL"), self.chiedi_epg),
-            (_("Reload"), self.ricarica_epg if self.cfg.get("epg") else None),
-            (_("Remove"), self.togli_epg if self.cfg.get("epg") else None)])
+            (_("Reload"), self.ricarica_epg if self.cfg.get("epg") else None)] + [
+            (_("Remove %s") % self.nome_guida(d), lambda d=d: self.togli_epg(d))
+            for d in self.cfg.get("epg", [])])
         self.menu("View", lambda: [
             (_("Fullscreen"), self.schermo_intero),
             (_("Show channels") if self.nascosti.get(self.sinistra) else _("Hide channels"),
@@ -866,6 +950,11 @@ class TV(object):
             (_("Delay +100 ms"), lambda: self.ritardo_audio(+0.1)),
             (_("Delay -100 ms"), lambda: self.ritardo_audio(-0.1)),
             (_("Reset delay"), self.azzera_ritardo)])
+        self.menu("About", lambda: [
+            (_("About XVB..."), self.informazioni),
+            (_("Check for updates"), self.controlla_versione),
+            (_("Download %s") % self.nuova if self.nuova else _("Up to date"),
+             self.apri_release if self.nuova else None)])
         self.menu("Language", lambda: [
             (("*  " if codice == LINGUA else "   ") + nome,
              lambda c=codice: self.cambia_lingua(c)) for codice, nome in LINGUE])
@@ -983,6 +1072,19 @@ class TV(object):
         self.barra = tk.Frame(self.root, bg=BARRA, height=40)
         self.barra.pack(side="bottom", fill="x")
         self.barra.pack_propagate(False)        # altezza fissa, comandi al centro
+        # il pannello viola degli avvisi: compare sopra ai comandi, alto
+        # come la riga del programma, e se ne va da solo o con un clic
+        self.avviso = tk.Frame(self.root, bg=IN_ONDA, height=42)
+        self.avviso.pack_propagate(False)
+        self.et_xvb = tk.Label(self.avviso, text="xvb", bg=IN_ONDA, fg=ACCENTO,
+                               font=("TkDefaultFont", 11, "bold"))
+        self.et_xvb.pack(side="left", padx=(12, 10), fill="y")
+        self.et_avviso = tk.Label(self.avviso, text="", bg=IN_ONDA, fg=TESTO_ONDA,
+                                  anchor="w")
+        self.et_avviso.pack(side="left", fill="both", expand=True)
+        for w in (self.avviso, self.et_xvb, self.et_avviso):
+            w.bind("<Button-1>", lambda e: self.chiudi_avviso())
+        self.timer_avviso = None
         # la riga in cima alla barra, stile YouTube: traccia grigia e, in
         # bianco, quanto manca alla fine del programma (dalla guida)
         self.linea = tk.Canvas(self.barra, height=2, bg="#3a3a3a",
@@ -1146,8 +1248,9 @@ class TV(object):
         self.rifai_liste(scegli=lista)
         threading.Thread(target=self.guarda, daemon=True).start()
         if self.cfg.get("epg"):
-            threading.Thread(target=self._carica_epg, args=(self.cfg["epg"],),
-                             daemon=True).start()
+            self.carica_guide()
+        # dopo un po', in silenzio: c'e' una versione nuova su GitHub?
+        self.root.after(8000, lambda: self.controlla_versione(zitto=True))
 
     # ------------------------------------------------- i pezzi di finestra
     def bottone(self, dove, testo, cosa):
@@ -1237,8 +1340,9 @@ class TV(object):
                 im = carica_logo(f, PUNTO, PUNTO)
                 if im is not None:
                     self.img_liste[f] = im
-            self.el_liste.insert(padre, "end", image=self.img_liste.get(f, self.vuoto),
-                                 text=" " + nome_epg(self.cfg["epg"]))
+            for d in self.cfg["epg"]:
+                self.el_liste.insert(padre, "end", image=self.img_liste.get(f, self.vuoto),
+                                     text=" " + self.nome_guida(d))
         # poi le liste sciolte, e le categorie con le loro dentro
         gia = set()
         for nome, dentro in categorie():
@@ -1762,8 +1866,9 @@ class TV(object):
     def disponi(self, pieno):
         """Mette i pezzi al loro posto, nell'ordine giusto. L'ordine conta:
         i pannelli prima, il video per ultimo, che si prende il resto."""
+        avviso_aperto = self.avviso.winfo_ismapped()
         for w in (self.cima, self.sinistra, self.destra, self.riga_stato,
-                  self.barra, self.video):
+                  self.barra, self.avviso, self.video):
             w.pack_forget()
         if not pieno:
             self.cima.pack(side="top", fill="x")
@@ -1775,6 +1880,8 @@ class TV(object):
         if not pieno:
             self.riga_stato.pack(side="bottom", fill="x")
             self.barra.pack(side="bottom", fill="x")
+        if avviso_aperto:
+            self.avviso.pack(side="bottom", fill="x")
         self.video.pack(side="right", fill="both", expand=True)
         self.root.config(cursor="")
 
@@ -1872,6 +1979,64 @@ class TV(object):
         self.icona_preferito()
         self.scrivi_riga() if self.nome else self.scrivi(_("ready"))
 
+    def mostra_avviso(self, testo, secondi=8):
+        """Il pannello viola sopra ai comandi, col messaggio; sparisce
+        dopo `secondi` (0 = resta finche' non ci si clicca)."""
+        self.et_avviso.config(text=testo)
+        if not self.avviso.winfo_ismapped():
+            self.avviso.pack(side="bottom", fill="x", before=self.video)
+        if self.timer_avviso:
+            self.root.after_cancel(self.timer_avviso)
+            self.timer_avviso = None
+        if secondi:
+            self.timer_avviso = self.root.after(int(secondi * 1000), self.chiudi_avviso)
+
+    def chiudi_avviso(self):
+        self.timer_avviso = None
+        if self.avviso.winfo_ismapped():
+            self.avviso.pack_forget()
+
+    # ------------------------------------------------- l'aggiornamento
+    def controlla_versione(self, zitto=False):
+        """Chiede a GitHub l'ultima release; se e' piu' nuova lo dice
+        nella riga di stato. Con zitto, se non c'e' niente non dice nulla."""
+        threading.Thread(target=self._controlla_versione, args=(zitto,),
+                         daemon=True).start()
+
+    def _controlla_versione(self, zitto):
+        try:
+            r = Request("https://api.github.com/repos/%s/releases/latest" % REPO,
+                        headers={"User-Agent": UA, "Accept": "application/vnd.github+json"})
+            d = json.loads(urlopen(r, timeout=10).read().decode("utf-8", "ignore"))
+            tag = str(d.get("tag_name", "")).lstrip("vV")
+            pagina = d.get("html_url", "")
+        except Exception as e:
+            if not zitto:
+                self.scrivi(_("cannot check for updates: %s") % e)
+            return
+        if tag and piu_nuova(tag, VERSIONE):
+            self.nuova, self.pagina_nuova = tag, pagina
+            self.root.after(0, lambda: self.mostra_avviso(
+                _("new version %s available: About > Download") % tag, 0))
+        elif not zitto:
+            self.scrivi(_("up to date (%s)") % VERSIONE)
+            self.root.after(3000, self.scrivi_riga)
+
+    def informazioni(self):
+        """La finestrella About: nome, versione, dove sta il progetto."""
+        testo = "XVB - Extended Video Broadcast\n%s %s\n\n%s\n\nhttps://github.com/%s" % (
+            _("Version"), VERSIONE,
+            _("new version %s available") % self.nuova if self.nuova else _("Up to date"),
+            REPO)
+        messagebox.showinfo("XVB", testo, parent=self.root)
+
+    def apri_release(self):
+        if self.pagina_nuova:
+            try:
+                subprocess.Popen(["xdg-open", self.pagina_nuova])
+            except Exception as e:
+                self.scrivi(_("cannot open %s: %s") % (self.pagina_nuova, e))
+
     def apri_cartella_liste(self):
         cartella = CARTELLE_LISTE[0]
         try:
@@ -1906,53 +2071,78 @@ class TV(object):
         self.ridisponi()
 
     def ricarica_epg(self):
-        dove = self.cfg.get("epg")
-        if not dove:
+        """Butta le copie in cache e riscarica tutte le guide."""
+        if not self.cfg.get("epg"):
             self.scrivi(_("no TV guide set"))
             return
-        try:
-            if not os.path.isfile(dove):
-                f = os.path.join(CACHE_EPG, hashlib.md5(dove.encode()).hexdigest())
-                if os.path.isfile(f):
-                    os.remove(f)                # via la copia: si riscarica
-        except Exception:
-            pass
-        threading.Thread(target=self._carica_epg, args=(dove,), daemon=True).start()
+        for dove in self.cfg["epg"]:
+            try:
+                if not os.path.isfile(dove):
+                    f = os.path.join(CACHE_EPG, hashlib.md5(dove.encode()).hexdigest())
+                    if os.path.isfile(f):
+                        os.remove(f)            # via la copia: si riscarica
+            except Exception:
+                pass
+        self.carica_guide()
 
-    def togli_epg(self):
-        self.cfg["epg"] = ""
+    def togli_epg(self, dove):
+        """Via una guida sola, quella detta nella voce di menu."""
+        self.cfg["epg"] = [d for d in self.cfg.get("epg", []) if d != dove]
         scrivi_config(self.cfg)
-        self.epg_nomi, self.epg = {}, {}
         self.rifai_albero()
-        self.scrivi_riga()
+        self.scrivi(_("removed %s") % self.nome_guida(dove))
+        self.cfg.get("epg_nomi", {}).pop(dove, None)
+        self.carica_guide()                 # si rifa' l'unione con quelle rimaste
 
     def chiedi_epg(self):
-        """Chiede l'url (o il percorso) della guida XMLTV e la carica."""
+        """Chiede l'url (o il percorso) di una guida XMLTV e la aggiunge
+        alle altre."""
         dove = simpledialog.askstring(
             _("TV guide"), _("URL or file of the guide (XMLTV, .gz is fine):"),
-            initialvalue=self.cfg.get("epg", ""), parent=self.root)
-        if dove is None:
+            parent=self.root)
+        if not dove or not dove.strip():
             return
         dove = dove.strip()
-        self.cfg["epg"] = dove
+        if dove in self.cfg.get("epg", []):
+            self.scrivi(_("%s is already there") % self.nome_guida(dove))
+            return
+        self.cfg.setdefault("epg", []).append(dove)
         scrivi_config(self.cfg)
         self.rifai_albero()
-        if not dove:
-            self.epg_nomi, self.epg = {}, {}
-            self.scrivi_riga()
-            return
-        threading.Thread(target=self._carica_epg, args=(dove,),
+        self.carica_guide()
+
+    def nome_guida(self, dove):
+        """Il nome di una guida: quello del file dentro all'archivio, se
+        lo si e' gia' letto; se no l'ultima parola dell'url."""
+        return self.cfg.get("epg_nomi", {}).get(dove) or nome_epg(dove)
+
+    def carica_guide(self):
+        """Tutte le guide del config, in un thread, unite in una sola."""
+        threading.Thread(target=self._carica_guide, args=(list(self.cfg.get("epg", [])),),
                          daemon=True).start()
 
-    def _carica_epg(self, dove):
-        self.scrivi(_("loading the guide..."))
-        try:
-            f = prendi_epg(dove)
-            nomi, programmi = leggi_epg(f)
-        except Exception as e:
-            self.scrivi(_("guide not loaded: %s") % e)
-            return
+    def _carica_guide(self, dove_tutte):
+        nomi, programmi = {}, {}
+        for dove in dove_tutte:
+            self.scrivi(_("loading %s...") % self.nome_guida(dove))
+            try:
+                f = prendi_epg(dove)
+                dentro = nome_dentro(f)
+                if dentro:
+                    self.cfg.setdefault("epg_nomi", {})[dove] = dentro
+                    scrivi_config(self.cfg)
+                n, p = leggi_epg(f)
+            except Exception as e:
+                self.scrivi(_("guide not loaded: %s") % e)
+                time.sleep(2)
+                continue
+            for k, v in n.items():
+                nomi.setdefault(k, v)       # la prima guida che ha un nome vince
+            for k, v in p.items():
+                if k not in programmi:
+                    programmi[k] = v
         self.epg_nomi, self.epg = nomi, programmi
+        self.root.after(0, self.rifai_albero)   # coi nomi veri dei file
         self.scrivi(_("guide loaded: %d channels, %d programmes") % (
             len(nomi), sum(len(v) for v in programmi.values())))
         self.root.after(4000, self.scrivi_riga)

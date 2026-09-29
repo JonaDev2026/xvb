@@ -35,7 +35,11 @@ python-mpv --break-system-packages`.
 
 ### Fare il pacchetto
 
-Dalla cartella del repo: `sh fai-deb.sh 1.0` produce `xvb_1.0_all.deb`.
+Dalla cartella del repo: `sh fai-deb.sh` produce `xvb_<versione>_all.deb`
+con la versione scritta in `xvb.py` (`VERSIONE = "1.0"`): per una release
+nuova si alza quel numero, si rifà il pacchetto, e il tag della release
+deve essere `v` + lo stesso numero (es. `v1.1`), perché è quello che
+l'app confronta per l'avviso di aggiornamento.
 
 ## Le liste
 
@@ -70,10 +74,11 @@ stile etichette del Mac, sempre lo stesso per lo stesso nome.
 | Ritardo audio | `+` ritarda l'audio di 100 ms (audio in anticipo sul video), `-` lo anticipa; anche dal menu Audio. Resta salvato per quel canale |
 | Preferiti | il cuore mette o toglie il canale in onda dai preferiti |
 | Registrare | il bottone rec registra il canale in onda in `~/Videos/xvb/` così com'è, senza ricodificare; ripremi per fermare, cambiando canale si ferma. Record → Schedule... imposta inizio e fine: all'ora giusta l'app apre il canale e registra (deve restare aperta) |
-| Guida TV | TV guide → Add URL: l'url o il file di una guida XMLTV, anche `.gz`. Sotto il video compaiono il programma in onda e l'orario, la riga sopra i comandi è il tempo che manca alla fine. I canali si trovano col `tvg-id` della lista, o per nome |
+| Guida TV | TV guide → Add URL: l'url o il file di una guida XMLTV, anche `.gz`; se ne possono aggiungere più d'una (una per paese) e si uniscono; ognuna ha la sua voce "Remove …" e la sua riga sotto EPG. Sotto il video compaiono il programma in onda e l'orario, la riga sopra i comandi è il tempo che manca alla fine. I canali si trovano col `tvg-id` della lista, o per nome |
 | Schermo intero | il bottone, F11 o View → Fullscreen; Esc per uscire |
 | Barre laterali | il primo bottone a sinistra le toglie e le rimette, in finestra e a schermo intero; con le barre chiuse comandi e mouse spariscono da soli dopo tre secondi |
 | Lingua | menu Language: English, Italiano, Español, Français |
+| Aggiornamenti | all'avvio controlla su GitHub se c'è una release nuova e lo scrive nella riga di stato; About → Download apre la pagina, About → About XVB… mostra la versione |
 
 Nell'elenco la riga **viola** è il canale in onda, quella **grigia** è
 la selezione. L'app si ricorda l'ultima lista, l'ultimo canale, il
