@@ -39,7 +39,7 @@ try:                            # per i loghi: ridimensiona e legge i jpg
 except ImportError:             # senza, si va di PhotoImage: solo png
     HA_PIL = False
 
-VERSIONE = "1.4"
+VERSIONE = "1.5"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"        # dove stanno le release, per l'avviso di aggiornamento
@@ -74,6 +74,8 @@ LINGUE = (("en", "English"), ("it", "Italiano"), ("es", "Español"), ("fr", "Fra
 LINGUA = "en"
 TESTI = {
     "it": {
+        "Programme guide": "Guida programmi",
+        "no guide data for this playlist": "nessun programma in guida per questa playlist",
         "OK": "OK",
         "Cancel": "Annulla",
         "MIT license": "Licenza MIT",
@@ -151,6 +153,8 @@ TESTI = {
         "Show playlists": "Mostra playlist", "Language": "Lingua",
     },
     "es": {
+        "Programme guide": "Guía de programas",
+        "no guide data for this playlist": "sin programas en la guía para esta lista",
         "OK": "OK",
         "Cancel": "Cancelar",
         "MIT license": "Licencia MIT",
@@ -228,6 +232,8 @@ TESTI = {
         "Show playlists": "Mostrar listas", "Language": "Idioma",
     },
     "fr": {
+        "Programme guide": "Grille des programmes",
+        "no guide data for this playlist": "aucun programme dans le guide pour cette liste",
         "OK": "OK",
         "Cancel": "Annuler",
         "MIT license": "Licence MIT",
@@ -458,17 +464,98 @@ def leggi_lista(f, solo_cache=False):
         else:
             f = copia_lista_url(f)
     righe = open(f, encoding="utf-8", errors="ignore").read().splitlines()
-    fuori, nome, ide = [], None, None
+    fuori, nome, ide, logo = [], None, None, None
     for riga in righe:
         riga = riga.strip()
         if riga.startswith("#EXTINF"):
             nome = riga.split(",", 1)[-1].strip() or _("unnamed")
             m = re.search(r'tvg-id="([^"]*)"', riga)
             ide = m.group(1).strip() if m else None
+            m = re.search(r'tvg-logo="([^"]+)"', riga)
+            logo = m.group(1).strip() if m else None
         elif riga and not riga.startswith("#"):
             fuori.append((nome or riga, riga, ide or None))
-            nome, ide = None, None
+            if logo:
+                LOGHI[riga] = logo          # il logo del canale, per il colore
+            nome, ide, logo = None, None, None
     return fuori
+
+
+LOGHI = {}                      # indirizzo canale -> url del logo
+CACHE_LOGHI = os.path.join(CASA, ".cache", "xvb", "loghi")
+FILE_COLORI = os.path.join(CASA, ".cache", "xvb", "colori.json")
+
+
+def colore_dal_logo(url_logo):
+    """Il colore dominante del logo di un canale, da usare per il pallino:
+    si scarica il logo (in cache), si buttano i pixel trasparenti, bianchi,
+    neri e grigi, si prende la tinta piu' presente e la si porta a una
+    luminosita' che si veda sullo scuro. None se non si riesce."""
+    if not HA_PIL:
+        return None
+    import colorsys
+    os.makedirs(CACHE_LOGHI, exist_ok=True)
+    f = os.path.join(CACHE_LOGHI, hashlib.md5(url_logo.encode()).hexdigest())
+    if not os.path.isfile(f) or os.path.getsize(f) == 0:
+        r = Request(url_logo, headers={"User-Agent": UA})
+        dati = urlopen(r, timeout=10).read()   # prima si scarica tutto, poi si scrive
+        with open(f, "wb") as o:
+            o.write(dati)
+    try:
+        im = Image.open(f).convert("RGBA")
+    except Exception:
+        os.remove(f)                        # non e' un'immagine: via, si riprova
+        raise
+    im.thumbnail((48, 48))
+    secchi = {}
+    for r, g, b, a in im.getdata():
+        if a < 128:
+            continue
+        h, l, sa = colorsys.rgb_to_hls(r / 255.0, g / 255.0, b / 255.0)
+        if sa < 0.35 or l < 0.12 or l > 0.92:
+            continue                        # grigi, neri e bianchi non contano
+        k = int(h * 12) % 12                # dodici tinte
+        tot = secchi.setdefault(k, [0, 0.0, 0.0, 0.0])
+        tot[0] += 1
+        tot[1] += h
+        tot[2] += l
+        tot[3] += sa
+    if not secchi:
+        return None
+    n, h, l, sa = max(secchi.values(), key=lambda t: t[0])
+    h, l, sa = h / n, l / n, sa / n
+    # luce e saturazione del logo, tenute in una fascia che si veda sullo
+    # scuro senza sbiadire; solo i blu, che vengono cupi, si alzano un po'
+    l = min(0.72, max(0.55, l))
+    sa = max(0.75, sa)
+    if 0.55 <= h <= 0.75:
+        l = max(l, 0.63)
+    r, g, b = colorsys.hls_to_rgb(h, l, sa)
+    return "#%02x%02x%02x" % (int(r * 255), int(g * 255), int(b * 255))
+
+
+COLORI_VERSIONE = 4             # si alza quando cambia il calcolo: i vecchi si rifanno
+
+
+def leggi_colori():
+    try:
+        with open(FILE_COLORI, encoding="utf-8") as h:
+            d = json.load(h)
+        if d.get("_v") != COLORI_VERSIONE:
+            return {}
+        d.pop("_v", None)
+        return d
+    except Exception:
+        return {}
+
+
+def scrivi_colori(d):
+    try:
+        os.makedirs(os.path.dirname(FILE_COLORI), exist_ok=True)
+        with open(FILE_COLORI, "w", encoding="utf-8") as h:
+            json.dump(dict(d, _v=COLORI_VERSIONE), h)
+    except Exception:
+        pass
 
 
 def immagine_lista(dove):
@@ -934,14 +1021,210 @@ class Cursore(tk.Canvas):
     def get(self):
         return self.valore
 
+    def sfondo(self, tinta):
+        """La sfumatura della barra passa anche dietro al cursore: tinta e'
+        la funzione riga -> colore della barra (None = fondo piatto)."""
+        self.tinta = tinta
+        self.disegna()
+
     def disegna(self):
         self.delete("all")
+        tinta = getattr(self, "tinta", None)
+        if tinta and self.winfo_ismapped():
+            y0 = self.winfo_y()
+            for r in range(self.alta):
+                self.create_line(0, r, self.larga, r, fill=tinta(y0 + r))
         y, x0, x1 = self.alta // 2, 10, self.larga - 10
         x = x0 + (x1 - x0) * self.valore / 100.0
         # stile YouTube: traccia grigia, la parte piena bianca, niente pomello
         self.create_line(x0, y, x1, y, width=4, fill="#4a4a4a", capstyle="round")
         if x > x0:
             self.create_line(x0, y, x, y, width=4, fill="#ffffff", capstyle="round")
+
+
+class Guida(tk.Toplevel):
+    """La griglia dei programmi, stile guida TV: una riga per canale della
+    lista aperta, il tempo che scorre a destra, i programmi come blocchi;
+    la riga lilla e' adesso. La riga delle ore e la colonna dei nomi
+    restano ferme mentre si scorre. Clic sul nome o su un blocco per
+    vedere il canale. Rotella per le righe, Shift+rotella per il tempo."""
+
+    ORA = 300           # pixel per ora
+    RIGA = 40           # altezza di una riga
+    NOMI = 190          # larghezza della colonna dei nomi
+    TESTA = 28          # altezza della riga delle ore
+
+    def __init__(self, app):
+        tk.Toplevel.__init__(self, app.root, bg=FONDO)
+        self.app = app
+        self.title(_("TV guide"))
+        self.geometry("1100x620")
+        self.minsize(700, 300)
+        if app.icona_finestra is not None:
+            self.iconphoto(False, app.icona_finestra)
+        # tre tele: le ore in alto (scorre solo in orizzontale), i nomi a
+        # sinistra (solo in verticale), la griglia in mezzo
+        self.grid_rowconfigure(1, weight=1)
+        self.grid_columnconfigure(1, weight=1)
+        tk.Frame(self, bg=PANNELLO, width=self.NOMI, height=self.TESTA).grid(row=0, column=0, sticky="nsew")
+        self.testa = tk.Canvas(self, bg=PANNELLO, height=self.TESTA, highlightthickness=0, bd=0)
+        self.testa.grid(row=0, column=1, sticky="nsew")
+        self.nomi = tk.Canvas(self, bg=FONDO, width=self.NOMI, highlightthickness=0, bd=0)
+        self.nomi.grid(row=1, column=0, sticky="nsew")
+        self.tela = tk.Canvas(self, bg=FONDO, highlightthickness=0, bd=0)
+        self.tela.grid(row=1, column=1, sticky="nsew")
+        self.da = int(time.time() // 1800 * 1800) - 1800    # mezz'ora prima, tondo
+        self.fino = self.da + 6 * 3600
+        self.righe = []             # (nome, url, ide, programmi)
+        self.blocchi = {}           # (w, h, colore, fondo) -> immagine del blocco in onda
+        self.raccogli()
+        self.tela.bind("<Configure>", lambda e: self.disegna())
+        for c in (self.tela, self.nomi, self.testa):
+            c.bind("<Button-4>", lambda e: self.scorri_y(-1))
+            c.bind("<Button-5>", lambda e: self.scorri_y(+1))
+            c.bind("<MouseWheel>", lambda e: self.scorri_y(-1 if e.delta > 0 else +1))
+            c.bind("<Shift-Button-4>", lambda e: self.scorri_x(-1))
+            c.bind("<Shift-Button-5>", lambda e: self.scorri_x(+1))
+            c.bind("<Shift-MouseWheel>", lambda e: self.scorri_x(-1 if e.delta > 0 else +1))
+        self.tela.bind("<Button-1>", lambda e: self.clic(self.tela, e))
+        self.nomi.bind("<Button-1>", lambda e: self.clic(self.nomi, e))
+        self.bind("<Escape>", lambda e: self.chiudi())
+        self.dopo = self.after(30000, self.ridisegna)
+        self.protocol("WM_DELETE_WINDOW", self.chiudi)
+
+    def raccogli(self):
+        """I canali della lista aperta che stanno nella guida, coi loro
+        programmi nella finestra di tempo."""
+        app = self.app
+        self.righe = []
+        for nome, url, ide in app.canali:
+            k = ide if ide and ide in app.epg else app.epg_nomi.get(nome_piatto(nome))
+            if not k:
+                continue
+            prog = [(a, b, t) for a, b, t in app.epg.get(k, [])
+                    if b > self.da and a < self.fino]
+            if prog:
+                self.righe.append((nome, url, ide, prog))
+
+    def x_di(self, t):
+        return (t - self.da) / 3600.0 * self.ORA
+
+    def disegna(self):
+        c, n, h = self.tela, self.nomi, self.testa
+        for tela in (c, n, h):
+            tela.delete("all")
+        largo = int(self.x_di(self.fino)) + 20
+        alto = max(1, len(self.righe)) * self.RIGA + 20
+        c.config(scrollregion=(0, 0, largo, alto))
+        n.config(scrollregion=(0, 0, self.NOMI, alto))
+        h.config(scrollregion=(0, 0, largo, self.TESTA))
+        if not self.righe:
+            c.create_text(20, 20, anchor="w", fill=GRIGIO,
+                          text=_("no guide data for this playlist"))
+            return
+        adesso = time.time()
+        # le ore
+        t = self.da
+        while t <= self.fino:
+            x = self.x_di(t)
+            h.create_line(x, self.TESTA - 6, x, self.TESTA, fill="#3a3a3a")
+            h.create_text(x + 6, self.TESTA // 2, anchor="w", fill=GRIGIO,
+                          text=time.strftime("%H:%M", time.localtime(t)))
+            c.create_line(x, 0, x, alto, fill="#2a2a2a")
+            t += 1800
+        # le righe
+        for i, (nome, url, ide, prog) in enumerate(self.righe):
+            y0 = i * self.RIGA
+            y1 = y0 + self.RIGA
+            fondo = PANNELLO if i % 2 else FONDO
+            c.create_rectangle(0, y0, largo, y1, fill=fondo, outline="")
+            colore = self.app.colore_canale(nome, url)
+            for a, b, titolo in prog:
+                xa, xb = max(self.x_di(a), 0), self.x_di(b)
+                in_onda = a <= adesso < b
+                # il blocco in onda: il colore del canale in una sfumatura
+                # morbida, piu' presente in alto e che si spegne in basso
+                if in_onda and HA_PIL:
+                    im = self.blocco(int(xb - xa - 2), self.RIGA - 8, colore, fondo)
+                    c.create_image(xa + 1, y0 + 4, anchor="nw", image=im, tags=("prog", url))
+                else:
+                    c.create_rectangle(xa + 1, y0 + 4, xb - 1, y1 - 4,
+                                       fill=colore if in_onda else TASTO, outline="",
+                                       tags=("prog", url))
+                if xb - xa > 30:
+                    testo = titolo
+                    while testo and len(testo) * 7 > xb - xa - 14:
+                        testo = testo[:-1]
+                    if testo != titolo and len(testo) > 2:
+                        testo = testo[:-1] + "\u2026"
+                    c.create_text(xa + 8, (y0 + y1) // 2, anchor="w", text=testo,
+                                  fill="#ffffff" if in_onda else TESTO,
+                                  tags=("prog", url))
+            # la colonna dei nomi, col pallino disegnato (liscio)
+            n.create_rectangle(0, y0, self.NOMI, y1, fill=fondo, outline="", tags=("nome", url))
+            n.create_image(17, (y0 + y1) // 2, image=self.app.pallino_di(nome, url),
+                           tags=("nome", url))
+            n.create_text(30, (y0 + y1) // 2, anchor="w", text=nome[:24],
+                          fill=TESTO, tags=("nome", url))
+        # adesso
+        x = self.x_di(adesso)
+        c.create_line(x, 0, x, alto, fill=ACCENTO, width=2)
+        h.create_polygon(x - 6, self.TESTA - 8, x + 6, self.TESTA - 8, x, self.TESTA, fill=ACCENTO)
+        # le ore e la griglia allineate
+        h.xview_moveto(c.xview()[0])
+        n.yview_moveto(c.yview()[0])
+
+    def blocco(self, w, h, colore, fondo):
+        """L'immagine del blocco in onda: il colore del canale fuso col
+        fondo della riga, al 55% in alto e al 20% in basso, angoli
+        morbidi. Tenuta in cache per misura e colore."""
+        w = max(1, w)
+        k = (w, h, colore, fondo)
+        if k in self.blocchi:
+            return self.blocchi[k]
+        r1, g1, b1 = (int(colore[i:i + 2], 16) for i in (1, 3, 5))
+        r0, g0, b0 = (int(fondo[i:i + 2], 16) for i in (1, 3, 5))
+        im = Image.new("RGB", (w, h))
+        px = im.load()
+        for y in range(h):
+            t = 0.55 - 0.35 * y / float(max(1, h - 1))
+            c = (int(r0 + (r1 - r0) * t), int(g0 + (g1 - g0) * t), int(b0 + (b1 - b0) * t))
+            for x in range(w):
+                px[x, y] = c
+        self.blocchi[k] = ImageTk.PhotoImage(im)
+        return self.blocchi[k]
+
+    def ridisegna(self):
+        self.disegna()
+        self.dopo = self.after(30000, self.ridisegna)
+
+    def scorri_y(self, verso):
+        self.tela.yview_scroll(verso * 2, "units")
+        self.nomi.yview_moveto(self.tela.yview()[0])
+
+    def scorri_x(self, verso):
+        self.tela.xview_scroll(verso * 3, "units")
+        self.testa.xview_moveto(self.tela.xview()[0])
+
+    def clic(self, tela, ev):
+        """Clic su un nome o su un blocco: si apre quel canale."""
+        x, y = tela.canvasx(ev.x), tela.canvasy(ev.y)
+        for item in tela.find_overlapping(x, y, x, y):
+            tags = tela.gettags(item)
+            if len(tags) >= 2 and tags[0] in ("nome", "prog"):
+                url = tags[1]
+                for nome, u, ide in self.app.canali:
+                    if u == url:
+                        self.app.apri(nome, u, ide)
+                        self.after(400, self.disegna)
+                        return
+
+    def chiudi(self):
+        try:
+            self.after_cancel(self.dopo)
+        except Exception:
+            pass
+        self.destroy()
 
 
 class Finestrella(tk.Toplevel):
@@ -1058,6 +1341,10 @@ class TV(object):
         # immagine: cosi' i nomi restano in colonna
         self.vuoto = tk.PhotoImage(width=PUNTO, height=PUNTO)
         self.pallini = {c: pallino(c) for c in PALLINI}
+        self.colori = leggi_colori()        # url canale -> colore dal logo
+        self.coda_colori = []
+        self.in_coda = set()                # loghi che si stanno guardando
+        threading.Thread(target=self.lavora_colori, daemon=True).start()
         self.cartelle = {}                  # (colore, aperta) -> icona
         self.iid_di = {}
         self.cartella_di = {}               # riga della cartella -> colore
@@ -1072,14 +1359,20 @@ class TV(object):
                 pass
 
         # --- a sinistra: i canali
-        self.icone = {}
+        self.icone, self.icone_pil = {}, {}     # png come Tk e come PIL
+        self.vestiti = {}                       # bottone -> immagine composta
         for n in ("play", "pausa", "switch", "playlist", "favorite_on", "favorite_off",
                   "rec", "rec_stop",
                   "volume", "volume_high",
                   "volume_low", "volume_off", "muto", "pieno", "prima", "dopo",
-                  "aperto", "chiuso", "setting"):
+                  "aperto", "chiuso", "setting", "epg"):
             p = os.path.join(QUI, "icone", n + ".png")
             if os.path.isfile(p):
+                if HA_PIL:
+                    try:
+                        self.icone_pil[n] = Image.open(p).convert("RGBA")
+                    except Exception:
+                        pass
                 try:
                     self.icone[n] = tk.PhotoImage(file=p)
                 except Exception:
@@ -1089,6 +1382,24 @@ class TV(object):
                             Image.open(p).convert("RGBA"))
                     except Exception:
                         pass
+        # EPG e' una scritta, non una png: la si disegna come icona, cosi'
+        # sta sulla sfumatura senza fondo come le altre
+        if "epg" not in self.icone and HA_PIL:
+            try:
+                from PIL import ImageDraw, ImageFont
+                try:
+                    font = ImageFont.truetype("DejaVuSans-Bold.ttf", 11)
+                except Exception:
+                    font = ImageFont.load_default()
+                im = Image.new("RGBA", (30, 24), (0, 0, 0, 0))
+                d = ImageDraw.Draw(im)
+                x0, y0, x1, y1 = d.textbbox((0, 0), "EPG", font=font)
+                d.text(((30 - (x1 - x0)) // 2 - x0, (24 - (y1 - y0)) // 2 - y0), "EPG",
+                       fill="#e8e8ef", font=font)
+                self.icone_pil["epg"] = im
+                self.icone["epg"] = ImageTk.PhotoImage(im)
+            except Exception:
+                pass
         # quelle che mancano o non si aprono si dicono, cosi' si vede subito
         self.icone_mancanti = [n for n in (
             "play", "pausa", "switch", "playlist", "favorite_on", "favorite_off",
@@ -1117,6 +1428,7 @@ class TV(object):
             (_("Remove %s") % n, lambda u=u: self.togli_lista_url(u))
             for u, n in self.cfg.get("liste_url", {}).items()])
         self.menu("TV guide", lambda: [
+            (_("Programme guide"), self.apri_guida),
             (_("Add URL"), self.chiedi_epg),
             (_("Reload"), self.ricarica_epg if self.cfg.get("epg") else None)] + [
             (_("Remove %s") % self.nome_guida(d), lambda d=d: self.togli_epg(d))
@@ -1274,6 +1586,12 @@ class TV(object):
         self.timer_avviso, self.avviso_chiave = None, (None, 0)
         # la riga in cima alla barra, stile YouTube: traccia grigia e, in
         # bianco, quanto manca alla fine del programma (dalla guida)
+        # dietro ai comandi, dalla progress in giu', una sfumatura del suo
+        # colore che si spegne verso il fondo
+        self.fondo_barra = tk.Canvas(self.barra, bg=BARRA, highlightthickness=0, bd=0)
+        self.fondo_barra.place(x=0, y=0, relwidth=1, relheight=1)
+        self.colore_barra = None
+        self.fondo_barra.bind("<Configure>", lambda e: self.disegna_fondo_barra())
         self.linea = tk.Canvas(self.barra, height=2, bg="#3a3a3a",
                                highlightthickness=0, bd=0)
         self.linea.pack(side="top", fill="x")
@@ -1283,7 +1601,7 @@ class TV(object):
         self.root.after(1000, self.controlla_registrazione)
 
         # a sinistra, a gruppi: [sidebar]  [< play >]
-        self.tasto("playlist", _("Playlists"), self.sidebar, 8)
+        self.b_sidebar = self.tasto("playlist", _("Playlists"), self.sidebar, 8)
         self.tasto("prima", "<", lambda: self.salta(-1), 3, padx=(6, 2))
         self.b_pausa = self.tasto("pausa", _("Pause"), self.pausa, 8)
         self.tasto("dopo", ">", lambda: self.salta(+1), 3)
@@ -1296,6 +1614,7 @@ class TV(object):
         # poi, da destra a sinistra, [switch rec] dopo l'ingranaggio
         self.b_rec = self.tasto("rec", _("Record"), self.registra, lato="right",
                                 padx=(2, 6))
+        self.tasto("epg", "EPG", self.apri_guida, 4, lato="right")
         self.tasto("switch", _("Switch"), self.switch, 6, lato="right",
                    padx=(6, 2))
         self.menu_qualita = tk.Menu(self.root, tearoff=0, bg=TASTO, fg=TESTO,
@@ -1450,10 +1769,12 @@ class TV(object):
         """Un bottone della barra; padx=(6, 2) apre un gruppo nuovo, con
         piu' aria a sinistra."""
         b = self.bottone(self.barra, testo, cosa)
+        b.icona = None
         if icona in self.icone:
             # nella barra i bottoni sono solo l'icona, senza scatola:
             # il fondo e' quello del pannello e si accende solo al tocco
             b.config(image=self.icone[icona], width=34, height=30, bg=BARRA)
+            b.icona = icona
         else:
             b.config(width=largo)
         b.pack(side=lato, padx=padx, pady=6)
@@ -1704,7 +2025,10 @@ class TV(object):
 
     def ricarica_liste(self):
         """Reload: le copie delle liste da url si buttano, cosi' si
-        riscaricano, poi si rilegge tutto."""
+        riscaricano, e anche i colori presi dai loghi si rifanno; poi si
+        rilegge tutto."""
+        self.colori, self.in_coda, self.coda_colori[:] = {}, set(), []
+        scrivi_colori(self.colori)
         for u in self.cfg.get("liste_url", {}):
             try:
                 os.remove(os.path.join(CACHE_LISTE, hashlib.md5(u.encode()).hexdigest() + ".m3u"))
@@ -1751,10 +2075,53 @@ class TV(object):
         self.visti = [c for c in self.canali if q in c[0].lower()]
         self.elenco.delete(*self.elenco.get_children())
         adesso = self.cfg.get("canale")
+        da_fare = []
         for i, (nome, url, _ide) in enumerate(self.visti[:3000]):
             self.elenco.insert("", "end", iid=str(i), text=" " + nome,
-                               image=self.pallini[colore_di(nome)],
-                               tags=("onda",) if url == adesso else ())
+                               image=self.pallino_di(nome, url))
+            if url not in self.colori and url in LOGHI and url not in self.in_coda:
+                self.in_coda.add(url)
+                da_fare.append(url)
+        if da_fare:
+            self.coda_colori.extend(da_fare)
+        if adesso and self.nome_in_onda:
+            self.segna_in_onda(adesso)
+
+    def colore_canale(self, nome, url):
+        """Il colore del canale: quello preso dal suo logo, se lo si ha;
+        se no quello dal nome."""
+        return self.colori.get(url) or colore_di(nome)
+
+    def pallino_di(self, nome, url):
+        c = self.colore_canale(nome, url)
+        if c not in self.pallini:
+            self.pallini[c] = pallino(c) or self.vuoto
+        return self.pallini[c]
+
+    def lavora_colori(self):
+        """In un thread: prende i loghi in coda uno alla volta, ne tira
+        fuori il colore e aggiorna il pallino nell'elenco."""
+        while True:
+            if not self.coda_colori:
+                time.sleep(0.3)
+                continue
+            url = self.coda_colori.pop(0)
+            try:
+                c = colore_dal_logo(LOGHI[url])
+            except Exception:
+                c = None
+            self.colori[url] = c or ""      # "" = provato, niente colore
+            scrivi_colori(self.colori)
+            if c:
+                self.root.after(0, self.aggiorna_pallino, url, c)
+
+    def aggiorna_pallino(self, url, c):
+        for i, (nome, u, _i) in enumerate(self.visti[:3000]):
+            if u == url and self.elenco.exists(str(i)):
+                self.elenco.item(str(i), image=self.pallino_di(nome, u))
+        if url == self.cfg.get("canale"):
+            self.colora_stato(c)
+            self.segna_in_onda(url)
 
     def parti(self):
         s = self.elenco.selection()
@@ -1763,11 +2130,23 @@ class TV(object):
             self.apri(nome, url, ide)
 
     def segna_in_onda(self, url):
-        """La riga del canale che si sta guardando diventa verde, e quella
-        di prima torna normale."""
-        for i, (_n, u, _l) in enumerate(self.visti[:3000]):
-            if self.elenco.exists(str(i)):
-                self.elenco.item(str(i), tags=("onda",) if u == url else ())
+        """La riga del canale che si sta guardando prende il colore del
+        suo pallino come sfondo; testo e pallino diventano neri o bianchi
+        a seconda di quanto e' chiaro. Quella di prima torna normale."""
+        for i, (nome, u, _l) in enumerate(self.visti[:3000]):
+            if not self.elenco.exists(str(i)):
+                continue
+            if u == url:
+                colore = self.colore_canale(nome, u)
+                r, g, b = (int(colore[k:k + 2], 16) for k in (1, 3, 5))
+                luce = 0.299 * r + 0.587 * g + 0.114 * b
+                testo = "#000000" if luce > 150 else "#ffffff"
+                self.elenco.tag_configure("onda", background=colore, foreground=testo)
+                if testo not in self.pallini:
+                    self.pallini[testo] = pallino(testo) or self.vuoto
+                self.elenco.item(str(i), tags=("onda",), image=self.pallini[testo])
+            else:
+                self.elenco.item(str(i), tags=(), image=self.pallino_di(nome, u))
         self.non_sul_verde(self.elenco, "onda")
 
     def salta(self, dove):
@@ -1850,7 +2229,7 @@ class TV(object):
             self.ferma_registrazione()          # cambio canale: si chiude il file
         self.nome_in_onda, self.ide_in_onda = nome, ide
         self.attesa_da = time.time()
-        self.colora_stato(colore_di(nome))          # come il pallino
+        self.colora_stato(self.colore_canale(nome, url))    # come il pallino
         self.indice = next((k for k, c in enumerate(self.visti)
                             if c[1] == url and c[0] == nome), -1)
         self.mostra_carico(True)
@@ -1956,6 +2335,17 @@ class TV(object):
                 return
             self.passo_ingranaggio = n
             self.b_qualita.config(image=self.giri_ingranaggio[n])
+            if self.colore_barra and HA_PIL and self.b_qualita.winfo_ismapped():
+                # sulla sfumatura: il fotogramma composto sulla fettina
+                b = self.b_qualita
+                w, h, y = b.winfo_width(), b.winfo_height(), b.winfo_y()
+                fondo = Image.new("RGBA", (w, h))
+                for r in range(h):
+                    fondo.paste(self.tinta_barra(y + r), (0, r, w, r + 1))
+                im = self.icone_pil["setting"].rotate(-n * 15, resample=Image.BICUBIC)
+                fondo.alpha_composite(im, ((w - im.width) // 2, (h - im.height) // 2))
+                self.vestiti[b] = ImageTk.PhotoImage(fondo)
+                b.config(image=self.vestiti[b])
             self.root.after(25, passo)
         passo()
 
@@ -2059,9 +2449,30 @@ class TV(object):
     # ---------------------------------------------------------- i comandi
     def faccia(self, b, icona, testo):
         if icona in self.icone:
-            b.config(image=self.icone[icona])
+            b.icona = icona
+            self.vesti(b)
         else:
             b.config(text=testo)
+
+    def vesti(self, b):
+        """Il bottone prende come immagine la fettina di sfumatura che gli
+        sta sotto con la sua icona sopra: cosi' non ha un fondo suo e la
+        sfumatura passa dietro. Senza sfumatura (o senza PIL) resta la png."""
+        icona = getattr(b, "icona", None)
+        if not icona:
+            return
+        pil = self.icone_pil.get(icona)
+        if not self.colore_barra or pil is None or not b.winfo_ismapped():
+            b.config(image=self.icone[icona], bg=BARRA)
+            return
+        w, h = b.winfo_width(), b.winfo_height()
+        y = b.winfo_y()
+        fondo = Image.new("RGBA", (w, h))
+        for r in range(h):
+            fondo.paste(self.tinta_barra(y + r), (0, r, w, r + 1))
+        fondo.alpha_composite(pil, ((w - pil.width) // 2, (h - pil.height) // 2))
+        self.vestiti[b] = ImageTk.PhotoImage(fondo)
+        b.config(image=self.vestiti[b], bg=self.tinta_barra(y + h // 2))
 
     def pausa(self):
         try:
@@ -2342,6 +2753,19 @@ class TV(object):
         via = not (self.nascosti.get(self.sinistra) and self.nascosti.get(self.destra))
         self.nascosti[self.sinistra] = self.nascosti[self.destra] = via
         self.ridisponi()
+        self.icona_sidebar()
+
+    def icona_sidebar(self):
+        """L'icona del bottone delle sidebar: girata di 180 gradi quando
+        sono chiuse (la png ruotata al volo con PIL)."""
+        chiuse = self.nascosti.get(self.sinistra) and self.nascosti.get(self.destra)
+        if "playlist" not in self.icone_pil:
+            return
+        if "playlist_chiuso" not in self.icone:
+            im = self.icone_pil["playlist"].rotate(180)
+            self.icone_pil["playlist_chiuso"] = im
+            self.icone["playlist_chiuso"] = ImageTk.PhotoImage(im)
+        self.faccia(self.b_sidebar, "playlist_chiuso" if chiuse else "playlist", _("Playlists"))
 
     def ridisponi(self):
         """Rifa' la disposizione com'e' adesso: i comandi a vista, e se c'e'
@@ -2381,6 +2805,17 @@ class TV(object):
         self.scrivi(_("removed %s") % self.nome_guida(dove))
         self.cfg.get("epg_nomi", {}).pop(dove, None)
         self.carica_guide()                 # si rifa' l'unione con quelle rimaste
+
+    def apri_guida(self):
+        """La finestra della griglia dei programmi; una sola alla volta."""
+        if not self.epg:
+            self.scrivi(_("no TV guide set"))
+            return
+        g = getattr(self, "finestra_guida", None)
+        if g is not None and g.winfo_exists():
+            g.lift()
+            return
+        self.finestra_guida = Guida(self)
 
     def chiedi_epg(self):
         """Chiede l'url (o il percorso) di una guida XMLTV e la aggiunge
@@ -2450,22 +2885,57 @@ class TV(object):
         return None
 
     def colora_stato(self, colore):
-        """La progress e il titolo del programma del colore del pallino
-        del canale."""
+        """La progress, il titolo del programma e la sfumatura dietro ai
+        comandi del colore del pallino del canale."""
         self.linea.itemconfig(self.pieno_linea, fill=colore)
         self.et_titolo.config(fg=colore)
+        self.colore_barra = colore
+        self.disegna_fondo_barra()
+
+    def disegna_fondo_barra(self):
+        """La sfumatura: dal colore (al 22%) sotto la progress al fondo
+        della barra in basso. I bottoni, che Tk non sa fare trasparenti,
+        prendono il colore della sfumatura alla loro altezza."""
+        c = self.fondo_barra
+        c.delete("all")
+        w, h = c.winfo_width(), c.winfo_height()
+        if not self.colore_barra or w < 2 or h < 2:
+            for fig in self.barra.winfo_children():
+                if fig is not c and fig is not self.linea:
+                    fig.config(bg=BARRA)
+            return
+        for y in range(h):
+            c.create_line(0, y, w, y, fill=self.tinta_barra(y))
+        self.root.after_idle(self.vesti_tutti)
+
+    def tinta_barra(self, y):
+        """Il colore della sfumatura alla riga y della barra: dal colore
+        del canale (al 22%) in cima al fondo della barra in basso."""
+        h = max(1, self.fondo_barra.winfo_height())
+        r1, g1, b1 = (int(self.colore_barra[k:k + 2], 16) for k in (1, 3, 5))
+        r0, g0, b0 = (int(BARRA[k:k + 2], 16) for k in (1, 3, 5))
+        t = 0.22 * max(0.0, 1.0 - y / float(h)) ** 1.6
+        return "#%02x%02x%02x" % (int(r0 + (r1 - r0) * t), int(g0 + (g1 - g0) * t),
+                                  int(b0 + (b1 - b0) * t))
+
+    def vesti_tutti(self):
+        for fig in self.barra.winfo_children():
+            if isinstance(fig, tk.Button):
+                self.vesti(fig)
+            elif isinstance(fig, Cursore):
+                fig.sfondo(self.tinta_barra if self.colore_barra else None)
 
     def aggiorna_linea(self):
-        """Ogni mezzo secondo: la riga bianca e' il tempo che manca alla
-        fine del programma in onda. Senza guida resta vuota."""
+        """Ogni mezzo secondo: la riga colorata e' quanto del programma in
+        onda e' passato. Senza guida resta vuota."""
         parte = 0.0
         if self.cfg.get("canale") and not self.sfondo_su:
             p = self.programma()
             if p:
-                # con la guida: quanto manca alla fine del programma,
-                # piena all'inizio, vuota alla fine
+                # con la guida: quanto del programma e' passato, vuota
+                # all'inizio, piena alla fine
                 inizio, fine, _t = p
-                parte = (fine - time.time()) / max(1.0, fine - inizio)
+                parte = (time.time() - inizio) / max(1.0, fine - inizio)
                 parte = max(0.0, min(1.0, parte))
             if (self.stato.cget("text") == self.riga_mostrata[0] and
                     self.riga() != self.riga_mostrata):
