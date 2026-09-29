@@ -21,6 +21,7 @@ import hashlib
 import json
 import math
 import os
+import random
 import re
 import subprocess
 import sys
@@ -40,7 +41,7 @@ try:                            # per i loghi: ridimensiona e legge i jpg
 except ImportError:             # senza, si va di PhotoImage: solo png
     HA_PIL = False
 
-VERSIONE = "2.3"
+VERSIONE = "2.5"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"        # dove stanno le release, per l'avviso di aggiornamento
@@ -192,7 +193,7 @@ TESTI = {
         "cannot open %s: %s": "non riesco ad aprire %s: %s",
         "Pause": "Pausa", "Resume": "Riprendi", "Favorite": "Preferito",
         "Fullscreen": "Schermo intero", "quality": "qualita'", "Mute": "Muto",
-        "Unmute": "Audio", "Switch": "Scambia",
+        "Unmute": "Audio", "Switch": "Scambia", "Shuffle": "Casuale",
         "Open folder": "Apri cartella", "Reload": "Ricarica", "Add URL": "Aggiungi url",
         "Remove": "Rimuovi", "View": "Vista", "Hide channels": "Nascondi canali",
         "Show channels": "Mostra canali", "Hide playlists": "Nascondi playlist",
@@ -315,7 +316,7 @@ TESTI = {
         "cannot open %s: %s": "no puedo abrir %s: %s",
         "Pause": "Pausa", "Resume": "Reanudar", "Favorite": "Favorito",
         "Fullscreen": "Pantalla completa", "quality": "calidad", "Mute": "Silencio",
-        "Unmute": "Sonido", "Switch": "Cambiar",
+        "Unmute": "Sonido", "Switch": "Cambiar", "Shuffle": "Aleatorio",
         "Open folder": "Abrir carpeta", "Reload": "Recargar", "Add URL": "Añadir URL",
         "Remove": "Quitar", "View": "Vista", "Hide channels": "Ocultar canales",
         "Show channels": "Mostrar canales", "Hide playlists": "Ocultar listas",
@@ -438,7 +439,7 @@ TESTI = {
         "cannot open %s: %s": "impossible d'ouvrir %s : %s",
         "Pause": "Pause", "Resume": "Reprendre", "Favorite": "Favori",
         "Fullscreen": "Plein écran", "quality": "qualité", "Mute": "Muet",
-        "Unmute": "Son", "Switch": "Basculer",
+        "Unmute": "Son", "Switch": "Basculer", "Shuffle": "Aléatoire",
         "Open folder": "Ouvrir le dossier", "Reload": "Recharger", "Add URL": "Ajouter une URL",
         "Remove": "Retirer", "View": "Affichage", "Hide channels": "Masquer les chaînes",
         "Show channels": "Afficher les chaînes", "Hide playlists": "Masquer les listes",
@@ -895,15 +896,20 @@ def e_media(f):
 
 
 def media_in(cartella):
-    """I file audio/video dentro a una cartella, primo livello, per nome:
-    (nome senza estensione, percorso, None) come i canali."""
+    """I file audio/video dentro a una cartella e a tutte le sue
+    sottocartelle (quelle nascoste no), in ordine di percorso cosi' gli
+    album restano insieme: (nome senza estensione, percorso, None) come i
+    canali."""
+    fuori = []
     try:
-        nomi = sorted(os.listdir(cartella), key=str.lower)
+        for dove, sotto, nomi in os.walk(cartella):
+            sotto[:] = sorted((d for d in sotto if not d.startswith(".")), key=str.lower)
+            for n in sorted(nomi, key=str.lower):
+                if not n.startswith(".") and e_media(n):
+                    fuori.append((os.path.splitext(n)[0], os.path.join(dove, n), None))
     except Exception:
-        return []
-    return [(os.path.splitext(n)[0], os.path.join(cartella, n), None)
-            for n in nomi if not n.startswith(".") and e_media(n)
-            and os.path.isfile(os.path.join(cartella, n))]
+        pass
+    return fuori
 
 
 def ore_min_sec(secondi):
@@ -1756,6 +1762,7 @@ class TV(object):
         self.file_in_onda = None            # la registrazione in riproduzione
         self.iid_reg, self.reg, self.reg_in_uso = {}, [], None
         self.iid_media, self.media_in_uso = {}, None     # cartelle e importati
+        self.ascoltati = []                 # i file passati, per il < in shuffle
         self.icona_finestra, self.icona_file = None, ""
         self.piano = None                            # (nome, url, ide, inizio, fine)
         self.ultima_discesa = 0.0
@@ -1804,7 +1811,7 @@ class TV(object):
                   "rec", "rec_stop",
                   "volume", "volume_high",
                   "volume_low", "volume_off", "muto", "pieno", "prima", "dopo",
-                  "aperto", "chiuso", "setting", "epg"):
+                  "aperto", "chiuso", "setting", "epg", "shuffle"):
             p = os.path.join(QUI, "icone", n + ".png")
             if os.path.isfile(p):
                 if HA_PIL:
@@ -1847,7 +1854,9 @@ class TV(object):
         self.tendina = Tendina(self.root)
         self.menu("File", lambda: [
             (_("Open file..."), self.apri_file),
-            (_("Open folder..."), self.apri_cartella_media)])
+            (_("Open folder..."), self.apri_cartella_media),
+            None,
+            (("*  " if self.cfg.get("shuffle") else "   ") + _("Shuffle"), self.shuffle)])
         self.menu("Playlists", lambda: [
             (_("Add URL"), self.chiedi_lista_url),
             (_("Open folder"), self.apri_cartella_liste),
@@ -2101,6 +2110,7 @@ class TV(object):
         self.b_pausa = self.tasto("pausa", _("Pause"), self.pausa, 8)
         self.b_rec = self.tasto("rec", _("Record"), self.registra)
         self.tasto("switch", _("Switch"), self.switch, 6)
+        self.b_shuffle = self.tasto("shuffle", _("Shuffle"), self.shuffle, 7)
         self.tasto("dopo", ">", lambda: self.salta(+1), 3)
         # a destra, da destra a sinistra: cuore, schermo intero, [EPG x1],
         # ingranaggio, volume col suo muto
@@ -2432,14 +2442,38 @@ class TV(object):
             if im is not None:
                 self.img_liste[f_pl] = im
         img_pl = self.img_liste.get(f_pl, self.vuoto)
-        media = [(("cartella", c), os.path.basename(c.rstrip(os.sep)) or c)
-                 for c in self.cfg.get("cartelle", [])]
-        if self.cfg.get("importati"):
-            media.append((("importati", None), _("Imported media")))
-        for chiave, nome in media:
-            iid = self.el_liste.insert("", "end", text=" " + nome, image=img_pl,
-                                       values=("\u2715",),
+        for c in self.cfg.get("cartelle", []):
+            # la cartella col totale dei file, e sotto, apribili, le sue
+            # sottocartelle dirette che hanno dei media, ognuna col suo
+            nome = os.path.basename(c.rstrip(os.sep)) or c
+            chiave = ("cartella", c)
+            sotto = []
+            try:
+                for d in sorted(os.listdir(c), key=str.lower):
+                    p = os.path.join(c, d)
+                    if not d.startswith(".") and os.path.isdir(p):
+                        n = len(media_in(p))
+                        if n:
+                            sotto.append((d, p, n))
+            except Exception:
+                pass
+            in_uso = self.media_in_uso and self.media_in_uso[0] == "cartella" and (
+                self.media_in_uso[1] == c or self.media_in_uso[1].startswith(c + os.sep))
+            iid = self.el_liste.insert("", "end", text=" %s (%d)" % (nome, len(media_in(c))),
+                                       image=img_pl, values=("\u2715",), open=bool(in_uso),
                                        tags=("usata",) if chiave == self.media_in_uso else ())
+            self.iid_media[iid] = chiave
+            for d, p, n in sotto:
+                k = ("cartella", p)
+                figlio = self.el_liste.insert(iid, "end", text=" %s (%d)" % (d, n),
+                                              image=img_pl,
+                                              tags=("usata",) if k == self.media_in_uso else ())
+                self.iid_media[figlio] = k
+        if self.cfg.get("importati"):
+            chiave = ("importati", None)
+            iid = self.el_liste.insert("", "end", text=" %s (%d)" % (
+                _("Imported media"), len(self.cfg["importati"])), image=img_pl,
+                values=("\u2715",), tags=("usata",) if chiave == self.media_in_uso else ())
             self.iid_media[iid] = chiave
         # poi le liste sciolte, e le categorie con le loro dentro
         gia = set()
@@ -2586,6 +2620,9 @@ class TV(object):
         self.ide_in_onda = None
         est = os.path.splitext(f)[1][1:].lower()
         self.et_formato.config(text=("  -  " + est) if est else "")
+        if f in self.ascoltati:
+            self.ascoltati.remove(f)
+        self.ascoltati.append(f)
         self.varianti, self.quale = [], -1
         self.da_riallineare = False
         self.attesa_da = time.time()
@@ -2942,8 +2979,21 @@ class TV(object):
         self.non_sul_verde(self.elenco, "onda")
 
     def salta(self, dove):
-        """Il canale prima o dopo, nell'elenco come lo si vede adesso."""
+        """Il canale prima o dopo, nell'elenco come lo si vede adesso. Con
+        lo shuffle acceso e un file in onda: > uno a caso, < quello sentito
+        prima."""
         if not self.visti:
+            return
+        if self.cfg.get("shuffle") and self.file_in_onda:
+            if dove > 0:
+                c = self.a_caso()
+            else:
+                prima = [f for f in self.ascoltati if f != self.file_in_onda]
+                c = next((x for x in self.visti if prima and x[1] == prima[-1]), None)
+                if c:
+                    self.ascoltati = [f for f in self.ascoltati if f not in (c[1], self.file_in_onda)]
+            if c:
+                self.vai_a_file(c)
             return
         adesso = self.file_in_onda or self.cfg.get("canale")
         i = getattr(self, "indice", -1)
@@ -2998,6 +3048,39 @@ class TV(object):
         acceso = bool(url) and self.e_preferito(leggi_preferiti(), url, self.nome_in_onda)
         self.faccia(self.b_pref, "favorite_on" if acceso else "favorite_off",
                     _("Favorite"))
+
+    def shuffle(self):
+        """Ordine casuale dei file (cartelle, importati, registrazioni):
+        a fine file e col > si passa a uno a caso non ancora sentito."""
+        self.cfg["shuffle"] = not self.cfg.get("shuffle")
+        scrivi_config(self.cfg)
+        self.ascoltati = [f for f in self.ascoltati if f == self.file_in_onda]
+        self.icona_shuffle()
+
+    def icona_shuffle(self):
+        """Bianca da spento, del colore del canale da acceso."""
+        if not hasattr(self, "b_shuffle"):
+            return
+        if self.cfg.get("shuffle") and HA_PIL and "shuffle" in self.icone_pil and self.colore_barra:
+            im = self.icone_pil["shuffle"].copy()
+            r, g, b = (int(self.colore_barra[k:k + 2], 16) for k in (1, 3, 5))
+            tinta = Image.new("RGBA", im.size, (r, g, b, 255))
+            tinta.putalpha(im.getchannel("A"))
+            self.icone_pil["shuffle_on"] = tinta
+            self.icone["shuffle_on"] = ImageTk.PhotoImage(tinta)
+            self.faccia(self.b_shuffle, "shuffle_on", _("Shuffle"))
+        else:
+            self.faccia(self.b_shuffle, "shuffle", _("Shuffle"))
+
+    def a_caso(self):
+        """Un file a caso fra quelli a sinistra, fra i non ancora sentiti;
+        finiti quelli, si ricomincia."""
+        file_ = [c for c in self.visti if c[1] != self.file_in_onda]
+        nuovi = [c for c in file_ if c[1] not in self.ascoltati]
+        if not nuovi:
+            self.ascoltati = [f for f in self.ascoltati if f == self.file_in_onda]
+            nuovi = file_
+        return random.choice(nuovi) if nuovi else None
 
     def switch(self):
         """Torna al canale visto prima di questo; premuto ancora, torna
@@ -3849,6 +3932,7 @@ class TV(object):
         self.et_orologio.config(fg=colore)
         self.et_formato.config(fg=colore)
         self.colore_barra = colore
+        self.icona_shuffle()
         self.disegna_fondo_barra()
 
     def disegna_fondo_barra(self):
@@ -4006,13 +4090,22 @@ class TV(object):
         sinistra (cartella, importati, registrazioni), come una playlist.
         All'ultimo ci si ferma."""
         f = self.file_in_onda
+        if self.cfg.get("shuffle"):
+            c = self.a_caso()
+            if c:
+                self.vai_a_file(c)
+            return
         i = next((k for k, c in enumerate(self.visti) if c[1] == f), -1)
         if i < 0 or i + 1 >= len(self.visti):
             return
-        if self.elenco.exists(str(i + 1)):
-            self.elenco.selection_set(str(i + 1))
-            self.elenco.see(str(i + 1))
-        nome, url, ide = self.visti[i + 1]
+        self.vai_a_file(self.visti[i + 1])
+
+    def vai_a_file(self, c):
+        nome, url, ide = c
+        i = next((k for k, x in enumerate(self.visti) if x[1] == url), -1)
+        if i >= 0 and self.elenco.exists(str(i)):
+            self.elenco.selection_set(str(i))
+            self.elenco.see(str(i))
         self.apri(nome, url, ide)
 
     def canale_morto(self):
