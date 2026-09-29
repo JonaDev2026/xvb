@@ -176,12 +176,12 @@ onwards, so even guides of tens of MB are light.
 
 Channels are matched by the list's `tvg-id`; failing that, by name,
 stripped to the bone (lower case, no spaces or punctuation, no
-HD/FHD/4K suffix), so "RAI 1 HD" and "Rai1" match. Times carry the
+HD/FHD/4K suffix), so "NEWS 24 HD" and "News24" match. Times carry the
 guide's own time zone and are shown in the PC's local time, so they
 are right wherever you are.
 
 **In the row below the video:** channel, title of the programme on air
-(in the channel's colour) and time, "Rai 1 - Tg1 (20:00 - 20:30)". The
+(in the channel's colour) and time, "News 24 - Evening News (20:00 - 20:30)". The
 line above the controls is the progress: how much of the programme
 has elapsed; it fills from the left and switches by itself to the next
 programme. If the channel isn't in the guide it says so; with no guide
@@ -212,9 +212,9 @@ the end ("REC until 21:30"). The app must stay open. Record → Cancel
 schedule cancels it.
 
 **Watching back.** In the right-hand bar, under Recordings, one entry per
-channel and day ("Rai 1 · 29/09/2026"), most recent first. Clicking
+channel and day ("News 24 · 29/09/2026"), most recent first. Clicking
 it, the left-hand bar shows the programmes recorded that day with the
-time, "20:00 Tg1": double-click and it plays in the player, ‹ › go to
+time, "20:00 Evening News": double-click and it plays in the player, ‹ › go to
 the previous and next one, the progress shows where you are in the
 file. To get back to the channels click a playlist. The ✕ on the entry
 deletes all that day's recordings from disk, after confirmation.
@@ -551,12 +551,12 @@ decine di MB non pesano.
 
 I canali si trovano col `tvg-id` della lista; se manca, per nome, ridotto
 all'osso (minuscolo, senza spazi e punteggiatura, senza HD/FHD/4K in
-coda), così "RAI 1 HD" e "Rai1" combaciano. Gli orari hanno il fuso
+coda), così "NEWS 24 HD" e "News24" combaciano. Gli orari hanno il fuso
 scritto nella guida e vengono mostrati nell'ora locale del PC, quindi
 sono giusti ovunque tu sia.
 
 **Nella riga sotto il video:** canale, titolo del programma in onda (col
-colore del canale) e orario, "Rai 1 - Tg1 (20:00 - 20:30)". La riga
+colore del canale) e orario, "News 24 - Evening News (20:00 - 20:30)". La riga
 sopra i comandi è la progress: quanto del programma è passato, si
 riempie da sinistra e cambia da sola al programma dopo. Se il canale
 non è in guida lo dice; senza guida la progress resta vuota.
@@ -586,9 +586,9 @@ until 21:30"). L'app deve restare aperta. Record → Cancel schedule la
 annulla.
 
 **Rivedere.** Nella barra a destra, sotto Recordings, una voce per
-canale e giorno ("Rai 1 · 29/09/2026"), dalla più recente. Cliccandola,
+canale e giorno ("News 24 · 29/09/2026"), dalla più recente. Cliccandola,
 a sinistra al posto dei canali compaiono i programmi registrati quel
-giorno con l'ora, "20:00 Tg1": doppio clic e parte nel lettore, ‹ ›
+giorno con l'ora, "20:00 Evening News": doppio clic e parte nel lettore, ‹ ›
 passano al precedente e al successivo, la progress mostra a che punto
 del file sei. Per tornare ai canali clicca una playlist. La ✕ sulla
 voce cancella dal disco tutte le registrazioni di quel giorno, dopo
