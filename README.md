@@ -58,9 +58,13 @@ playlists/
         favorite.m3u      <- i preferiti, li fa l'app (cartella rossa)
 ```
 
-Per togliere una lista si sposta o si cancella il file. Accanto a ogni
-lista c'è `icone/default.png`; i canali hanno ognuno un pallino colorato
-stile etichette del Mac, sempre lo stesso per lo stesso nome.
+Una lista da internet si aggiunge con Playlists → Add URL, col nome che
+scegli: resta un url, la copia sta in `~/.cache/xvb/liste/` e si
+riscarica quando la apri se ha più di sei ore (Playlists → Reload la
+riscarica subito); si toglie con Playlists → Remove <nome>. Una lista
+su disco si toglie spostando o cancellando il file. Accanto a ogni lista c'è `icone/default.png`; i canali hanno
+ognuno un pallino colorato stile etichette del Mac, sempre lo stesso per
+lo stesso nome.
 
 ## Come si usa
 
@@ -91,6 +95,7 @@ un canale non risponde passa al prossimo da sola.
 - liste e preferiti: `~/.local/share/xvb/playlists/` (da installata), o `playlists/` accanto a `xvb.py`
 - registrazioni: `~/Videos/xvb/`
 - guida TV scaricata: `~/.cache/xvb/epg/` (si riscarica dopo sei ore, o subito con TV guide → Reload)
+- liste da url scaricate: `~/.cache/xvb/liste/`
 - sfondo del lettore quando non va niente: `icone/screen.png`
 
 ## Se qualcosa non va

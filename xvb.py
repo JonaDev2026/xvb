@@ -39,7 +39,7 @@ try:                            # per i loghi: ridimensiona e legge i jpg
 except ImportError:             # senza, si va di PhotoImage: solo png
     HA_PIL = False
 
-VERSIONE = "1.1"
+VERSIONE = "1.2"
 REPO = "JonaDev2026/xvb"        # dove stanno le release, per l'avviso di aggiornamento
 UA = "Mozilla/5.0 (X11; Linux x86_64)"
 IN_AFFANNO = 3.0            # secondi di buffer sotto i quali si scende
@@ -72,6 +72,8 @@ LINGUE = (("en", "English"), ("it", "Italiano"), ("es", "Español"), ("fr", "Fra
 LINGUA = "en"
 TESTI = {
     "it": {
+        "URL of the playlist (m3u):": "Url della playlist (m3u):",
+        "Name:": "Nome:",
         "About": "Info",
         "About XVB...": "Informazioni su XVB...",
         "Version": "Versione",
@@ -144,6 +146,8 @@ TESTI = {
         "Show playlists": "Mostra playlist", "Language": "Lingua",
     },
     "es": {
+        "URL of the playlist (m3u):": "URL de la lista (m3u):",
+        "Name:": "Nombre:",
         "About": "Acerca de",
         "About XVB...": "Acerca de XVB...",
         "Version": "Versión",
@@ -216,6 +220,8 @@ TESTI = {
         "Show playlists": "Mostrar listas", "Language": "Idioma",
     },
     "fr": {
+        "URL of the playlist (m3u):": "URL de la liste (m3u) :",
+        "Name:": "Nom :",
         "About": "À propos",
         "About XVB...": "À propos de XVB...",
         "Version": "Version",
@@ -298,7 +304,7 @@ def _(testo):
 PREFERITI = "favorite"     # la cartella dei preferiti, in playlists/
 ROSSO = "#ff453a"          # il suo colore: solo suo, le altre cartelle no
 PALLINI = ("#ff5257", "#ff9f0a", "#ffd60a", "#30d158", "#0a84ff",
-           "#bf5af2", "#ff375f", "#64d2ff", "#8e8e93")
+           "#bf5af2", "#ff375f", "#64d2ff")       # niente grigio: e' per l'EPG
 # i colori: Material dark. Il fondo e' quasi nero, i pannelli una
 # superficie appena piu' chiara, e tutto quello che "si alza" e' bianco
 # messo sopra in trasparenza: i bottoni all'8 per cento, la riga
@@ -340,8 +346,14 @@ def scrivi_config(d):
 
 
 # ------------------------------------------------------------- le liste
+NOMI_URL = {}                   # url -> nome dato dall'utente (dal config)
+
+
 def nome_di(dove):
-    """Il nome da mostrare: quello del file, senza cartella ne' estensione."""
+    """Il nome da mostrare: quello del file, senza cartella ne' estensione;
+    per una lista da url, il nome che le si e' dato."""
+    if dove in NOMI_URL:
+        return NOMI_URL[dove]
     return os.path.splitext(os.path.basename(dove))[0] or dove
 
 
@@ -397,9 +409,43 @@ def categorie():
     return fuori
 
 
-def leggi_lista(f):
-    """I canali di una lista sul disco: (nome, indirizzo, tvg-id o None).
-    Il tvg-id serve a trovare il canale nella guida."""
+CACHE_LISTE = os.path.join(CASA, ".cache", "xvb", "liste")
+LISTA_VECCHIA = 6 * 3600        # una lista da url si riscarica dopo sei ore
+
+
+def copia_lista_url(url, aggiorna=True):
+    """La copia in cache di una lista da url: si riscarica se manca o e'
+    vecchia (o sempre, con aggiorna forzato); se la rete non va e c'e'
+    una copia, si usa quella."""
+    os.makedirs(CACHE_LISTE, exist_ok=True)
+    f = os.path.join(CACHE_LISTE, hashlib.md5(url.encode()).hexdigest() + ".m3u")
+    fresca = os.path.isfile(f) and time.time() - os.path.getmtime(f) < LISTA_VECCHIA
+    if fresca and aggiorna != "forza":
+        return f
+    try:
+        r = Request(url, headers={"User-Agent": UA})
+        dati = urlopen(r, timeout=30).read()
+        if b"#EXTINF" not in dati[:65536]:
+            raise ValueError("not an m3u playlist")
+        with open(f, "wb") as o:
+            o.write(dati)
+    except Exception:
+        if not os.path.isfile(f):
+            raise
+    return f
+
+
+def leggi_lista(f, solo_cache=False):
+    """I canali di una lista: (nome, indirizzo, tvg-id o None). Il tvg-id
+    serve a trovare il canale nella guida. Se f e' un url si legge la
+    copia in cache (scaricandola se serve; con solo_cache mai)."""
+    if re.match(r"https?://", f, re.I):
+        if solo_cache:
+            f = os.path.join(CACHE_LISTE, hashlib.md5(f.encode()).hexdigest() + ".m3u")
+            if not os.path.isfile(f):
+                return []
+        else:
+            f = copia_lista_url(f)
     righe = open(f, encoding="utf-8", errors="ignore").read().splitlines()
     fuori, nome, ide = [], None, None
     for riga in righe:
@@ -509,6 +555,25 @@ def cartellina(colore, aperta=False, lato=PUNTO):
     return ImageTk.PhotoImage(im.resize((lato, lato), Image.LANCZOS))
 
 
+def globo(colore, lato=PUNTO):
+    """L'icona del globo per le liste da url: solo contorno, come le
+    cartelle, del colore che le tocca."""
+    if not HA_PIL:
+        return None
+    from PIL import ImageDraw
+    K = 4
+    im = Image.new("RGBA", (lato * K, lato * K), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    u = lato * K / 24.0
+    sp = int(1.7 * u)
+    d.ellipse((3 * u, 3 * u, 21 * u, 21 * u), outline=colore, width=sp)   # la sfera
+    d.ellipse((8 * u, 3 * u, 16 * u, 21 * u), outline=colore, width=sp)   # il meridiano
+    d.line([(3 * u, 12 * u), (21 * u, 12 * u)], fill=colore, width=sp)     # l'equatore
+    d.line([(5 * u, 7.5 * u), (19 * u, 7.5 * u)], fill=colore, width=sp)   # i paralleli
+    d.line([(5 * u, 16.5 * u), (19 * u, 16.5 * u)], fill=colore, width=sp)
+    return ImageTk.PhotoImage(im.resize((lato, lato), Image.LANCZOS))
+
+
 def colore_di(nome):
     """Il colore del pallino di un canale: sempre lo stesso per lo stesso
     nome, cosi' non cambia a ogni apertura."""
@@ -516,21 +581,44 @@ def colore_di(nome):
     return PALLINI[n % len(PALLINI)]
 
 
-COLORI_CARTELLE = tuple(c for c in PALLINI if c not in ("#ff5257", "#ff375f"))
+# cartelle e globi: un caldo e un freddo, sempre alternati, rossi esclusi
+# (il rosso e' dei preferiti) e niente grigio
+CALDI = ("#ff9f0a", "#ffd60a", "#ffb340")               # arancio, giallo, ambra
+FREDDI = ("#30d158", "#0a84ff", "#bf5af2", "#64d2ff")   # verde, blu, viola, celeste
+COLORI_CARTELLE = tuple(CALDI[i // 2 % len(CALDI)] if i % 2 == 0 else
+                        FREDDI[i // 2 % len(FREDDI)]
+                        for i in range(2 * len(CALDI) * len(FREDDI)))
 
 
 def colore_cartella(nome, posto):
     """Il colore di una cartella: rosso solo per i preferiti; le altre,
-    nell'ordine in cui stanno, prendono i colori dei pallini (rossi
-    esclusi) uno dopo l'altro, e si ricomincia solo finito il giro."""
+    nell'ordine in cui stanno, un caldo e un freddo alternati."""
     if nome == PREFERITI:
         return ROSSO
     return COLORI_CARTELLE[posto % len(COLORI_CARTELLE)]
 
 
+def cartella_liste_in_uso():
+    """La cartella delle liste che si usa davvero: la prima che ha gia'
+    qualcosa dentro; se sono tutte vuote, la prima."""
+    for c in CARTELLE_LISTE:
+        try:
+            if any(not n.startswith(".") for n in os.listdir(c)):
+                return c
+        except Exception:
+            continue
+    return CARTELLE_LISTE[0]
+
+
 def file_preferiti():
-    """La lista dei preferiti: playlists/favorite/favorite.m3u."""
-    return os.path.join(CARTELLE_LISTE[0], PREFERITI, PREFERITI + ".m3u")
+    """La lista dei preferiti: playlists/favorite/favorite.m3u, quella che
+    c'e' gia' (in qualunque cartella delle liste); se non c'e' ancora,
+    nella cartella in uso."""
+    for c in CARTELLE_LISTE:
+        f = os.path.join(c, PREFERITI, PREFERITI + ".m3u")
+        if os.path.isfile(f):
+            return f
+    return os.path.join(cartella_liste_in_uso(), PREFERITI, PREFERITI + ".m3u")
 
 
 def leggi_preferiti():
@@ -545,6 +633,14 @@ def leggi_preferiti():
 
 def scrivi_preferiti(canali):
     f = file_preferiti()
+    if not canali:
+        # vuoti: via file e cartella, cosi' favorite sparisce dalla barra
+        try:
+            os.remove(f)
+            os.rmdir(os.path.dirname(f))
+        except Exception:
+            pass
+        return
     os.makedirs(os.path.dirname(f), exist_ok=True)
     with open(f, "w", encoding="utf-8") as o:
         o.write("#EXTM3U\n")
@@ -870,7 +966,18 @@ class TV(object):
         self.affanni = []
 
         self.root = tk.Tk(className="xvb")
-        self.root.title("XVB")
+        self.root.title("XVB v" + VERSIONE)
+        # l'icona del programma sulla barra della finestra: icon.png
+        # accanto all'app, o quella messa dal pacchetto
+        for p in (os.path.join(QUI, "icon.png"),
+                  "/usr/share/icons/hicolor/512x512/apps/xvb.png"):
+            if os.path.isfile(p):
+                try:
+                    self.icona_finestra = tk.PhotoImage(file=p)
+                    self.root.iconphoto(True, self.icona_finestra)
+                except tk.TclError:
+                    continue
+                break
         # una casella vuota della misura dei pallini, per le liste senza
         # immagine: cosi' i nomi restano in colonna
         self.vuoto = tk.PhotoImage(width=PUNTO, height=PUNTO)
@@ -928,8 +1035,11 @@ class TV(object):
                                    activeforeground="#ffffff", bd=0,
                                    relief="flat")
         self.menu("Playlists", lambda: [
+            (_("Add URL"), self.chiedi_lista_url),
             (_("Open folder"), self.apri_cartella_liste),
-            (_("Reload"), lambda: self.rifai_liste(scegli=self.cfg.get("lista")))])
+            (_("Reload"), self.ricarica_liste)] + [
+            (_("Remove %s") % n, lambda u=u: self.togli_lista_url(u))
+            for u, n in self.cfg.get("liste_url", {}).items()])
         self.menu("TV guide", lambda: [
             (_("Add URL"), self.chiedi_epg),
             (_("Reload"), self.ricarica_epg if self.cfg.get("epg") else None)] + [
@@ -1050,6 +1160,7 @@ class TV(object):
         # il verde vince sul blu: se si seleziona proprio la riga in uso,
         # la selezione si toglie, cosi' resta verde e non si accende
         self.img_liste = {}                 # percorso -> immagine
+        self.globi = {}                     # colore -> globo disegnato
         self.el_liste.bind("<<TreeviewOpen>>",
                            lambda e: self.apri_chiudi_cartella(True))
         self.el_liste.bind("<<TreeviewClose>>",
@@ -1084,7 +1195,7 @@ class TV(object):
         self.et_avviso.pack(side="left", fill="both", expand=True)
         for w in (self.avviso, self.et_xvb, self.et_avviso):
             w.bind("<Button-1>", lambda e: self.chiudi_avviso())
-        self.timer_avviso = None
+        self.timer_avviso, self.avviso_chiave = None, (None, 0)
         # la riga in cima alla barra, stile YouTube: traccia grigia e, in
         # bianco, quanto manca alla fine del programma (dalla guida)
         self.linea = tk.Canvas(self.barra, height=2, bg="#3a3a3a",
@@ -1291,7 +1402,9 @@ class TV(object):
         if buone != self.cfg.get("liste", []):
             self.cfg["liste"] = buone
             scrivi_config(self.cfg)
-        return fuori + buone
+        NOMI_URL.clear()
+        NOMI_URL.update(self.cfg.get("liste_url", {}))
+        return fuori + buone + list(self.cfg.get("liste_url", {}))
 
     def rifai_liste(self, scegli=None):
         """Rifa' la barra delle liste e ne apre una: quella chiesta, se no
@@ -1317,14 +1430,25 @@ class TV(object):
         self.iid_di = {}                    # percorso -> riga nell'albero
         adesso = self.cfg.get("lista")
 
+        posto = [0]                         # globi e cartelle: un giro solo
+
         def riga(padre, d):
             f = immagine_lista(d)
             if f and f not in self.img_liste:
                 im = carica_logo(f, PUNTO, PUNTO)
                 if im is not None:
                     self.img_liste[f] = im
+            img = self.img_liste.get(f, self.vuoto)
+            if re.match(r"https?://", d, re.I):
+                # le liste da url hanno un globo, coi colori delle cartelle
+                # uno dopo l'altro
+                colore = COLORI_CARTELLE[posto[0] % len(COLORI_CARTELLE)]
+                posto[0] += 1
+                if colore not in self.globi:
+                    self.globi[colore] = globo(colore) or self.vuoto
+                img = self.globi[colore]
             iid = self.el_liste.insert(padre, "end", text=" " + nome_di(d),
-                                       image=self.img_liste.get(f, self.vuoto),
+                                       image=img,
                                        tags=("usata",) if d == adesso else ())
             self.iid_di[d] = iid
 
@@ -1350,11 +1474,10 @@ class TV(object):
         for d in self.liste:
             if d not in gia:
                 riga("", d)
-        posto = 0
         for nome, dentro in categorie():
-            colore = colore_cartella(nome, posto)
+            colore = colore_cartella(nome, posto[0])
             if nome != PREFERITI:
-                posto += 1
+                posto[0] += 1
             aperta = any(d == adesso for d in dentro)
             padre = self.el_liste.insert("", "end", text=" " + nome,
                                          image=self.icona_cartella(colore, aperta),
@@ -1378,7 +1501,7 @@ class TV(object):
                  [d for d in self.liste if d != ricordata]
         for d in ordine:
             try:
-                if any(url == canale for _n, url, _i in leggi_lista(d)):
+                if any(url == canale for _n, url, _i in leggi_lista(d, solo_cache=True)):
                     return d
             except Exception:
                 continue
@@ -1478,6 +1601,43 @@ class TV(object):
                                     self.apri(n, u, i))
                     break
 
+    def chiedi_lista_url(self):
+        """Una lista da url, col nome che si vuole: resta url, la copia
+        sta in cache e si riscarica quando e' vecchia."""
+        url = simpledialog.askstring(_("Playlists"), _("URL of the playlist (m3u):"),
+                                     parent=self.root)
+        if not url or not url.strip():
+            return
+        url = url.strip()
+        if url in self.cfg.get("liste_url", {}):
+            self.scrivi(_("%s is already there") % nome_di(url))
+            return
+        base = os.path.basename(urlparse(url).path.rstrip("/"))
+        base = re.sub(r"\.(m3u8?|txt)$", "", base, flags=re.I) or "playlist"
+        nome = simpledialog.askstring(_("Playlists"), _("Name:"), initialvalue=base,
+                                      parent=self.root)
+        if not nome or not nome.strip():
+            return
+        self.cfg.setdefault("liste_url", {})[url] = nome.strip()
+        scrivi_config(self.cfg)
+        self.rifai_liste(scegli=url)
+
+    def togli_lista_url(self, url):
+        self.cfg.get("liste_url", {}).pop(url, None)
+        scrivi_config(self.cfg)
+        self.scrivi(_("removed %s") % nome_di(url))
+        self.rifai_liste(scegli=self.cfg.get("lista") if self.cfg.get("lista") != url else None)
+
+    def ricarica_liste(self):
+        """Reload: le copie delle liste da url si buttano, cosi' si
+        riscaricano, poi si rilegge tutto."""
+        for u in self.cfg.get("liste_url", {}):
+            try:
+                os.remove(os.path.join(CACHE_LISTE, hashlib.md5(u.encode()).hexdigest() + ".m3u"))
+            except Exception:
+                pass
+        self.rifai_liste(scegli=self.cfg.get("lista"))
+
     def aggiungi_file(self):
         # "tutti i file" per primo: una lista puo' non avere l'estensione
         f = filedialog.askopenfilename(
@@ -1558,8 +1718,9 @@ class TV(object):
         if not url or not self.nome_in_onda:
             return
         pref = leggi_preferiti()
-        if any(u == url for _n, u, _i in pref):
-            pref = [c for c in pref if c[1] != url]
+        if self.e_preferito(pref, url, self.nome_in_onda):
+            pref = [c for c in pref if not (c[1] == url or
+                    nome_piatto(c[0]) == nome_piatto(self.nome_in_onda))]
             self.scrivi(_("%s removed from favorites") % self.nome_in_onda)
         else:
             pref.append((self.nome_in_onda, url, self.ide_in_onda))
@@ -1570,13 +1731,26 @@ class TV(object):
             self.scrivi(_("cannot write favorites: %s") % e)
             return
         self.icona_preferito()
-        self.rifai_albero()
-        if self.cfg.get("lista") == file_preferiti():
-            self.carica(file_preferiti())   # e' la lista aperta: si aggiorna
+        f = file_preferiti()
+        if self.cfg.get("lista") == f:
+            if os.path.isfile(f):
+                self.rifai_albero()
+                self.carica(f)              # e' la lista aperta: si aggiorna
+            else:
+                self.rifai_liste()          # svuotata: si passa a un'altra
+        else:
+            self.rifai_albero()
+
+    def e_preferito(self, pref, url, nome):
+        """Un canale e' fra i preferiti se c'e' con lo stesso indirizzo, o
+        con lo stesso nome (stesso canale preso da un'altra lista)."""
+        piatto = nome_piatto(nome)
+        return any(u == url or (piatto and nome_piatto(n) == piatto)
+                   for n, u, _i in pref)
 
     def icona_preferito(self):
         url = self.cfg.get("canale")
-        acceso = bool(url) and any(u == url for _n, u, _i in leggi_preferiti())
+        acceso = bool(url) and self.e_preferito(leggi_preferiti(), url, self.nome_in_onda)
         self.faccia(self.b_pref, "favorite_on" if acceso else "favorite_off",
                     _("Favorite"))
 
@@ -1978,10 +2152,16 @@ class TV(object):
         self.icona_volume()
         self.icona_preferito()
         self.scrivi_riga() if self.nome else self.scrivi(_("ready"))
+        # l'avviso viola, se c'e', nella lingua nuova
+        chiave, secondi = self.avviso_chiave
+        if chiave and self.avviso.winfo_ismapped():
+            self.et_avviso.config(text=_(chiave[0]) % chiave[1:])
 
-    def mostra_avviso(self, testo, secondi=8):
+    def mostra_avviso(self, testo, secondi=8, chiave=None):
         """Il pannello viola sopra ai comandi, col messaggio; sparisce
-        dopo `secondi` (0 = resta finche' non ci si clicca)."""
+        dopo `secondi` (0 = resta finche' non ci si clicca). Con `chiave`
+        (testo inglese e argomenti) si puo' ritradurre al cambio lingua."""
+        self.avviso_chiave = (chiave, secondi)
         self.et_avviso.config(text=testo)
         if not self.avviso.winfo_ismapped():
             self.avviso.pack(side="bottom", fill="x", before=self.video)
@@ -2017,7 +2197,8 @@ class TV(object):
         if tag and piu_nuova(tag, VERSIONE):
             self.nuova, self.pagina_nuova = tag, pagina
             self.root.after(0, lambda: self.mostra_avviso(
-                _("new version %s available: About > Download") % tag, 0))
+                _("new version %s available: About > Download") % tag, 0,
+                chiave=("new version %s available: About > Download", tag)))
         elif not zitto:
             self.scrivi(_("up to date (%s)") % VERSIONE)
             self.root.after(3000, self.scrivi_riga)
@@ -2038,7 +2219,7 @@ class TV(object):
                 self.scrivi(_("cannot open %s: %s") % (self.pagina_nuova, e))
 
     def apri_cartella_liste(self):
-        cartella = CARTELLE_LISTE[0]
+        cartella = cartella_liste_in_uso()
         try:
             os.makedirs(cartella, exist_ok=True)
             subprocess.Popen(["xdg-open", cartella])
