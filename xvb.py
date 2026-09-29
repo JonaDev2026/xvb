@@ -26,7 +26,7 @@ import sys
 import threading
 import time
 import tkinter as tk
-from tkinter import filedialog, messagebox, simpledialog, ttk
+from tkinter import filedialog, ttk
 import xml.etree.ElementTree as ET
 from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
@@ -39,7 +39,9 @@ try:                            # per i loghi: ridimensiona e legge i jpg
 except ImportError:             # senza, si va di PhotoImage: solo png
     HA_PIL = False
 
-VERSIONE = "1.3"
+VERSIONE = "1.4"
+AUTORE = "Jonathan Sanfilippo"
+ANNO = "2026"
 REPO = "JonaDev2026/xvb"        # dove stanno le release, per l'avviso di aggiornamento
 UA = "Mozilla/5.0 (X11; Linux x86_64)"
 IN_AFFANNO = 3.0            # secondi di buffer sotto i quali si scende
@@ -72,6 +74,9 @@ LINGUE = (("en", "English"), ("it", "Italiano"), ("es", "Español"), ("fr", "Fra
 LINGUA = "en"
 TESTI = {
     "it": {
+        "OK": "OK",
+        "Cancel": "Annulla",
+        "MIT license": "Licenza MIT",
         "URL of the playlist (m3u):": "Url della playlist (m3u):",
         "Name:": "Nome:",
         "About": "Info",
@@ -146,6 +151,9 @@ TESTI = {
         "Show playlists": "Mostra playlist", "Language": "Lingua",
     },
     "es": {
+        "OK": "OK",
+        "Cancel": "Cancelar",
+        "MIT license": "Licencia MIT",
         "URL of the playlist (m3u):": "URL de la lista (m3u):",
         "Name:": "Nombre:",
         "About": "Acerca de",
@@ -220,6 +228,9 @@ TESTI = {
         "Show playlists": "Mostrar listas", "Language": "Idioma",
     },
     "fr": {
+        "OK": "OK",
+        "Cancel": "Annuler",
+        "MIT license": "Licence MIT",
         "URL of the playlist (m3u):": "URL de la liste (m3u) :",
         "Name:": "Nom :",
         "About": "À propos",
@@ -933,6 +944,69 @@ class Cursore(tk.Canvas):
             self.create_line(x0, y, x, y, width=4, fill="#ffffff", capstyle="round")
 
 
+class Finestrella(tk.Toplevel):
+    """Una finestrella nostra, scura come i pannelli, centrata sulla
+    finestra dell'app, al posto di quelle grigie di Tk. Invio = OK,
+    Esc = annulla. Con `chiedi` ha una casella di testo e torna quello
+    che si e' scritto (None se si annulla); senza, e' solo da leggere."""
+
+    def __init__(self, root, titolo, corpo, chiedi=None, valore="",
+                 ok=None, annulla=None, larga=420):
+        tk.Toplevel.__init__(self, root, bg=PANNELLO)
+        self.title(titolo)
+        self.transient(root)
+        self.resizable(False, False)
+        self.risposta = None
+        dentro = tk.Frame(self, bg=PANNELLO)
+        dentro.pack(padx=22, pady=(18, 16))
+        corpo(dentro)                       # chi chiama disegna il contenuto
+        if chiedi is not None:
+            tk.Label(dentro, text=chiedi, bg=PANNELLO, fg=GRIGIO, anchor="w"
+                     ).pack(fill="x", pady=(10, 4))
+            self.casella = tk.Entry(dentro, bg=TASTO, fg=TESTO, insertbackground=ACCENTO,
+                                    relief="flat", bd=0, highlightthickness=1,
+                                    highlightbackground=SCELTO, highlightcolor=ACCENTO,
+                                    font=("TkDefaultFont", 10), width=max(30, larga // 9))
+            self.casella.pack(fill="x", ipady=6)
+            self.casella.insert(0, valore)
+            self.casella.select_range(0, "end")
+        bottoni = tk.Frame(dentro, bg=PANNELLO)
+        bottoni.pack(fill="x", pady=(16, 0))
+
+        def bottone(testo, cosa, primario=False):
+            b = tk.Button(bottoni, text=testo, command=cosa, relief="flat", bd=0,
+                          highlightthickness=0, cursor="hand2", padx=16, pady=5,
+                          bg=ACCENTO if primario else TASTO,
+                          fg="#1a1a1a" if primario else TESTO,
+                          activebackground=SCELTO, activeforeground="#ffffff")
+            b.pack(side="right", padx=(8, 0))
+            return b
+        bottone(ok or _("OK"), self.va_bene, primario=True)
+        if chiedi is not None:
+            bottone(annulla or _("Cancel"), self.lascia)
+        self.bind("<Return>", lambda e: self.va_bene())
+        self.bind("<Escape>", lambda e: self.lascia())
+        self.protocol("WM_DELETE_WINDOW", self.lascia)
+        # al centro della finestra dell'app
+        self.update_idletasks()
+        x = root.winfo_rootx() + (root.winfo_width() - self.winfo_reqwidth()) // 2
+        y = root.winfo_rooty() + (root.winfo_height() - self.winfo_reqheight()) // 2
+        self.geometry("+%d+%d" % (max(0, x), max(0, y)))
+        if chiedi is not None:
+            self.casella.focus_set()
+        else:
+            self.focus_set()
+        self.grab_set()
+
+    def va_bene(self):
+        self.risposta = self.casella.get() if hasattr(self, "casella") else True
+        self.destroy()
+
+    def lascia(self):
+        self.risposta = None
+        self.destroy()
+
+
 class TV(object):
     def __init__(self, lista=None):
         self.cfg = leggi_config()
@@ -960,6 +1034,7 @@ class TV(object):
         self.da_riallineare, self.suonato_da = False, 0.0
         self.registrando, self.fine_rec = "", 0.0    # file in corso, quando fermarsi
         self.nuova, self.pagina_nuova = "", ""      # versione nuova su GitHub, se c'e'
+        self.icona_finestra, self.icona_file = None, ""
         self.piano = None                            # (nome, url, ide, inizio, fine)
         self.ultima_discesa = 0.0
         self.tranquillo_da = time.time()
@@ -974,6 +1049,7 @@ class TV(object):
             if os.path.isfile(p):
                 try:
                     self.icona_finestra = tk.PhotoImage(file=p)
+                    self.icona_file = p
                     self.root.iconphoto(True, self.icona_finestra)
                 except tk.TclError:
                     continue
@@ -1604,8 +1680,7 @@ class TV(object):
     def chiedi_lista_url(self):
         """Una lista da url, col nome che si vuole: resta url, la copia
         sta in cache e si riscarica quando e' vecchia."""
-        url = simpledialog.askstring(_("Playlists"), _("URL of the playlist (m3u):"),
-                                     parent=self.root)
+        url = self.chiedi(_("Add URL"), _("URL of the playlist (m3u):"))
         if not url or not url.strip():
             return
         url = url.strip()
@@ -1614,8 +1689,7 @@ class TV(object):
             return
         base = os.path.basename(urlparse(url).path.rstrip("/"))
         base = re.sub(r"\.(m3u8?|txt)$", "", base, flags=re.I) or "playlist"
-        nome = simpledialog.askstring(_("Playlists"), _("Name:"), initialvalue=base,
-                                      parent=self.root)
+        nome = self.chiedi(_("Add URL"), _("Name:"), base)
         if not nome or not nome.strip():
             return
         self.cfg.setdefault("liste_url", {})[url] = nome.strip()
@@ -2203,13 +2277,46 @@ class TV(object):
             self.scrivi(_("up to date (%s)") % VERSIONE)
             self.root.after(3000, self.scrivi_riga)
 
+    def chiedi(self, titolo, domanda, valore=""):
+        """Una riga di testo dall'utente, nella finestrella nostra. None
+        se annulla."""
+        def corpo(dentro):
+            tk.Label(dentro, text=titolo, bg=PANNELLO, fg=TESTO, anchor="w",
+                     font=("TkDefaultFont", 11, "bold")).pack(fill="x")
+        f = Finestrella(self.root, titolo, corpo, chiedi=domanda, valore=valore)
+        self.root.wait_window(f)
+        return f.risposta
+
     def informazioni(self):
-        """La finestrella About: nome, versione, dove sta il progetto."""
-        testo = "XVB - Extended Video Broadcast\n%s %s\n\n%s\n\nhttps://github.com/%s" % (
-            _("Version"), VERSIONE,
-            _("new version %s available") % self.nuova if self.nuova else _("Up to date"),
-            REPO)
-        messagebox.showinfo("XVB", testo, parent=self.root)
+        """La finestrella About: icona, nome, versione, autore, link."""
+        def corpo(dentro):
+            riga = tk.Frame(dentro, bg=PANNELLO)
+            riga.pack(fill="x")
+            if getattr(self, "icona_finestra", None) is not None and HA_PIL:
+                try:
+                    im = Image.open(self.icona_file).convert("RGBA").resize((64, 64), Image.LANCZOS)
+                    self.icona_about = ImageTk.PhotoImage(im)
+                    tk.Label(riga, image=self.icona_about, bg=PANNELLO).pack(side="left", padx=(0, 16))
+                except Exception:
+                    pass
+            testi = tk.Frame(riga, bg=PANNELLO)
+            testi.pack(side="left", fill="x")
+            tk.Label(testi, text="XVB", bg=PANNELLO, fg=TESTO, anchor="w",
+                     font=("TkDefaultFont", 16, "bold")).pack(fill="x")
+            tk.Label(testi, text="Extended Video Broadcast", bg=PANNELLO, fg=GRIGIO,
+                     anchor="w").pack(fill="x")
+            tk.Label(testi, text=_("Version") + " " + VERSIONE, bg=PANNELLO, fg=ACCENTO,
+                     anchor="w").pack(fill="x", pady=(6, 0))
+            stato = (_("new version %s available") % self.nuova) if self.nuova else _("Up to date")
+            tk.Label(dentro, text=stato, bg=PANNELLO, fg=TESTO, anchor="w").pack(fill="x", pady=(14, 0))
+            tk.Label(dentro, text="\u00a9 %s %s" % (ANNO, AUTORE), bg=PANNELLO, fg=GRIGIO,
+                     anchor="w").pack(fill="x", pady=(10, 0))
+            tk.Label(dentro, text=_("MIT license"), bg=PANNELLO, fg=GRIGIO, anchor="w").pack(fill="x")
+            link = tk.Label(dentro, text="github.com/" + REPO, bg=PANNELLO, fg=ACCENTO,
+                            anchor="w", cursor="hand2")
+            link.pack(fill="x", pady=(10, 0))
+            link.bind("<Button-1>", lambda e: subprocess.Popen(["xdg-open", "https://github.com/" + REPO]))
+        Finestrella(self.root, _("About XVB..."), corpo)
 
     def apri_release(self):
         if self.pagina_nuova:
@@ -2278,9 +2385,7 @@ class TV(object):
     def chiedi_epg(self):
         """Chiede l'url (o il percorso) di una guida XMLTV e la aggiunge
         alle altre."""
-        dove = simpledialog.askstring(
-            _("TV guide"), _("URL or file of the guide (XMLTV, .gz is fine):"),
-            parent=self.root)
+        dove = self.chiedi(_("TV guide"), _("URL or file of the guide (XMLTV, .gz is fine):"))
         if not dove or not dove.strip():
             return
         dove = dove.strip()
@@ -2534,13 +2639,10 @@ class TV(object):
         if not self.cfg.get("canale") or not self.nome_in_onda:
             self.scrivi(_("open the channel to record first"))
             return
-        inizio = simpledialog.askstring(_("Schedule"), _("Start (HH:MM):"),
-                                        initialvalue=time.strftime("%H:%M"),
-                                        parent=self.root)
+        inizio = self.chiedi(_("Schedule"), _("Start (HH:MM):"), time.strftime("%H:%M"))
         if not inizio:
             return
-        fine = simpledialog.askstring(_("Schedule"), _("End (HH:MM):"),
-                                      parent=self.root)
+        fine = self.chiedi(_("Schedule"), _("End (HH:MM):"))
         if not fine:
             return
         try:
