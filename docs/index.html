@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>XVB — Extended Video Broadcast</title>
+<meta name="description" content="A lightweight IPTV player for Linux: m3u playlists, XMLTV guide, recording, favourites. Python + libmpv.">
+<link rel="icon" href="https://raw.githubusercontent.com/JonaDev2026/xvb/main/icon.png">
+<style>
+:root{
+  --bg:#141418;--bg2:#1c1c22;--panel:#23232b;--line:#2f2f3a;
+  --text:#e8e8ee;--dim:#9a9aa8;--accent:#8b5cf6;--accent2:#a78bfa;--rec:#e53935;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font:16px/1.6 -apple-system,"Segoe UI",Ubuntu,"DejaVu Sans",sans-serif}
+a{color:var(--accent2);text-decoration:none}
+a:hover{text-decoration:underline}
+.wrap{max-width:980px;margin:0 auto;padding:0 20px}
+header{display:flex;align-items:center;justify-content:space-between;padding:18px 0}
+.brand{display:flex;align-items:center;gap:12px;font-weight:700;font-size:20px;color:var(--text)}
+.brand img{width:36px;height:36px;border-radius:9px}
+nav{display:flex;gap:18px;align-items:center;font-size:14px}
+nav a{color:var(--dim)}
+.lang{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.lang button{background:none;border:0;color:var(--dim);padding:4px 10px;cursor:pointer;font:inherit;font-size:13px}
+.lang button.on{background:var(--panel);color:var(--text)}
+.hero{padding:40px 0 20px;text-align:center}
+.hero h1{font-size:44px;line-height:1.15;margin:0 0 12px;letter-spacing:-.5px}
+.hero h1 span{background:linear-gradient(90deg,var(--accent),#ec4899);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero p{font-size:19px;color:var(--dim);max-width:640px;margin:0 auto 26px}
+.btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:12px 22px;border-radius:10px;font-weight:600;border:1px solid var(--line);color:var(--text);background:var(--panel)}
+.btn.main{background:linear-gradient(135deg,var(--accent),#7c3aed);border-color:transparent}
+.btn:hover{text-decoration:none;filter:brightness(1.1)}
+.ver{font-size:13px;color:var(--dim);margin-top:12px;min-height:20px}
+.shot{margin:34px auto 0;border-radius:14px;overflow:hidden;border:1px solid var(--line);box-shadow:0 30px 80px rgba(0,0,0,.6)}
+.shot img{display:block;width:100%}
+section{padding:56px 0 0}
+h2{font-size:26px;margin:0 0 20px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+.card{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:18px 20px}
+.card h3{margin:0 0 6px;font-size:16px;display:flex;align-items:center;gap:8px}
+.card p{margin:0;color:var(--dim);font-size:15px}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+pre{background:#0e0e12;border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow:auto;font:14px/1.5 "DejaVu Sans Mono",Menlo,Consolas,monospace;color:#d6d6e0}
+code{font-family:"DejaVu Sans Mono",Menlo,Consolas,monospace}
+p code{background:var(--panel);padding:1px 6px;border-radius:5px;font-size:14px}
+.steps p{margin:12px 0 6px}
+footer{margin-top:70px;padding:26px 0 40px;border-top:1px solid var(--line);color:var(--dim);font-size:14px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
+[data-lang]{display:none}
+html[lang=en] [data-lang=en]{display:revert}
+html[lang=it] [data-lang=it]{display:revert}
+@media (max-width:600px){.hero h1{font-size:32px}.hero p{font-size:17px}nav a.hide{display:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <a class="brand" href="./"><img src="https://raw.githubusercontent.com/JonaDev2026/xvb/main/icon.png" alt="">XVB</a>
+  <nav>
+    <a class="hide" href="#features"><span data-lang="en">Features</span><span data-lang="it">Funzioni</span></a>
+    <a class="hide" href="#install"><span data-lang="en">Install</span><span data-lang="it">Installazione</span></a>
+    <a href="https://github.com/JonaDev2026/xvb">GitHub</a>
+    <div class="lang"><button id="en" class="on">EN</button><button id="it">IT</button></div>
+  </nav>
+</header>
+
+<div class="hero">
+  <h1>Extended <span>Video Broadcast</span></h1>
+  <p data-lang="en">A lightweight IPTV player for Linux. m3u playlists, XMLTV guide, recording, favourites. Python on top of libmpv, dark interface, no accounts, no telemetry.</p>
+  <p data-lang="it">Lettore IPTV per Linux, leggero. Playlist m3u, guida XMLTV, registrazione, preferiti. Python su libmpv, interfaccia scura, niente account, niente telemetria.</p>
+  <div class="btns">
+    <a class="btn main" id="deb" href="https://github.com/JonaDev2026/xvb/releases/latest">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 21h16"/></svg>
+      <span data-lang="en">Download .deb</span><span data-lang="it">Scarica .deb</span>
+    </a>
+    <a class="btn" href="https://github.com/JonaDev2026/xvb#readme"><span data-lang="en">Read the manual</span><span data-lang="it">Leggi il manuale</span></a>
+  </div>
+  <div class="ver" id="ver"></div>
+  <div class="shot"><img src="https://raw.githubusercontent.com/JonaDev2026/xvb/main/preview.png" alt="XVB screenshot"></div>
+</div>
+
+<section id="features">
+  <h2><span data-lang="en">What it does</span><span data-lang="it">Cosa fa</span></h2>
+  <div class="grid">
+    <div class="card"><h3><i class="dot" style="background:#3b82f6"></i><span data-lang="en">Playlists</span><span data-lang="it">Playlist</span></h3>
+      <p data-lang="en">Drop m3u files in a folder or add a URL. Groups become folders, dead channels are skipped, lists from the web refresh every 6 hours.</p>
+      <p data-lang="it">Metti i file m3u in una cartella o aggiungi un url. I gruppi diventano cartelle, i canali morti vengono saltati, le liste dal web si aggiornano ogni 6 ore.</p></div>
+    <div class="card"><h3><i class="dot" style="background:#f59e0b"></i><span data-lang="en">TV guide</span><span data-lang="it">Guida TV</span></h3>
+      <p data-lang="en">Several XMLTV sources at once, plain or gzipped. Current programme under the channel name, a progress line, and a full timeline grid.</p>
+      <p data-lang="it">Più guide XMLTV insieme, xml o gz. Programma in corso sotto il nome del canale, linea di avanzamento e griglia con la timeline.</p></div>
+    <div class="card"><h3><i class="dot" style="background:var(--rec)"></i><span data-lang="en">Recording</span><span data-lang="it">Registrazione</span></h3>
+      <p data-lang="en">One click to record, or schedule start and end. Files are named after the programme and sorted per channel and day, playable from the sidebar.</p>
+      <p data-lang="it">Un clic per registrare, oppure pianifica inizio e fine. I file prendono il nome del programma, divisi per canale e giorno, e si riguardano dalla sidebar.</p></div>
+    <div class="card"><h3><i class="dot" style="background:#ec4899"></i><span data-lang="en">Favourites</span><span data-lang="it">Preferiti</span></h3>
+      <p data-lang="en">A heart on the controls adds the channel to a red Favourites folder, kept per playlist.</p>
+      <p data-lang="it">Un cuore nei controlli aggiunge il canale alla cartella rossa dei preferiti, una per playlist.</p></div>
+    <div class="card"><h3><i class="dot" style="background:#22c55e"></i><span data-lang="en">Video &amp; audio</span><span data-lang="it">Video e audio</span></h3>
+      <p data-lang="en">Quality selection on HLS streams, speed, aspect ratio, deinterlace, picture controls, audio and subtitle tracks, per‑channel audio delay, volume boost.</p>
+      <p data-lang="it">Scelta della qualità sugli HLS, velocità, proporzioni, deinterlaccia, regolazioni immagine, tracce audio e sottotitoli, ritardo audio per canale, boost del volume.</p></div>
+    <div class="card"><h3><i class="dot" style="background:#a78bfa"></i><span data-lang="en">Four languages</span><span data-lang="it">Quattro lingue</span></h3>
+      <p data-lang="en">English, Italian, Spanish and French. Colours are taken from each channel's logo. Update check built in.</p>
+      <p data-lang="it">Inglese, italiano, spagnolo e francese. I colori vengono dal logo di ogni canale. Controllo aggiornamenti integrato.</p></div>
+  </div>
+</section>
+
+<section id="install" class="steps">
+  <h2><span data-lang="en">Install</span><span data-lang="it">Installazione</span></h2>
+  <p data-lang="en">Debian, Ubuntu, Linux Mint. Download the <code>.deb</code> from the latest release and:</p>
+  <p data-lang="it">Debian, Ubuntu, Linux Mint. Scarica il <code>.deb</code> dall'ultima release e:</p>
+  <pre id="cmd">sudo apt install ./xvb_*_all.deb</pre>
+  <p data-lang="en">Then launch <b>XVB</b> from the menu, or type <code>xvb</code>. To update, install the new package over the old one. To remove: <code>sudo apt remove xvb</code>.</p>
+  <p data-lang="it">Poi apri <b>XVB</b> dal menu, o scrivi <code>xvb</code>. Per aggiornare installa il nuovo pacchetto sopra il vecchio. Per togliere: <code>sudo apt remove xvb</code>.</p>
+  <p data-lang="en">Without the package, on any distribution:</p>
+  <p data-lang="it">Senza pacchetto, su qualsiasi distribuzione:</p>
+  <pre>sudo apt install -y libmpv2 python3-tk python3-pil python3-pil.imagetk python3-mpv
+git clone https://github.com/JonaDev2026/xvb.git
+cd xvb &amp;&amp; python3 xvb.py</pre>
+</section>
+
+<footer>
+  <div>XVB — MIT licence — © 2026 Jonathan Sanfilippo</div>
+  <div><a href="https://github.com/JonaDev2026/xvb/issues"><span data-lang="en">Report a problem</span><span data-lang="it">Segnala un problema</span></a> · <a href="https://github.com/JonaDev2026/xvb/releases"><span data-lang="en">All releases</span><span data-lang="it">Tutte le release</span></a></div>
+</footer>
+
+</div>
+<script>
+(function(){
+  var html=document.documentElement;
+  function lang(l){html.lang=l;document.getElementById('en').className=l=='en'?'on':'';document.getElementById('it').className=l=='it'?'on':'';try{localStorage.setItem('xvb-lang',l)}catch(e){}}
+  document.getElementById('en').onclick=function(){lang('en')};
+  document.getElementById('it').onclick=function(){lang('it')};
+  var saved=null;try{saved=localStorage.getItem('xvb-lang')}catch(e){}
+  lang(saved||((navigator.language||'').slice(0,2)=='it'?'it':'en'));
+
+  fetch('https://api.github.com/repos/JonaDev2026/xvb/releases/latest').then(function(r){return r.json()}).then(function(d){
+    if(!d||!d.tag_name)return;
+    var v=d.tag_name.replace(/^v/,'');
+    var deb=(d.assets||[]).filter(function(a){return /\.deb$/.test(a.name)})[0];
+    var when=d.published_at?new Date(d.published_at).toLocaleDateString(html.lang=='it'?'it-IT':'en-GB'):'';
+    document.getElementById('ver').textContent=(html.lang=='it'?'Ultima versione ':'Latest version ')+v+(when?' · '+when:'');
+    if(deb){document.getElementById('deb').href=deb.browser_download_url;
+      document.getElementById('cmd').textContent='sudo apt install ./'+deb.name;}
+  }).catch(function(){});
+})();
+</script>
+</body>
+</html>
