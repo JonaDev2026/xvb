@@ -40,7 +40,7 @@ try:                            # per i loghi: ridimensiona e legge i jpg
 except ImportError:             # senza, si va di PhotoImage: solo png
     HA_PIL = False
 
-VERSIONE = "1.9"
+VERSIONE = "2.0"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"        # dove stanno le release, per l'avviso di aggiornamento
@@ -1601,11 +1601,21 @@ class Finestrella(tk.Toplevel):
 
     def va_bene(self):
         self.risposta = self.casella.get() if hasattr(self, "casella") else True
-        self.destroy()
+        self.chiudi_dopo()
 
     def lascia(self):
         self.risposta = None
-        self.destroy()
+        self.chiudi_dopo()
+
+    def chiudi_dopo(self):
+        """Si chiude a evento finito, non dentro al clic sul bottone: col
+        grab addosso, distruggerla nel suo stesso evento fa saltare X
+        (BadWindow, X_QueryTree)."""
+        try:
+            self.grab_release()
+        except tk.TclError:
+            pass
+        self.after_idle(lambda: self.winfo_exists() and self.destroy())
 
 
 def sfoglia(root, titolo, da, file_=True):
