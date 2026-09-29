@@ -75,6 +75,8 @@ lo stesso nome.
 | Pausa / riprendi | il bottone, oppure spazio |
 | Volume | il cursore, la rotella sopra al cursore, oppure ↑ ↓; muto col bottone o M |
 | Qualità | l'ingranaggio: parte dalla migliore che il canale offre e cambia solo se lo scegli tu |
+| Video | menu Video: velocità (anche col bottone x1 nella barra, che cicla x1 → x1.25 → x1.5 → x2 → x0.5 → x0.75), proporzioni (Auto, 16:9, 4:3, 21:9) e riempi schermo, deinterlaccia, luminosità/contrasto/saturazione, istantanea in `~/Pictures/xvb/`, sempre in primo piano |
+| Audio | menu Audio: traccia audio e sottotitoli del flusso (quando ne ha più d'una), volume extra +50%, normalizzazione del volume, ritardo audio |
 | Ritardo audio | `+` ritarda l'audio di 100 ms (audio in anticipo sul video), `-` lo anticipa; anche dal menu Audio. Resta salvato per quel canale |
 | Preferiti | il cuore mette o toglie il canale in onda dai preferiti |
 | Registrare | il bottone rec registra il canale in onda in `~/Videos/xvb/` così com'è, senza ricodificare; ripremi per fermare, cambiando canale si ferma. Record → Schedule... imposta inizio e fine: all'ora giusta l'app apre il canale e registra (deve restare aperta) |

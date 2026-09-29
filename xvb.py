@@ -39,7 +39,7 @@ try:                            # per i loghi: ridimensiona e legge i jpg
 except ImportError:             # senza, si va di PhotoImage: solo png
     HA_PIL = False
 
-VERSIONE = "1.5"
+VERSIONE = "1.6"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"        # dove stanno le release, per l'avviso di aggiornamento
@@ -74,6 +74,31 @@ LINGUE = (("en", "English"), ("it", "Italiano"), ("es", "Español"), ("fr", "Fra
 LINGUA = "en"
 TESTI = {
     "it": {
+        "Video": "Video",
+        "Speed x%g": "Velocità x%g",
+        "Aspect %s": "Proporzioni %s",
+        "Fill screen (crop)": "Riempi lo schermo (taglia)",
+        "Deinterlace": "Deinterlaccia",
+        "Brightness +": "Luminosità +",
+        "Brightness -": "Luminosità -",
+        "Contrast +": "Contrasto +",
+        "Contrast -": "Contrasto -",
+        "Saturation +": "Saturazione +",
+        "Saturation -": "Saturazione -",
+        "Reset picture": "Azzera immagine",
+        "Screenshot": "Istantanea",
+        "Always on top": "Sempre in primo piano",
+        "Track: %s": "Traccia: %s",
+        "Subtitles off": "Sottotitoli spenti",
+        "Subtitles: %s": "Sottotitoli: %s",
+        "Volume boost +50%": "Volume extra +50%",
+        "Normalize loudness": "Normalizza il volume",
+        "speed x%g": "velocità x%g",
+        "brightness": "luminosità",
+        "contrast": "contrasto",
+        "saturation": "saturazione",
+        "screenshot saved in %s": "istantanea salvata in %s",
+        "cannot take a screenshot: %s": "istantanea non riuscita: %s",
         "Programme guide": "Guida programmi",
         "no guide data for this playlist": "nessun programma in guida per questa playlist",
         "OK": "OK",
@@ -153,6 +178,31 @@ TESTI = {
         "Show playlists": "Mostra playlist", "Language": "Lingua",
     },
     "es": {
+        "Video": "Vídeo",
+        "Speed x%g": "Velocidad x%g",
+        "Aspect %s": "Proporción %s",
+        "Fill screen (crop)": "Llenar pantalla (recortar)",
+        "Deinterlace": "Desentrelazar",
+        "Brightness +": "Brillo +",
+        "Brightness -": "Brillo -",
+        "Contrast +": "Contraste +",
+        "Contrast -": "Contraste -",
+        "Saturation +": "Saturación +",
+        "Saturation -": "Saturación -",
+        "Reset picture": "Restablecer imagen",
+        "Screenshot": "Captura",
+        "Always on top": "Siempre encima",
+        "Track: %s": "Pista: %s",
+        "Subtitles off": "Subtítulos desactivados",
+        "Subtitles: %s": "Subtítulos: %s",
+        "Volume boost +50%": "Volumen extra +50%",
+        "Normalize loudness": "Normalizar volumen",
+        "speed x%g": "velocidad x%g",
+        "brightness": "brillo",
+        "contrast": "contraste",
+        "saturation": "saturación",
+        "screenshot saved in %s": "captura guardada en %s",
+        "cannot take a screenshot: %s": "no se pudo capturar: %s",
         "Programme guide": "Guía de programas",
         "no guide data for this playlist": "sin programas en la guía para esta lista",
         "OK": "OK",
@@ -232,6 +282,31 @@ TESTI = {
         "Show playlists": "Mostrar listas", "Language": "Idioma",
     },
     "fr": {
+        "Video": "Vidéo",
+        "Speed x%g": "Vitesse x%g",
+        "Aspect %s": "Format %s",
+        "Fill screen (crop)": "Remplir l'écran (rogner)",
+        "Deinterlace": "Désentrelacer",
+        "Brightness +": "Luminosité +",
+        "Brightness -": "Luminosité -",
+        "Contrast +": "Contraste +",
+        "Contrast -": "Contraste -",
+        "Saturation +": "Saturation +",
+        "Saturation -": "Saturation -",
+        "Reset picture": "Réinitialiser l'image",
+        "Screenshot": "Capture d'écran",
+        "Always on top": "Toujours au premier plan",
+        "Track: %s": "Piste : %s",
+        "Subtitles off": "Sous-titres désactivés",
+        "Subtitles: %s": "Sous-titres : %s",
+        "Volume boost +50%": "Volume extra +50%",
+        "Normalize loudness": "Normaliser le volume",
+        "speed x%g": "vitesse x%g",
+        "brightness": "luminosité",
+        "contrast": "contraste",
+        "saturation": "saturation",
+        "screenshot saved in %s": "capture enregistrée dans %s",
+        "cannot take a screenshot: %s": "capture impossible : %s",
         "Programme guide": "Grille des programmes",
         "no guide data for this playlist": "aucun programme dans le guide pour cette liste",
         "OK": "OK",
@@ -317,6 +392,9 @@ def _(testo):
     """Il testo nella lingua scelta; se manca, resta l'inglese."""
     return TESTI.get(LINGUA, {}).get(testo, testo)
 
+
+VELOCITA = (1, 1.25, 1.5, 2, 0.5, 0.75)     # il giro del bottone x1
+PROPORZIONI = (("Auto", "-1"), ("16:9", "16:9"), ("4:3", "4:3"), ("21:9", "21:9"))
 
 PREFERITI = "favorite"     # la cartella dei preferiti, in playlists/
 ROSSO = "#ff453a"          # il suo colore: solo suo, le altre cartelle no
@@ -1317,6 +1395,7 @@ class TV(object):
         self.da_riallineare, self.suonato_da = False, 0.0
         self.registrando, self.fine_rec = "", 0.0    # file in corso, quando fermarsi
         self.nuova, self.pagina_nuova = "", ""      # versione nuova su GitHub, se c'e'
+        self.velocita = 1
         self.icona_finestra, self.icona_file = None, ""
         self.piano = None                            # (nome, url, ide, inizio, fine)
         self.ultima_discesa = 0.0
@@ -1384,22 +1463,10 @@ class TV(object):
                         pass
         # EPG e' una scritta, non una png: la si disegna come icona, cosi'
         # sta sulla sfumatura senza fondo come le altre
-        if "epg" not in self.icone and HA_PIL:
-            try:
-                from PIL import ImageDraw, ImageFont
-                try:
-                    font = ImageFont.truetype("DejaVuSans-Bold.ttf", 11)
-                except Exception:
-                    font = ImageFont.load_default()
-                im = Image.new("RGBA", (30, 24), (0, 0, 0, 0))
-                d = ImageDraw.Draw(im)
-                x0, y0, x1, y1 = d.textbbox((0, 0), "EPG", font=font)
-                d.text(((30 - (x1 - x0)) // 2 - x0, (24 - (y1 - y0)) // 2 - y0), "EPG",
-                       fill="#e8e8ef", font=font)
-                self.icone_pil["epg"] = im
-                self.icone["epg"] = ImageTk.PhotoImage(im)
-            except Exception:
-                pass
+        if "epg" not in self.icone:
+            self.icona_testo("epg", "EPG")
+        for v in VELOCITA:
+            self.icona_testo("x%g" % v, "x%g" % v)
         # quelle che mancano o non si aprono si dicono, cosi' si vede subito
         self.icone_mancanti = [n for n in (
             "play", "pausa", "switch", "playlist", "favorite_on", "favorite_off",
@@ -1444,7 +1511,34 @@ class TV(object):
             (_("Schedule..."), self.pianifica),
             (_("Cancel schedule"), self.annulla_piano if self.piano else None),
             (_("Open recordings folder"), self.apri_registrazioni)])
+        self.menu("Video", lambda: [
+            (("*  " if v == self.velocita else "   ") + _("Speed x%g") % v,
+             lambda v=v: self.metti_velocita(v)) for v in sorted(VELOCITA)] + [
+            (("*  " if self.cfg.get("proporzioni", "-1") == val and not self.cfg.get("riempi")
+              else "   ") + _("Aspect %s") % nome, lambda val=val: self.metti_proporzioni(val))
+            for nome, val in PROPORZIONI] + [
+            (("*  " if self.cfg.get("riempi") else "   ") + _("Fill screen (crop)"), self.riempi),
+            (("*  " if self.cfg.get("deinterlaccia") else "   ") + _("Deinterlace"), self.deinterlaccia),
+            (_("Brightness +"), lambda: self.regola("brightness", +10)),
+            (_("Brightness -"), lambda: self.regola("brightness", -10)),
+            (_("Contrast +"), lambda: self.regola("contrast", +10)),
+            (_("Contrast -"), lambda: self.regola("contrast", -10)),
+            (_("Saturation +"), lambda: self.regola("saturation", +10)),
+            (_("Saturation -"), lambda: self.regola("saturation", -10)),
+            (_("Reset picture"), self.azzera_immagine),
+            (_("Screenshot"), self.istantanea),
+            (("*  " if self.cfg.get("in_cima") else "   ") + _("Always on top"), self.sempre_in_cima)])
         self.menu("Audio", lambda: [
+            (("*  " if t["selected"] else "   ") + _("Track: %s") % self.nome_traccia(t),
+             lambda i=t["id"]: self.metti_traccia("aid", i))
+            for t in self.tracce("audio")] + [
+            (("*  " if not any(t["selected"] for t in self.tracce("sub")) else "   ") + _("Subtitles off"),
+             lambda: self.metti_traccia("sid", "no"))] + [
+            (("*  " if t["selected"] else "   ") + _("Subtitles: %s") % self.nome_traccia(t),
+             lambda i=t["id"]: self.metti_traccia("sid", i))
+            for t in self.tracce("sub")] + [
+            (("*  " if self.cfg.get("boost") else "   ") + _("Volume boost +50%"), self.boost),
+            (("*  " if self.cfg.get("normalizza") else "   ") + _("Normalize loudness"), self.normalizza),
             (_("Delay +100 ms"), lambda: self.ritardo_audio(+0.1)),
             (_("Delay -100 ms"), lambda: self.ritardo_audio(-0.1)),
             (_("Reset delay"), self.azzera_ritardo)])
@@ -1615,6 +1709,7 @@ class TV(object):
         self.b_rec = self.tasto("rec", _("Record"), self.registra, lato="right",
                                 padx=(2, 6))
         self.tasto("epg", "EPG", self.apri_guida, 4, lato="right")
+        self.b_velocita = self.tasto("x1", "x1", self.gira_velocita, 4, lato="right")
         self.tasto("switch", _("Switch"), self.switch, 6, lato="right",
                    padx=(6, 2))
         self.menu_qualita = tk.Menu(self.root, tearoff=0, bg=TASTO, fg=TESTO,
@@ -1656,6 +1751,9 @@ class TV(object):
             network_timeout=30,
             ytdl=False,
             hwdec="no",
+            volume_max=150,                 # per il boost
+            screenshot_directory=os.path.join(CASA, "Pictures", "xvb"),
+            screenshot_template="xvb-%tY-%tm-%td_%tH-%tM-%tS",
             user_agent=UA,
             cursor_autohide=3000,           # sul video il cursore lo nasconde mpv
             stream_lavf_o=("reconnect=1,reconnect_streamed=1,"
@@ -1674,6 +1772,9 @@ class TV(object):
             pass
         self.volume.set(int(self.cfg.get("volume", 85)))
         self.icona_volume()
+        self.applica_video()
+        if self.cfg.get("in_cima"):
+            self.root.attributes("-topmost", True)
         if self.icone_mancanti:
             self.scrivi(_("missing icons: %s") % ", ".join(self.icone_mancanti))
 
@@ -1764,6 +1865,27 @@ class TV(object):
                          relief="flat", bd=0, highlightthickness=0,
                          activebackground=SCELTO, activeforeground="#ffffff",
                          cursor="hand2")
+
+    def icona_testo(self, chiave, testo):
+        """Una scritta corta disegnata come icona (30x24), cosi' sta sulla
+        sfumatura senza fondo come le png. Senza PIL non si fa."""
+        if not HA_PIL:
+            return
+        try:
+            from PIL import ImageDraw, ImageFont
+            try:
+                font = ImageFont.truetype("DejaVuSans-Bold.ttf", 11)
+            except Exception:
+                font = ImageFont.load_default()
+            im = Image.new("RGBA", (34, 24), (0, 0, 0, 0))
+            d = ImageDraw.Draw(im)
+            x0, y0, x1, y1 = d.textbbox((0, 0), testo, font=font)
+            d.text(((34 - (x1 - x0)) // 2 - x0, (24 - (y1 - y0)) // 2 - y0), testo,
+                   fill="#e8e8ef", font=font)
+            self.icone_pil[chiave] = im
+            self.icone[chiave] = ImageTk.PhotoImage(im)
+        except Exception:
+            pass
 
     def tasto(self, icona, testo, cosa, largo=6, lato="left", padx=2):
         """Un bottone della barra; padx=(6, 2) apre un gruppo nuovo, con
@@ -2515,7 +2637,7 @@ class TV(object):
 
     def alza_volume(self, v):
         try:
-            self.mpv.volume = float(v)
+            self.mpv.volume = float(v) * (1.5 if self.cfg.get("boost") else 1.0)
         except Exception:
             pass
         self.cfg["volume"] = int(float(v))
@@ -2660,6 +2782,109 @@ class TV(object):
         self.timer_avviso = None
         if self.avviso.winfo_ismapped():
             self.avviso.pack_forget()
+
+    # ------------------------------------------------ video e audio in piu'
+    def metti_velocita(self, v):
+        self.velocita = v
+        try:
+            self.mpv.speed = v
+        except Exception:
+            pass
+        if "x%g" % v in self.icone:
+            self.faccia(self.b_velocita, "x%g" % v, "x%g" % v)
+        self.scrivi(_("speed x%g") % v)
+        self.root.after(2000, self.scrivi_riga)
+
+    def gira_velocita(self):
+        """Il bottone x1: un giro fra le velocita', lente e veloci."""
+        i = VELOCITA.index(self.velocita) if self.velocita in VELOCITA else 0
+        self.metti_velocita(VELOCITA[(i + 1) % len(VELOCITA)])
+
+    def metti_proporzioni(self, val):
+        self.cfg["proporzioni"], self.cfg["riempi"] = val, False
+        scrivi_config(self.cfg)
+        self.applica_video()
+
+    def riempi(self):
+        self.cfg["riempi"] = not self.cfg.get("riempi")
+        scrivi_config(self.cfg)
+        self.applica_video()
+
+    def deinterlaccia(self):
+        self.cfg["deinterlaccia"] = not self.cfg.get("deinterlaccia")
+        scrivi_config(self.cfg)
+        self.applica_video()
+
+    def regola(self, cosa, di):
+        """Luminosita', contrasto, saturazione: da -100 a 100, a passi."""
+        v = max(-100, min(100, int(self.cfg.get(cosa, 0)) + di))
+        self.cfg[cosa] = v
+        scrivi_config(self.cfg)
+        self.applica_video()
+        self.scrivi("%s %+d" % (_(cosa), v))
+        self.root.after(2000, self.scrivi_riga)
+
+    def azzera_immagine(self):
+        for cosa in ("brightness", "contrast", "saturation"):
+            self.cfg.pop(cosa, None)
+        scrivi_config(self.cfg)
+        self.applica_video()
+
+    def applica_video(self):
+        """Le impostazioni video del config date a mpv: valgono per tutti
+        i canali, anche ai prossimi avvii."""
+        try:
+            self.mpv.video_aspect_override = self.cfg.get("proporzioni", "-1")
+            self.mpv.panscan = 1.0 if self.cfg.get("riempi") else 0.0
+            self.mpv.deinterlace = "yes" if self.cfg.get("deinterlaccia") else "no"
+            for cosa in ("brightness", "contrast", "saturation"):
+                setattr(self.mpv, cosa, int(self.cfg.get(cosa, 0)))
+            self.mpv.af = "lavfi=[dynaudnorm=f=150:g=15]" if self.cfg.get("normalizza") else ""
+        except Exception:
+            pass
+        self.alza_volume(self.volume.get())
+
+    def istantanea(self):
+        try:
+            os.makedirs(os.path.join(CASA, "Pictures", "xvb"), exist_ok=True)
+            self.mpv.command("screenshot", "video")
+            self.scrivi(_("screenshot saved in %s") % os.path.join("~", "Pictures", "xvb"))
+        except Exception as e:
+            self.scrivi(_("cannot take a screenshot: %s") % e)
+        self.root.after(3000, self.scrivi_riga)
+
+    def sempre_in_cima(self):
+        self.cfg["in_cima"] = not self.cfg.get("in_cima")
+        scrivi_config(self.cfg)
+        self.root.attributes("-topmost", bool(self.cfg["in_cima"]))
+
+    def boost(self):
+        self.cfg["boost"] = not self.cfg.get("boost")
+        scrivi_config(self.cfg)
+        self.alza_volume(self.volume.get())
+
+    def normalizza(self):
+        self.cfg["normalizza"] = not self.cfg.get("normalizza")
+        scrivi_config(self.cfg)
+        self.applica_video()
+
+    def tracce(self, tipo):
+        """Le tracce (audio o sub) del flusso in onda, da mpv."""
+        try:
+            return [t for t in (self.mpv.track_list or []) if t.get("type") == tipo]
+        except Exception:
+            return []
+
+    def nome_traccia(self, t):
+        nome = t.get("title") or t.get("lang") or ""
+        extra = t.get("codec") or ""
+        return ("%s (%s)" % (nome, extra) if nome and extra else nome or extra or str(t.get("id")))
+
+    def metti_traccia(self, cosa, i):
+        try:
+            setattr(self.mpv, cosa, i)
+        except Exception:
+            pass
 
     # ------------------------------------------------- l'aggiornamento
     def controlla_versione(self, zitto=False):
