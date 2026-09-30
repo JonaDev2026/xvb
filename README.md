@@ -29,6 +29,11 @@ interface, drawn entirely by the app, with no GUI dependency beyond Tk.
 
 ## Install
 
+**Supported systems:** Linux Mint 21 and 22, Ubuntu 22.04 and newer,
+Debian 12 and newer (and their derivatives). Developed and tested on
+Linux Mint. Other Linux distributions, Windows and macOS are not
+supported.
+
 ### .deb package (Debian, Ubuntu, Linux Mint)
 
 Download `xvb_<version>_all.deb` from the latest [release](../../releases/latest) and:
@@ -38,7 +43,8 @@ sudo apt install ./xvb_*_all.deb
 ```
 
 apt pulls in the dependencies by itself (`python3-tk`, `python3-pil`,
-`python3-pil.imagetk`, `python3-mpv`, `libmpv2` or `libmpv1`) and puts
+`python3-pil.imagetk`, `python3-mpv`, `python3-mutagen`, `libmpv2` or
+`libmpv1`, and `ffmpeg` as recommended) and puts
 XVB in the menu under Sound & Video, and as the `xvb` command. To
 update, install the new .deb over the old one; config, playlists,
 favourites, guides and recordings stay where they are. To remove it:
@@ -49,18 +55,11 @@ so the system monitor shows its own name and icon.
 
 ### Without the package
 
-Any distribution. It needs libmpv, Python 3 with tkinter, Pillow with
-its Tk module, and python-mpv:
+On the same systems, straight from the source:
 
 ```
-# Debian, Ubuntu, Linux Mint
-sudo apt install -y libmpv2 python3-tk python3-pil python3-pil.imagetk python3-mpv python3-mutagen ffmpeg
-# Fedora
-sudo dnf install -y mpv-libs python3-tkinter python3-pillow python3-pillow-tk python3-mutagen ffmpeg python3-pip && pip install --user python-mpv
-# Arch, Manjaro
-sudo pacman -S --needed mpv tk python-pillow python-mpv python-mutagen ffmpeg
-# openSUSE
-sudo zypper install -y libmpv2 python3-tk python3-Pillow python3-Pillow-tk python3-mutagen ffmpeg python3-pip && pip install --user python-mpv
+sudo apt install -y python3-tk python3-pil python3-pil.imagetk python3-mpv python3-mutagen ffmpeg
+sudo apt install -y libmpv2 || sudo apt install -y libmpv1
 ```
 
 then:
@@ -70,8 +69,7 @@ git clone https://github.com/JonaDev2026/xvb.git ~/xvb
 python3 ~/xvb/xvb.py
 ```
 
-Playlists then live in `~/xvb/playlists/`. If `libmpv2` doesn't exist on
-your release use `libmpv1`; if pip refuses, add `--break-system-packages`. A playlist can be passed at
+Playlists then live in `~/xvb/playlists/`. A playlist can be passed at
 start-up: `python3 xvb.py ~/list.m3u`.
 
 ### Building the package
@@ -503,6 +501,11 @@ disegnata dall'app, senza dipendenze grafiche oltre a Tk.
 
 ## Installazione
 
+**Sistemi supportati:** Linux Mint 21 e 22, Ubuntu 22.04 e successive,
+Debian 12 e successive (e le loro derivate). Sviluppata e provata su
+Linux Mint. Le altre distribuzioni Linux, Windows e macOS non sono
+supportati.
+
 ### Pacchetto .deb (Debian, Ubuntu, Linux Mint)
 
 Scarica `xvb_<versione>_all.deb` dall'ultima [release](../../releases/latest) e:
@@ -512,7 +515,8 @@ sudo apt install ./xvb_*_all.deb
 ```
 
 apt tira dentro da solo le dipendenze (`python3-tk`, `python3-pil`,
-`python3-pil.imagetk`, `python3-mpv`, `libmpv2` o `libmpv1`) e mette XVB
+`python3-pil.imagetk`, `python3-mpv`, `python3-mutagen`, `libmpv2` o
+`libmpv1`, e `ffmpeg` come consigliato) e mette XVB
 nel menu, sotto Audio e video, e come comando `xvb`. Per aggiornare si
 installa il .deb nuovo sopra al vecchio; config, playlist, preferiti,
 guida e registrazioni restano dove sono. Per toglierla: `sudo apt remove xvb`.
@@ -522,18 +526,11 @@ monitor di sistema ha nome e icona suoi.
 
 ### Senza pacchetto
 
-Qualsiasi distribuzione. Servono libmpv, Python 3 con tkinter, Pillow col
-suo modulo Tk, e python-mpv:
+Sugli stessi sistemi, direttamente dal sorgente:
 
 ```
-# Debian, Ubuntu, Linux Mint
-sudo apt install -y libmpv2 python3-tk python3-pil python3-pil.imagetk python3-mpv python3-mutagen ffmpeg
-# Fedora
-sudo dnf install -y mpv-libs python3-tkinter python3-pillow python3-pillow-tk python3-mutagen ffmpeg python3-pip && pip install --user python-mpv
-# Arch, Manjaro
-sudo pacman -S --needed mpv tk python-pillow python-mpv python-mutagen ffmpeg
-# openSUSE
-sudo zypper install -y libmpv2 python3-tk python3-Pillow python3-Pillow-tk python3-mutagen ffmpeg python3-pip && pip install --user python-mpv
+sudo apt install -y python3-tk python3-pil python3-pil.imagetk python3-mpv python3-mutagen ffmpeg
+sudo apt install -y libmpv2 || sudo apt install -y libmpv1
 ```
 
 poi:
@@ -543,8 +540,7 @@ git clone https://github.com/JonaDev2026/xvb.git ~/xvb
 python3 ~/xvb/xvb.py
 ```
 
-Così le playlist vanno in `~/xvb/playlists/`. Se `libmpv2` non c'è sulla
-tua versione usa `libmpv1`; se pip si rifiuta, aggiungi `--break-system-packages`. Si può passare una lista all'avvio:
+Così le playlist vanno in `~/xvb/playlists/`. Si può passare una lista all'avvio:
 `python3 xvb.py ~/lista.m3u`.
 
 ### Fare il pacchetto

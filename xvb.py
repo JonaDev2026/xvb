@@ -46,7 +46,7 @@ try:                            # per i loghi: ridimensiona e legge i jpg
 except ImportError:             # senza, si va di PhotoImage: solo png
     HA_PIL = False
 
-VERSIONE = "2.6"
+VERSIONE = "2.7"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"        # dove stanno le release, per l'avviso di aggiornamento
@@ -168,6 +168,7 @@ TESTI = {
         "no playlist: put one in playlists/": "nessuna playlist: mettine una in playlists/",
         "loading %s...": "carico %s...",
         "cannot read %s: %s": "non riesco a leggere %s: %s",
+        "This DVD is encrypted and can't be played": "Questo DVD e' cifrato e non si puo' riprodurre",
         "%s - %d channels": "%s - %d canali",
         "Choose a playlist": "Scegli una playlist",
         "All files": "Tutti i file",
@@ -300,6 +301,7 @@ TESTI = {
         "no playlist: put one in playlists/": "ninguna lista: pon una en playlists/",
         "loading %s...": "cargando %s...",
         "cannot read %s: %s": "no puedo leer %s: %s",
+        "This DVD is encrypted and can't be played": "Este DVD está cifrado y no se puede reproducir",
         "%s - %d channels": "%s - %d canales",
         "Choose a playlist": "Elige una lista",
         "All files": "Todos los archivos",
@@ -432,6 +434,7 @@ TESTI = {
         "no playlist: put one in playlists/": "aucune liste : mets-en une dans playlists/",
         "loading %s...": "chargement de %s...",
         "cannot read %s: %s": "impossible de lire %s : %s",
+        "This DVD is encrypted and can't be played": "Ce DVD est chiffré et ne peut pas être lu",
         "%s - %d channels": "%s - %d chaînes",
         "Choose a playlist": "Choisir une liste",
         "All files": "Tous les fichiers",
@@ -1109,6 +1112,50 @@ def globo(colore, lato=PUNTO):
     d.line([(5 * u, 7.5 * u), (19 * u, 7.5 * u)], fill=colore, width=sp)   # i paralleli
     d.line([(5 * u, 16.5 * u), (19 * u, 16.5 * u)], fill=colore, width=sp)
     return ImageTk.PhotoImage(im.resize((lato, lato), Image.LANCZOS))
+
+
+def disco(colore, lato=PUNTO, alta=None):
+    """L'icona del disco (CD, DVD, ISO montata): icone/disco.png se c'e',
+    se no disegnata, solo contorno, come globi e cartelle."""
+    if not HA_PIL:
+        return None
+    f = os.path.join(QUI, "icone", "disco.png")
+    if os.path.isfile(f):
+        im = carica_logo(f, lato, alta or lato)
+        if im is not None:
+            return im
+    from PIL import ImageDraw
+    K = 4
+    im = Image.new("RGBA", (lato * K, lato * K), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    u = lato * K / 24.0
+    sp = int(1.7 * u)
+    d.ellipse((3 * u, 3 * u, 21 * u, 21 * u), outline=colore, width=sp)       # il disco
+    d.ellipse((9.5 * u, 9.5 * u, 14.5 * u, 14.5 * u), outline=colore, width=sp)  # il buco
+    d.arc((6 * u, 6 * u, 18 * u, 18 * u), 200, 250, fill=colore, width=int(1.2 * u))  # il riflesso
+    return ImageTk.PhotoImage(im.resize((lato, lato), Image.LANCZOS))
+
+
+def dischi():
+    """I dischi montati: CD e DVD nel lettore, e le immagini ISO montate
+    (sono tutti iso9660 o udf). [(punto di montaggio, nome)]."""
+    fuori = []
+    try:
+        with open("/proc/mounts", encoding="utf-8", errors="ignore") as h:
+            for riga in h:
+                p = riga.split()
+                if len(p) >= 3 and p[2] in ("iso9660", "udf"):
+                    mp = re.sub(r"\\([0-7]{3})", lambda m: chr(int(m.group(1), 8)), p[1])
+                    if os.path.isdir(mp):
+                        fuori.append((mp, os.path.basename(mp.rstrip(os.sep)) or mp))
+    except Exception:
+        pass
+    return fuori
+
+
+def e_dvd(mp):
+    """Un DVD video: ha la cartella VIDEO_TS."""
+    return any(os.path.isdir(os.path.join(mp, n)) for n in ("VIDEO_TS", "video_ts"))
 
 
 def colore_di(nome):
@@ -2351,6 +2398,8 @@ class TV(object):
         self.loghi_img = {}                 # url canale -> logo come immagine Tk
         self.anteprime = {}                 # percorso file -> jpg in cache (copertina/fotogramma)
         self.riprendi_da = 0.0
+        self.percorso_mpv = None            # il file come lo chiama mpv
+        self.dischi_visti = []              # i dischi montati l'ultima volta
         self.tag_cache = leggi_tag()
         self.icona_finestra, self.icona_file = None, ""
         self.piano = None                            # (nome, url, ide, inizio, fine)
@@ -2717,6 +2766,7 @@ class TV(object):
         self.root.after(1000, self.controlla_registrazione)
         self.root.after(60000, self.aggiorna_sottotitoli)
         self.root.after(8000, self.controlla_copertine)
+        self.root.after(5000, self.guarda_dischi)
 
         # a sinistra, a gruppi: [sidebar]  [< -10 play +10 >  rec switch shuffle]
         self.b_sidebar = self.tasto("playlist", _("Playlists"), self.sidebar, 8)
@@ -2785,8 +2835,6 @@ class TV(object):
             # default al posto di quello di Tk, e da li' in poi il primo
             # errore X innocuo (BadWindow) chiude tutta l'app
             force_window="yes",
-            # la copertina dentro agli mp3 (python-mpv la spegne di suo)
-            audio_display="embedded-first",
             volume_max=150,                 # per il boost
             screenshot_directory=os.path.join(CASA, "Pictures", "xvb"),
             screenshot_template="xvb-%tY-%tm-%td_%tH-%tM-%tS",
@@ -2801,6 +2849,15 @@ class TV(object):
         # delle virgole dentro, che per mpv separano le coppie: si passa
         # con la lunghezza davanti (%N%), che e' il suo modo di quotare
         protocolli = "file,http,https,tcp,tls,crypto,data,httpproxy"
+        # la copertina dentro agli mp3 (python-mpv la spegne di suo): il
+        # valore "embedded-first" c'e' da mpv 0.37; su Debian 12 e Ubuntu
+        # 22.04 (mpv piu' vecchi) si usa "attachment", che fa lo stesso
+        for valore in ("embedded-first", "attachment"):
+            try:
+                self.mpv["audio-display"] = valore
+                break
+            except Exception:
+                continue
         try:
             self.mpv["demuxer-lavf-o"] = "protocol_whitelist=%%%d%%%s" % (
                 len(protocolli), protocolli)
@@ -3065,6 +3122,14 @@ class TV(object):
             if im is not None:
                 self.img_liste[f_pl] = im
         img_pl = self.img_liste.get(f_pl, self.vuoto)
+        # i dischi montati (CD, DVD, ISO): icona del disco, col nome del disco
+        if "disco" not in self.img_liste:
+            self.img_liste["disco"] = disco(TESTO) or self.vuoto
+        for mp, nome in dischi():
+            chiave = ("disco", mp)
+            iid = self.el_liste.insert("", "end", text=" " + nome, image=self.img_liste["disco"],
+                                       tags=("usata",) if chiave == self.media_in_uso else ())
+            self.iid_media[iid] = chiave
         for c in self.cfg.get("cartelle", []):
             # la cartella col totale dei file, e sotto, apribili, le sue
             # sottocartelle dirette che hanno dei media, ognuna col suo
@@ -3244,8 +3309,11 @@ class TV(object):
         self.file_in_onda = f
         self.nome = self.nome_in_onda = nome or os.path.splitext(os.path.basename(f))[0]
         self.ide_in_onda = None
-        est = os.path.splitext(f)[1][1:].lower()
+        dvd = f.startswith("dvd://")
+        est = "dvd" if dvd else os.path.splitext(f)[1][1:].lower()
         self.et_formato.config(text=("  -  " + est) if est else "")
+        # quello che mpv dira' di stare suonando (per il riprendi)
+        self.percorso_mpv = "dvd://" if dvd else f
         self.varianti, self.quale = [], -1
         self.da_riallineare = False
         self.attesa_da = time.time()
@@ -3260,7 +3328,14 @@ class TV(object):
             self.riprendi_da = 0.0
         try:
             self.mpv["audio-files"] = []
-            self.mpv.play(f)
+            if dvd:
+                # il disco (o la ISO montata) e' il dispositivo, e si
+                # suona il film principale
+                self.mpv["dvd-device"] = f[len("dvd://"):]
+                self.mpv.play("dvd://")
+                self.root.after(10000, lambda: self.controlla_dvd(f))
+            else:
+                self.mpv.play(f)
         except Exception as e:
             self.scrivi(_("cannot read %s: %s") % (self.nome, e))
             return
@@ -3376,6 +3451,21 @@ class TV(object):
             scrivi_config(self.cfg)
         self.rifai_albero()
         self.mostra_media(("cartella", c))
+
+    def guarda_dischi(self):
+        """Ogni 5 secondi: se un disco e' entrato o uscito (o una ISO e'
+        stata montata o smontata) la barra di destra si rifa'; se era quello
+        aperto, a sinistra tornano i canali."""
+        adesso = dischi()
+        if adesso != self.dischi_visti:
+            self.dischi_visti = adesso
+            if (self.media_in_uso and self.media_in_uso[0] == "disco"
+                    and self.media_in_uso[1] not in [mp for mp, _n in adesso]):
+                self.media_in_uso = None
+                self.rifai_liste(scegli=self.cfg.get("lista"))
+            else:
+                self.rifai_albero()
+        self.root.after(5000, self.guarda_dischi)
 
     def controlla_copertine(self):
         """All'avvio, in sottofondo: per tutte le cartelle aggiunte e gli
@@ -3496,6 +3586,10 @@ class TV(object):
         self.reg_in_uso, self.media_in_uso = None, chiave
         if tipo == "cartella":
             self.canali, nome = media_in(c), os.path.basename(c.rstrip(os.sep)) or c
+        elif tipo == "disco":
+            nome = os.path.basename(c.rstrip(os.sep)) or c
+            # un DVD video e' un film solo; un disco di dati, i suoi file
+            self.canali = [(nome, "dvd://" + c, None)] if e_dvd(c) else media_in(c)
         else:
             self.canali = [(os.path.splitext(os.path.basename(f))[0], f, None)
                            for f in self.cfg.get("importati", []) if os.path.isfile(f)]
@@ -3784,6 +3878,11 @@ class TV(object):
     def icona_file_di(self, url):
         """Per un file senza copertina ne' poster (musica e video privati):
         l'icona dell'app, icon.png, nella colonna dei loghi."""
+        if url.startswith("dvd://"):
+            if "disco_grande" not in self.img_liste:
+                self.img_liste["disco_grande"] = disco(TESTO, lato=LOGO_L, alta=LOGO_A) \
+                    if os.path.isfile(os.path.join(QUI, "icone", "disco.png")) else disco(TESTO, lato=LOGO_A)
+            return self.img_liste["disco_grande"]
         if not os.path.isabs(url) or not self.icona_file or not HA_PIL:
             return None
         if getattr(self, "icona_colonna", None) is None:
@@ -3970,7 +4069,7 @@ class TV(object):
         self.apri(nome, url)
 
     def apri(self, nome, url, ide=None):
-        if url.startswith(REGISTRAZIONI + os.sep) or (
+        if url.startswith("dvd://") or url.startswith(REGISTRAZIONI + os.sep) or (
                 os.path.isabs(url) and e_media(url) and os.path.isfile(url)):
             self.riproduci(url, nome)
             return
@@ -4880,7 +4979,7 @@ class TV(object):
                 parte = max(0.0, min(1.0, pos / dur)) if dur > 0 else 0.0
                 if dur > 0:
                     self.et_ora.config(text="  -  %s / %s" % (ore_min_sec(pos), ore_min_sec(dur)))
-                    if self.mpv.path == self.file_in_onda and not self.riprendi_da:
+                    if self.mpv.path == self.percorso_mpv and not self.riprendi_da:
                         self.segna_posizione(pos, dur)
             except Exception:
                 parte = 0.0
@@ -4979,9 +5078,13 @@ class TV(object):
         motivo = ""
         try:
             d = ev.as_dict() if hasattr(ev, "as_dict") else {}
-            motivo = str(d.get("reason", "")) + str(d.get("file_error", ""))
-            if not motivo:
-                motivo = str(getattr(getattr(ev, "data", None), "reason", ""))
+            if isinstance(d.get("event"), dict):     # python-mpv vecchio (Ubuntu 22.04)
+                d = dict(d, **d["event"])
+            ragione = d.get("reason", getattr(getattr(ev, "data", None), "reason", ""))
+            # le versioni vecchie danno un numero: 0 = fine del file, 4 = errore
+            if isinstance(ragione, int):
+                ragione = {0: "eof", 4: "error"}.get(ragione, str(ragione))
+            motivo = str(ragione) + str(d.get("file_error", "") or d.get("error", "") or "")
         except Exception:
             pass
         if "error" in motivo.lower():
@@ -5058,9 +5161,38 @@ class TV(object):
             self.elenco.see(str(i))
         self.apri(nome, url, ide)
 
+    def dvd_bloccato(self):
+        """Un DVD che non parte: e' cifrato (i DVD commerciali). Lo si dice
+        chiaro e ci si ferma; la cifratura non si aggira."""
+        if not (self.file_in_onda or "").startswith("dvd://"):
+            return
+        self.attesa_da = 0.0
+        try:
+            self.mpv.command("stop")
+        except Exception:
+            pass
+        self.mostra_carico(False)
+        self.mostra_sfondo(True)
+        self.scrivi(_("This DVD is encrypted and can't be played"))
+
+    def controlla_dvd(self, f):
+        """Dieci secondi dopo aver aperto un DVD: se non c'e' ancora
+        l'immagine, e' cifrato."""
+        if self.file_in_onda != f:
+            return
+        try:
+            immagine = self.mpv.video_params
+        except Exception:
+            immagine = None
+        if not immagine:
+            self.dvd_bloccato()
+
     def canale_morto(self):
         """Il canale non va: avanti col prossimo, ma non all'infinito. Se
         li si e' provati tutti o dieci di fila, ci si ferma."""
+        if (self.file_in_onda or "").startswith("dvd://"):
+            self.dvd_bloccato()                 # un DVD non si salta: e' cifrato
+            return
         self.attesa_da = 0.0
         self.mostra_carico(False)
         self.salti += 1
@@ -5082,7 +5214,7 @@ class TV(object):
                 # solo quando e' davvero il file nuovo a suonare: subito
                 # dopo play() arriva ancora qualche tempo di quello di prima
                 try:
-                    if self.mpv.path == self.file_in_onda:
+                    if self.mpv.path == self.percorso_mpv:
                         da, self.riprendi_da = self.riprendi_da, 0.0
                         self.mpv.command("seek", "%.1f" % da, "absolute")
                 except Exception:
