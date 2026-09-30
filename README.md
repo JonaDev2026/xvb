@@ -10,12 +10,13 @@ guide and recording.
 
 ## Features
 
-- Local videos and music, with resume, shuffle and seeking
-- Titles, covers and posters fetched automatically (TMDB, MusicBrainz)
+- Local videos and music, with resume, shuffle, repeat and seeking
+- Open files and folders from the file manager (Open with XVB), recent files
+- Open any stream or file by URL; opened addresses are kept in the sidebar
+- Titles, covers and posters fetched automatically (TMDB, MusicBrainz), also for untagged music from folder and file names
 - Video DVDs (not encrypted), data CDs and DVDs, and ISO images; audio CDs and Blu-ray are not supported
 - IPTV: m3u playlists from file or URL, XMLTV guide, recording and scheduling
-- Favourites for channels, music and videos
-- Video and audio adjustments, tracks and subtitles, screenshots
+- Video and audio adjustments, tracks, external subtitles with delay and size, screenshots
 - Dark interface in English, Italian, Spanish, French, German, Portuguese and Russian, following the system language
 
 ## Installation
@@ -40,11 +41,11 @@ python3 ~/xvb/xvb.py
 
 ## Usage
 
-- **Media** — open a file or a folder of videos and music.
+- **Media** — open a file, a folder of videos and music, or a URL; recent files.
 - **IPTV** — add playlists and TV guides, record and schedule recordings.
 - **Playback**, **Video**, **Audio** — playback, picture and sound controls.
 - **View** — full screen, layout and language.
-- **Sidebar** — media folders, discs and favourites on top; playlists, TV guides and recordings inside the IPTV folder.
+- **Sidebar** — media folders, discs, imported files and opened URLs on top; playlists, TV guides and recordings inside the IPTV folder.
 
 | Key | Action |
 |---|---|
@@ -86,12 +87,13 @@ TV e registrazione.
 
 ## Funzioni
 
-- Video e musica locali, con ripresa, riproduzione casuale e avanzamento
-- Titoli, copertine e poster scaricati in automatico (TMDB, MusicBrainz)
+- Video e musica locali, con ripresa, riproduzione casuale, ripetizione e avanzamento
+- Apertura di file e cartelle dal file manager (Apri con XVB), file recenti
+- Apertura di qualsiasi stream o file da URL; gli indirizzi aperti restano nella barra laterale
+- Titoli, copertine e poster scaricati in automatico (TMDB, MusicBrainz), anche per la musica senza tag a partire dai nomi di cartelle e file
 - DVD video (non cifrati), CD e DVD di dati, e immagini ISO; CD audio e Blu-ray non sono supportati
 - IPTV: playlist m3u da file o URL, guida XMLTV, registrazione e programmazione
-- Preferiti per canali, musica e video
-- Regolazioni video e audio, tracce e sottotitoli, istantanee
+- Regolazioni video e audio, tracce, sottotitoli esterni con ritardo e dimensione, istantanee
 - Interfaccia scura in inglese, italiano, spagnolo, francese, tedesco, portoghese e russo, secondo la lingua del sistema
 
 ## Installazione
@@ -116,11 +118,11 @@ python3 ~/xvb/xvb.py
 
 ## Uso
 
-- **Media** — apri un file o una cartella di video e musica.
+- **Media** — apri un file, una cartella di video e musica, o un URL; file recenti.
 - **IPTV** — aggiungi playlist e guide TV, registra e programma le registrazioni.
 - **Playback**, **Video**, **Audio** — comandi di riproduzione, immagine e suono.
 - **View** — schermo intero, layout e lingua.
-- **Barra laterale** — cartelle media, dischi e preferiti in alto; playlist, guide TV e registrazioni nella cartella IPTV.
+- **Barra laterale** — cartelle media, dischi, file importati e URL aperti in alto; playlist, guide TV e registrazioni nella cartella IPTV.
 
 | Tasto | Azione |
 |---|---|

@@ -32,13 +32,14 @@ cat > "$D/usr/share/applications/xvb.desktop" <<'FINE'
 Version=1.0
 Type=Application
 Name=XVB
-Comment=Extended Video Broadcast - IPTV player
-Exec=xvb
+Comment=Media player: videos, music, discs and IPTV
+Exec=xvb %F
 Icon=xvb
 Terminal=false
 Categories=AudioVideo;Video;Player;TV;
 StartupNotify=true
 StartupWMClass=Xvb
+MimeType=video/mp4;video/x-matroska;video/webm;video/x-msvideo;video/quicktime;video/mpeg;video/mp2t;video/x-flv;video/x-ms-wmv;video/ogg;video/x-m4v;audio/mpeg;audio/flac;audio/x-flac;audio/ogg;audio/x-vorbis+ogg;audio/opus;audio/mp4;audio/x-m4a;audio/aac;audio/x-wav;audio/wav;audio/x-ms-wma;audio/x-ape;audio/x-mpegurl;audio/mpegurl;application/vnd.apple.mpegurl;
 FINE
 
 cat > "$D/DEBIAN/control" <<FINE
@@ -50,8 +51,9 @@ Architecture: all
 Depends: python3, python3-tk, python3-pil, python3-pil.imagetk, python3-mpv, python3-mutagen, libmpv2 | libmpv1
 Recommends: ffmpeg
 Maintainer: Jona <jonalinux.uk@gmail.com>
-Description: XVB - Extended Video Broadcast
- IPTV player: m3u playlists, XMLTV guide, favorites, recording.
+Description: XVB Player
+ Media player for videos, music, discs and IPTV (m3u playlists,
+ XMLTV guide, recording), built on libmpv.
 FINE
 
 chmod -R go-w "$D"

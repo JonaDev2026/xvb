@@ -23,6 +23,7 @@ import math
 import os
 import random
 import re
+import socket
 import subprocess
 import sys
 import threading
@@ -47,7 +48,7 @@ try:                            # per i loghi: ridimensiona e legge i jpg
 except ImportError:             # senza, si va di PhotoImage: solo png
     HA_PIL = False
 
-VERSIONE = "2.9"
+VERSIONE = "3.0"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"        # dove stanno le release, per l'avviso di aggiornamento
@@ -84,6 +85,25 @@ LINGUE = (("en", "English"), ("it", "Italiano"), ("es", "Español"), ("fr", "Fra
 LINGUA = "en"
 TESTI = {
     "it": {
+        "Opened URLs": "URL aperti",
+        "The addresses will be removed from the list.": "Gli indirizzi vengono tolti dall'elenco.",
+        "Open URL...": "Apri URL...",
+        "Address of the stream or file:": "Indirizzo dello stream o del file:",
+        "Load subtitles...": "Carica sottotitoli...",
+        "Subtitle delay +100 ms": "Ritardo sottotitoli +100 ms",
+        "Subtitle delay -100 ms": "Ritardo sottotitoli -100 ms",
+        "Subtitles larger": "Sottotitoli più grandi",
+        "Subtitles smaller": "Sottotitoli più piccoli",
+        "Reset subtitles": "Azzera sottotitoli",
+        "subtitles: %s": "sottotitoli: %s",
+        "subtitle delay %+.1fs": "ritardo sottotitoli %+.1fs",
+        "subtitle size %d%%": "sottotitoli al %d%%",
+        "nothing is playing": "non c'è niente in riproduzione",
+        "Recent": "Recenti",
+        "Clear recent": "Svuota recenti",
+        "No repeat": "Non ripetere",
+        "Repeat one": "Ripeti il file",
+        "Repeat all": "Ripeti tutto",
         "until %s": "fino alle %s",
         "Delete": "Elimina",
         "Delete %s": "Elimina %s",
@@ -236,6 +256,25 @@ TESTI = {
         "Show playlists": "Mostra playlist", "Language": "Lingua",
     },
     "es": {
+        "Opened URLs": "URL abiertas",
+        "The addresses will be removed from the list.": "Las direcciones se quitarán de la lista.",
+        "Open URL...": "Abrir URL...",
+        "Address of the stream or file:": "Dirección del stream o del archivo:",
+        "Load subtitles...": "Cargar subtítulos...",
+        "Subtitle delay +100 ms": "Retraso de subtítulos +100 ms",
+        "Subtitle delay -100 ms": "Retraso de subtítulos -100 ms",
+        "Subtitles larger": "Subtítulos más grandes",
+        "Subtitles smaller": "Subtítulos más pequeños",
+        "Reset subtitles": "Restablecer subtítulos",
+        "subtitles: %s": "subtítulos: %s",
+        "subtitle delay %+.1fs": "retraso de subtítulos %+.1fs",
+        "subtitle size %d%%": "subtítulos al %d%%",
+        "nothing is playing": "no se está reproduciendo nada",
+        "Recent": "Recientes",
+        "Clear recent": "Borrar recientes",
+        "No repeat": "Sin repetir",
+        "Repeat one": "Repetir uno",
+        "Repeat all": "Repetir todo",
         "until %s": "hasta las %s",
         "Delete": "Eliminar",
         "Delete %s": "Eliminar %s",
@@ -388,6 +427,25 @@ TESTI = {
         "Show playlists": "Mostrar listas", "Language": "Idioma",
     },
     "fr": {
+        "Opened URLs": "URL ouvertes",
+        "The addresses will be removed from the list.": "Les adresses seront retirées de la liste.",
+        "Open URL...": "Ouvrir une URL...",
+        "Address of the stream or file:": "Adresse du flux ou du fichier :",
+        "Load subtitles...": "Charger des sous-titres...",
+        "Subtitle delay +100 ms": "Décalage sous-titres +100 ms",
+        "Subtitle delay -100 ms": "Décalage sous-titres -100 ms",
+        "Subtitles larger": "Sous-titres plus grands",
+        "Subtitles smaller": "Sous-titres plus petits",
+        "Reset subtitles": "Réinitialiser les sous-titres",
+        "subtitles: %s": "sous-titres : %s",
+        "subtitle delay %+.1fs": "décalage des sous-titres %+.1fs",
+        "subtitle size %d%%": "sous-titres à %d%%",
+        "nothing is playing": "rien n'est en lecture",
+        "Recent": "Récents",
+        "Clear recent": "Effacer les récents",
+        "No repeat": "Ne pas répéter",
+        "Repeat one": "Répéter un",
+        "Repeat all": "Répéter tout",
         "until %s": "jusqu'à %s",
         "Delete": "Supprimer",
         "Delete %s": "Supprimer %s",
@@ -540,6 +598,25 @@ TESTI = {
         "Show playlists": "Afficher les listes", "Language": "Langue",
     },
     "de": {
+        "Opened URLs": "Geöffnete URLs",
+        "The addresses will be removed from the list.": "Die Adressen werden aus der Liste entfernt.",
+        "Open URL...": "URL öffnen...",
+        "Address of the stream or file:": "Adresse des Streams oder der Datei:",
+        "Load subtitles...": "Untertitel laden...",
+        "Subtitle delay +100 ms": "Untertitel-Verzögerung +100 ms",
+        "Subtitle delay -100 ms": "Untertitel-Verzögerung -100 ms",
+        "Subtitles larger": "Untertitel größer",
+        "Subtitles smaller": "Untertitel kleiner",
+        "Reset subtitles": "Untertitel zurücksetzen",
+        "subtitles: %s": "Untertitel: %s",
+        "subtitle delay %+.1fs": "Untertitel-Verzögerung %+.1fs",
+        "subtitle size %d%%": "Untertitel %d%%",
+        "nothing is playing": "es wird nichts abgespielt",
+        "Recent": "Zuletzt geöffnet",
+        "Clear recent": "Liste leeren",
+        "No repeat": "Nicht wiederholen",
+        "Repeat one": "Eins wiederholen",
+        "Repeat all": "Alle wiederholen",
         "until %s": "bis %s",
         "Delete": "Löschen",
         "Delete %s": "%s löschen",
@@ -708,6 +785,25 @@ TESTI = {
         "Language": "Sprache",
     },
     "pt": {
+        "Opened URLs": "URLs abertas",
+        "The addresses will be removed from the list.": "Os endereços serão removidos da lista.",
+        "Open URL...": "Abrir URL...",
+        "Address of the stream or file:": "Endereço do stream ou do arquivo:",
+        "Load subtitles...": "Carregar legendas...",
+        "Subtitle delay +100 ms": "Atraso das legendas +100 ms",
+        "Subtitle delay -100 ms": "Atraso das legendas -100 ms",
+        "Subtitles larger": "Legendas maiores",
+        "Subtitles smaller": "Legendas menores",
+        "Reset subtitles": "Redefinir legendas",
+        "subtitles: %s": "legendas: %s",
+        "subtitle delay %+.1fs": "atraso das legendas %+.1fs",
+        "subtitle size %d%%": "legendas em %d%%",
+        "nothing is playing": "nada está sendo reproduzido",
+        "Recent": "Recentes",
+        "Clear recent": "Limpar recentes",
+        "No repeat": "Não repetir",
+        "Repeat one": "Repetir um",
+        "Repeat all": "Repetir todos",
         "Audio": "Áudio",
         "until %s": "até %s",
         "Delete": "Excluir",
@@ -877,6 +973,25 @@ TESTI = {
         "Language": "Idioma",
     },
     "ru": {
+        "Opened URLs": "Открытые URL",
+        "The addresses will be removed from the list.": "Адреса будут удалены из списка.",
+        "Open URL...": "Открыть URL...",
+        "Address of the stream or file:": "Адрес потока или файла:",
+        "Load subtitles...": "Загрузить субтитры...",
+        "Subtitle delay +100 ms": "Задержка субтитров +100 мс",
+        "Subtitle delay -100 ms": "Задержка субтитров -100 мс",
+        "Subtitles larger": "Субтитры крупнее",
+        "Subtitles smaller": "Субтитры мельче",
+        "Reset subtitles": "Сбросить субтитры",
+        "subtitles: %s": "субтитры: %s",
+        "subtitle delay %+.1fs": "задержка субтитров %+.1f с",
+        "subtitle size %d%%": "размер субтитров %d%%",
+        "nothing is playing": "ничего не воспроизводится",
+        "Recent": "Недавние",
+        "Clear recent": "Очистить недавние",
+        "No repeat": "Без повтора",
+        "Repeat one": "Повторять один",
+        "Repeat all": "Повторять все",
         "Audio": "Аудио",
         "until %s": "до %s",
         "Delete": "Удалить",
@@ -1071,7 +1186,14 @@ def _(testo):
 VELOCITA = (1, 1.25, 1.5, 2, 0.5, 0.75)     # il giro del bottone x1
 PROPORZIONI = (("Auto", "-1"), ("16:9", "16:9"), ("4:3", "4:3"), ("21:9", "21:9"))
 
+# le barre laterali partono sempre larghe cosi' (trascinandole si cambiano,
+# ma solo fino alla chiusura)
+LARGA_BARRA = 220
+IN_RIPRODUZIONE = "#c0c7d0"   # il fondo fisso della riga in riproduzione (argento)
 PREFERITI = "favorite"     # la cartella dei preferiti, in playlists/
+# i preferiti, per ora spenti: niente cuore e niente cartella nella barra
+# (i file in playlists/favorite/ restano dove sono). True per riaccenderli
+PREFERITI_ACCESI = False
 PREF_IPTV = "iptv"         # dentro: iptv.m3u per i canali, music.m3u per la
 PREF_MUSICA = "music"      # musica, video.m3u per i video
 PREF_VIDEO = "video"
@@ -1080,6 +1202,8 @@ AUDIO = ("mp3", "flac", "ogg", "opus", "m4a", "aac", "wav", "wma", "ape")
 
 def tipo_preferiti(url):
     """In quale lista dei preferiti va una cosa: iptv, music o video."""
+    # i file sul disco per quello che sono, musica o video; quello che
+    # viene da una lista IPTV (anche un .mp4 in rete) e' IPTV
     if not (os.path.isabs(url) and e_media(url)):
         return PREF_IPTV
     return PREF_MUSICA if os.path.splitext(url)[1][1:].lower() in AUDIO else PREF_VIDEO
@@ -1387,6 +1511,60 @@ def info_tmdb(chiave, titolo, anno, lingua):
     return None
 
 
+def _anno_via(t):
+    """'Terremoto (1993)', '[1993] Terremoto', '1993 - Terremoto' ->
+    ('Terremoto', '1993')."""
+    anno = ""
+    m = re.search(r"[\(\[]\s*((?:19|20)\d\d)\s*[\)\]]", t)
+    if m:
+        anno, t = m.group(1), (t[:m.start()] + t[m.end():])
+    else:
+        m = re.match(r"\s*((?:19|20)\d\d)\s*[-.\u2013]\s*(.+)$", t) or \
+            re.match(r"(.+?)\s*[-\u2013]\s*((?:19|20)\d\d)\s*$", t)
+        if m:
+            a, b = m.groups()
+            anno, t = (a, b) if a.isdigit() else (b, a)
+    return re.sub(r"\s+", " ", t.replace("_", " ")).strip(" -\u2013."), anno
+
+
+def dal_percorso(f, radici=()):
+    """Quando un brano non ha tag: titolo, artista, album e anno ricavati
+    da cartelle e nome del file. Capisce:
+      .../Artista/Album/01 - Titolo.mp3   (anche 'Album (1993)', '1993 - Album')
+      .../Artista - Album/01. Titolo.mp3
+      .../qualcosa/Artista - Titolo.mp3
+    Le cartelle aggiunte (radici) non contano come artista o album."""
+    cartella, nome = os.path.split(f)
+    radice = os.path.splitext(nome)[0].replace("_", " ")
+    radici = [os.path.normpath(r) for r in radici]
+    titolo = re.sub(r"^\s*\d{1,3}\s*[-.\s]\s*", "", radice).strip()
+    artista = album = anno = ""
+    if " - " in titolo:                 # 'Artista - Titolo'
+        a, t = titolo.split(" - ", 1)
+        artista, titolo = a.strip(), t.strip()
+    padre = os.path.basename(cartella)
+    nonno_path = os.path.dirname(cartella)
+    nonno = os.path.basename(nonno_path)
+    if os.path.normpath(cartella) not in radici and padre:
+        if " - " in padre and not re.match(r"\s*(19|20)\d\d\s*-", padre):
+            a, b = padre.split(" - ", 1)
+            artista = artista or a.strip()
+            album, anno = _anno_via(b)
+        else:
+            album, anno = _anno_via(padre)
+            if nonno and os.path.normpath(nonno_path) not in radici:
+                if not artista:                 # .../Artista/Album/
+                    artista = nonno.replace("_", " ").strip()
+            elif not anno and not artista:
+                # una cartella sola sotto quella aggiunta (Music/Litfiba/):
+                # e' l'artista, l'album non si sa (si cerchera' il brano).
+                # Con l'anno nel nome (Music/Terremoto (1993)/) resta album
+                artista, album = album, ""
+    if artista and album.lower() == artista.lower():
+        album = ""                      # .../Artista/Artista - Titolo: e' la cartella dell'artista
+    return titolo or radice, artista, album, anno
+
+
 def copertina_musicbrainz(artista, album):
     """L'url della copertina di un album (MusicBrainz + Cover Art
     Archive) e il suo anno: (url, anno), o (None, "")."""
@@ -1398,6 +1576,39 @@ def copertina_musicbrainz(artista, album):
             return ("https://coverartarchive.org/release-group/%s/front-500" % g["id"],
                     (g.get("first-release-date") or "")[:4])
     return None, ""
+
+
+def copertina_da_brano(artista, titolo):
+    """Senza album: si cerca il brano (artista + titolo) su MusicBrainz e si
+    prende l'album ufficiale piu' vecchio in cui e' uscito, scartando
+    raccolte e live. ([url copertine, dalla migliore], anno, nome album):
+    piu' d'una perche' non tutti gli album hanno la copertina caricata."""
+    from urllib.parse import quote
+    q = 'recording:"%s" AND artist:"%s"' % (titolo.replace('"', ""), artista.replace('"', ""))
+    ris = json_da("https://musicbrainz.org/ws/2/recording/?fmt=json&limit=15&query=" + quote(q))
+    scelte = []
+    for r in ris.get("recordings") or []:
+        for rel in r.get("releases") or []:
+            g = rel.get("release-group") or {}
+            if not g.get("id"):
+                continue
+            buono = (rel.get("status", "Official") == "Official"
+                     and g.get("primary-type") in ("Album", "EP", "Single")
+                     and not g.get("secondary-types"))
+            data = rel.get("date") or "9999"
+            # prima gli album veri, poi i piu' vecchi
+            scelte.append((not buono, g.get("primary-type") != "Album", data, g["id"],
+                           g.get("title") or rel.get("title") or ""))
+    if not scelte:
+        return [], "", ""
+    scelte.sort()
+    _n, _a, data, _g, nome = scelte[0]
+    urls = []
+    for c in scelte:
+        u = "https://coverartarchive.org/release-group/%s/front-500" % c[3]
+        if u not in urls:
+            urls.append(u)
+    return urls[:3], (data[:4] if data[:4].isdigit() and data != "9999" else ""), nome
 
 
 def anteprima_di(f):
@@ -1836,6 +2047,50 @@ def e_media(f):
     return os.path.splitext(f)[1][1:].lower() in MEDIA
 
 
+def nome_url(u):
+    """Il nome da mostrare per un indirizzo: l'ultimo pezzo del percorso,
+    se no il sito."""
+    return (os.path.basename(urlparse(u).path.rstrip("/")) or urlparse(u).netloc or u)
+
+
+def titolo_url(u):
+    """Il titolo di un indirizzo, per la lista: il nome del file senza
+    estensione, con gli spazi al posto di _ . -"""
+    pezzi = [x for x in urlparse(u).path.split("/") if x]
+    n = pezzi[-1] if pezzi else ""
+    m = re.match(r"(.*)\.([A-Za-z0-9]+)$", n)
+    if m and (m.group(2).lower() in MEDIA or m.group(2).lower() in ("m3u8", "m3u", "mpd", "ism")):
+        n = m.group(1)
+    if not n and len(pezzi) > 1:        # es. .../film.ism/.m3u8: il pezzo prima
+        n = re.sub(r"\.[A-Za-z0-9]+$", "", pezzi[-2])
+    return re.sub(r"[_.]+", " ", n).strip() or urlparse(u).netloc or u
+
+
+def tipo_url(u):
+    """Cos'e' un indirizzo e da dove viene: 'Video · MP4 · sito',
+    'Audio · MP3 · sito', 'Stream HLS · sito', 'Stream · sito'."""
+    p, sito = urlparse(u).path, urlparse(u).netloc
+    m = re.search(r"\.([A-Za-z0-9]+)$", p)
+    est = m.group(1).lower() if m else ""
+    if est in AUDIO:
+        cosa = "Audio \u00b7 " + est.upper()
+    elif est in MEDIA:
+        cosa = "Video \u00b7 " + est.upper()
+    elif est in ("m3u8", "m3u"):
+        cosa = "Stream HLS"
+    elif est == "mpd":
+        cosa = "Stream DASH"
+    else:
+        cosa = "Stream"
+    return cosa + (" \u00b7 " + sito if sito else "")
+
+
+def e_media_url(u):
+    """Un file video o audio in rete (http...mp4, mp3...): si suona come un
+    file, non come un canale IPTV."""
+    return bool(re.match(r"https?://", u or "", re.I)) and e_media(urlparse(u).path)
+
+
 def media_in(cartella):
     """I file audio/video dentro a una cartella e a tutte le sue
     sottocartelle (quelle nascoste no), in ordine di percorso cosi' gli
@@ -1862,6 +2117,9 @@ def ore_min_sec(secondi):
 
 
 REGISTRAZIONI = os.path.join(CASA, "Videos", "xvb")
+# la porta per tenere una XVB sola (le altre le passano i file)
+PORTA = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or os.path.join(CASA, ".cache", "xvb"),
+                     "xvb.sock")
 
 
 _DURATE = {}
@@ -2051,10 +2309,12 @@ def varianti(url):
     da scegliere e si suona l'indirizzo com'e'."""
     try:
         r = Request(url, headers={"User-Agent": UA})
-        testo = urlopen(r, timeout=10).read().decode("utf-8", "ignore")
+        # solo l'inizio: un master e' pochi kB, e se l'indirizzo e' un
+        # file video (o una radio) non lo si scarica tutto per niente
+        testo = urlopen(r, timeout=10).read(262144).decode("utf-8", "ignore")
     except Exception:
         return []
-    if "#EXT-X-STREAM-INF" not in testo:
+    if not testo.lstrip().startswith("#EXTM3U") or "#EXT-X-STREAM-INF" not in testo:
         return []
     gruppi, media, testa = {}, {}, ["#EXTM3U"]
     for riga in testo.splitlines():
@@ -2469,6 +2729,54 @@ class Tendina(object):
         # il grab solo quando la finestra e' davvero a video, se no Tk
         # si arrabbia (e X anche); e mai su una finestra gia' chiusa
         top.after(30, lambda: self.prendi(top))
+        # si chiude da sola: dopo due secondi col mouse fuori, o subito se
+        # si passa a un'altra finestra del desktop (se no restava sopra)
+        self.fuori_da = None
+        self.aveva_fuoco = False
+        # dove sta la finestra adesso: se si sposta o cambia misura, la
+        # tendina (che e' una finestrella a parte, ferma) si chiude
+        self.finestra_era = self.root.winfo_geometry()
+        top.after(150, lambda: self.sorveglia(top))
+
+    def sorveglia(self, top):
+        if self.top is not top or not top.winfo_exists():
+            return
+        try:
+            # un'altra finestra davanti: il fuoco lascia XVB. Conta solo se
+            # prima lo si era visto dentro (con certi gestori di finestre la
+            # tendina il fuoco non lo prende mai: si chiuderebbe e si
+            # riaprirebbe di continuo, lampeggiando)
+            if self.root.winfo_geometry() != getattr(self, "finestra_era", None):
+                self.chiudi()                     # finestra spostata o ridimensionata
+                return
+            fuoco = self.root.focus_get()
+            if fuoco is not None:
+                self.aveva_fuoco = True
+            elif getattr(self, "aveva_fuoco", False):
+                self.chiudi()
+                return
+            x, y = top.winfo_pointerxy()
+        except (tk.TclError, KeyError):
+            self.chiudi()
+            return
+
+        def sopra(w):
+            try:
+                return (w is not None and w.winfo_exists()
+                        and w.winfo_rootx() <= x < w.winfo_rootx() + w.winfo_width()
+                        and w.winfo_rooty() <= y < w.winfo_rooty() + w.winfo_height())
+            except tk.TclError:
+                return False
+        if sopra(top) or sopra(self.chi):
+            self.fuori_da = None
+        elif self.altrove and self.altrove(x, y, subito=True):
+            return                              # su un'altra voce della barra: si apre quella
+        elif self.fuori_da is None:
+            self.fuori_da = time.time()
+        elif time.time() - self.fuori_da > 2.0:
+            self.chiudi()
+            return
+        top.after(120, lambda: self.sorveglia(top))
 
     def prendi(self, top):
         if self.top is not top or not top.winfo_exists():
@@ -2514,6 +2822,8 @@ class Tendina(object):
         # dentro al suo stesso clic e' quello che faceva saltare X
         self.root.after_idle(lambda: top.winfo_exists() and top.destroy())
         f, self.al_chiudere = self.al_chiudere, None
+        # chi e quando: passandoci sopra subito dopo non si riapre (lampeggio)
+        self.chiusa = (self.chi, time.time())
         self.chi = None
         if f:
             f()
@@ -2865,7 +3175,10 @@ class Finestrella(tk.Toplevel):
         self.after_idle(lambda: self.winfo_exists() and self.destroy())
 
 
-def sfoglia(root, titolo, da, file_=True):
+SOTTOTITOLI = ("srt", "ass", "ssa", "sub", "vtt", "idx", "sup")
+
+
+def sfoglia(root, titolo, da, file_=True, tipi=None):
     """Sceglie un file (file_) o una cartella, con una finestra nostra al
     posto di quella grigia di Tk: il percorso in cima, su, l'elenco con
     le cartelle prima e poi i file multimediali. Doppio clic su una
@@ -2920,7 +3233,8 @@ def sfoglia(root, titolo, da, file_=True):
             if file_:
                 for n in nomi:
                     p = os.path.join(dove[0], n)
-                    if os.path.isfile(p) and e_media(n):
+                    if os.path.isfile(p) and (
+                            os.path.splitext(n)[1][1:].lower() in tipi if tipi else e_media(n)):
                         elenco.insert("", "end", iid=str(len(voci)), text=" " + n, image=icone[1])
                         voci.append((p, False))
 
@@ -2972,7 +3286,7 @@ def sfoglia(root, titolo, da, file_=True):
 
 
 class TV(object):
-    def __init__(self, lista=None):
+    def __init__(self, lista=None, da_aprire=None, porta=None):
         self.cfg = leggi_config()
         global LINGUA
         # quella scelta dal menu; se non se n'e' mai scelta una, quella del
@@ -3114,8 +3428,14 @@ class TV(object):
         self.menu("Media", lambda: [
             (_("Open file..."), self.apri_file),
             (_("Open folder..."), self.apri_cartella_media),
+            (_("Open URL..."), self.apri_url),
             None,
-            (_("Download posters and covers"), self.scarica_copertine)])
+            (_("Download posters and covers"), self.scarica_copertine)] + ([
+            None,
+            (_("Recent"), None)] + [
+            ("   " + corto(os.path.basename(f), 48), lambda f=f: self.apri_da_fuori([f]))
+            for f in self.recenti()] + [
+            (_("Clear recent"), self.pulisci_recenti)] if self.recenti() else []))
         self.menu("Playback", lambda: [
             (_("Play / Pause"), self.pausa),
             (_("Stop"), self.ferma),
@@ -3127,6 +3447,10 @@ class TV(object):
             (_("Next"), lambda: self.salta(+1)),
             None,
             (("*  " if self.cfg.get("shuffle") else "   ") + _("Shuffle"), self.shuffle),
+            None] + [
+            (("*  " if self.cfg.get("ripeti", "") == k else "   ") + _(n),
+             lambda k=k: self.metti_ripeti(k))
+            for k, n in (("", "No repeat"), ("uno", "Repeat one"), ("tutti", "Repeat all"))] + [
             None] + [
             (("*  " if v == self.velocita else "   ") + _("Speed x%g") % v,
              lambda v=v: self.metti_velocita(v)) for v in sorted(VELOCITA)])
@@ -3155,7 +3479,13 @@ class TV(object):
              lambda: self.metti_traccia("sid", "no"))] + [
             (("*  " if t["selected"] else "   ") + _("Subtitles: %s") % self.nome_traccia(t),
              lambda i=t["id"]: self.metti_traccia("sid", i))
-            for t in self.tracce("sub")] + [None] + [
+            for t in self.tracce("sub")] + [
+            (_("Load subtitles..."), self.carica_sottotitoli if self.file_in_onda else None),
+            (_("Subtitle delay +100 ms"), lambda: self.ritardo_sottotitoli(+0.1)),
+            (_("Subtitle delay -100 ms"), lambda: self.ritardo_sottotitoli(-0.1)),
+            (_("Subtitles larger"), lambda: self.scala_sottotitoli(+0.1)),
+            (_("Subtitles smaller"), lambda: self.scala_sottotitoli(-0.1)),
+            (_("Reset subtitles"), self.azzera_sottotitoli)] + [None] + [
             (("*  " if self.cfg.get("boost") else "   ") + _("Volume boost +50%"), self.boost),
             (("*  " if self.cfg.get("normalizza") else "   ") + _("Normalize loudness"), self.normalizza),
             None,
@@ -3168,16 +3498,12 @@ class TV(object):
             (_("Playlists"), None),
             (_("Add playlist URL"), self.chiedi_lista_url),
             (_("Open playlists folder"), self.apri_cartella_liste),
-            (_("Reload playlists"), self.ricarica_liste)] + [
-            (_("Remove %s") % n, lambda u=u: self.togli_lista_url(u))
-            for u, n in self.cfg.get("liste_url", {}).items()] + [
+            (_("Reload playlists"), self.ricarica_liste),
             None,
             (_("TV guide"), None),
             (_("Programme guide"), self.apri_guida),
             (_("Add guide URL"), self.chiedi_epg),
-            (_("Reload guide"), self.ricarica_epg if self.cfg.get("epg") else None)] + [
-            (_("Remove %s") % self.nome_guida(d), lambda d=d: self.togli_epg(d))
-            for d in self.cfg.get("epg", [])] + [
+            (_("Reload guide"), self.ricarica_epg if self.cfg.get("epg") else None),
             None,
             (_("Recording"), None),
             (_("Stop recording") if self.registrando else _("Record now"), self.registra),
@@ -3210,7 +3536,7 @@ class TV(object):
             (_("Donate"), self.dona)])
 
         self.sinistra = tk.Frame(self.root, bg=PANNELLO,
-                                 width=int(self.cfg.get("larga_sx", 220)))
+                                 width=LARGA_BARRA)
         self.sinistra.pack(side="left", fill="y")
         self.sinistra.pack_propagate(False)
         self.cerca = Ricerca(self.sinistra, self.filtra, vuota=_("Search channels"))
@@ -3246,7 +3572,7 @@ class TV(object):
 
         # --- a destra: le liste
         self.destra = tk.Frame(self.root, bg=PANNELLO,
-                               width=int(self.cfg.get("larga_dx", 220)))
+                               width=LARGA_BARRA)
         # le maniglie fra le barre laterali e il video: si trascinano
         self.maniglia_sx = self.maniglia(self.sinistra, "larga_sx", +1)
         self.maniglia_dx = self.maniglia(self.destra, "larga_dx", -1)
@@ -3325,6 +3651,17 @@ class TV(object):
         self.et_orologio = tk.Label(self.riga_stato, text=time.strftime("%H:%M"),
                                     bg=STATO, fg=TESTO)
         self.et_orologio.pack(side="left", padx=(10, 0), fill="y")
+        self.icona_errore = None
+        f_err = os.path.join(QUI, "icone", "error.png")
+        if os.path.isfile(f_err):
+            try:
+                if HA_PIL:
+                    self.icona_errore = ImageTk.PhotoImage(
+                        Image.open(f_err).convert("RGBA").resize((16, 16), Image.LANCZOS))
+                else:
+                    self.icona_errore = tk.PhotoImage(file=f_err)
+            except Exception:
+                self.icona_errore = None
         self.stato = tk.Label(self.riga_stato, text=_("ready"), anchor="w",
                               bg=STATO, fg="#ffffff")
         self.stato.pack(side="left", padx=(8, 0), fill="y")
@@ -3407,15 +3744,16 @@ class TV(object):
         self.tasto("stop", _("Stop"), self.ferma, 4)
         self.tasto("+10", "+10", lambda: self.avanza(+10), 4)
         self.tasto("dopo", ">", lambda: self.salta(+1), 3)
-        self.b_rec = self.tasto("rec", _("Record"), self.registra)
+        self.b_rec = self.tasto("rec", _("Record"), self.registra, padx=(24, 2))
         self.tasto("switch", _("Switch"), self.switch, 6)
         self.b_shuffle = self.tasto("shuffle", _("Shuffle"), self.shuffle, 7)
         # a destra, da destra a sinistra: cuore, schermo intero, [EPG x1],
         # ingranaggio, volume col suo muto
         self.b_pref = self.tasto("favorite_off", _("Favorite"), self.preferito,
                                  lato="right")
-        self.tasto("pieno", _("Fullscreen"), self.schermo_intero, 14,
-                   lato="right")
+        self.b_pieno = self.tasto("pieno", _("Fullscreen"), self.schermo_intero, 14,
+                                  lato="right")
+        self.b_pref.pack_forget()           # il cuore c'e' solo quando serve
         self.tasto("epg", "EPG", self.apri_guida, 4, lato="right", padx=(2, 6))
         self.b_velocita = self.tasto("x1", "x1", self.gira_velocita, 4, lato="right",
                                      padx=(6, 2))
@@ -3449,6 +3787,9 @@ class TV(object):
         # --- il video in mezzo
         self.video = tk.Frame(self.root, bg="black")
         self.video.pack(side="right", fill="both", expand=True)
+        # la disposizione vera (comandi e stato al piede, larghi quanto la
+        # finestra) prima che mpv ci metta dentro la sua finestra
+        self.disponi(False)
         self.video.bind("<Button-1>", lambda e: self.root.focus_set())
         self.root.update()
 
@@ -3484,6 +3825,14 @@ class TV(object):
         # la copertina dentro agli mp3 (python-mpv la spegne di suo): il
         # valore "embedded-first" c'e' da mpv 0.37; su Debian 12 e Ubuntu
         # 22.04 (mpv piu' vecchi) si usa "attachment", che fa lo stesso
+        # doppio clic sul video: schermo intero. Sul video i clic li riceve
+        # la finestra di mpv, non Tk: glielo si chiede a lui
+        try:
+            @self.mpv.on_key_press("MBTN_LEFT_DBL")
+            def _doppio():
+                self.root.after(0, self.schermo_intero)
+        except Exception:
+            pass
         for valore in ("embedded-first", "attachment"):
             try:
                 self.mpv["audio-display"] = valore
@@ -3528,6 +3877,7 @@ class TV(object):
         self.et_carico.pack(side="left", padx=(10, 0), before=self.stato)
         # icone/screen.png sopra al video quando non c'e' niente che va
         self.sfondo = tk.Label(self.video, bg="black", bd=0)
+        self.sfondo.bind("<Double-Button-1>", lambda e: self.schermo_intero())
         # un fratello di un pixel: serve solo per poter rialzare lo sfondo
         # sopra la finestra di mpv (Tk non manda l'ordine a X se crede di
         # essere gia' in cima)
@@ -3586,10 +3936,27 @@ class TV(object):
         self.root.protocol("WM_DELETE_WINDOW", self.chiudi)
 
         if lista and os.path.isfile(lista):
+            # una playlist passata all'avvio: si apre quella
             lista = os.path.abspath(lista)
             if lista not in self.tutte_le_liste():
                 self.cfg.setdefault("liste", []).append(lista)
-        self.rifai_liste(scegli=lista)
+            self.rifai_liste(scegli=lista)
+        else:
+            # se no si parte neutri: nessuna lista aperta, niente selezionato,
+            # a sinistra vuoto. Sceglie chi usa XVB (l'ultimo canale resta
+            # ricordato: aprendo la sua lista e' selezionato, pronto)
+            self.cfg["lista"] = None
+            self.rifai_albero()
+            self.canali = []
+            self.filtra()
+            self.scrivi(_("ready"))
+        if da_aprire:
+            self.root.after(300, lambda: self.apri_da_fuori(da_aprire))
+        # le XVB aperte dopo (es. "Apri con" dal file manager) non partono:
+        # passano i file a questa, che li apre
+        self.porta = porta
+        if porta is not None:
+            threading.Thread(target=self.ascolta, daemon=True).start()
         threading.Thread(target=self.guarda, daemon=True).start()
         if self.cfg.get("epg"):
             self.carica_guide()
@@ -3820,10 +4187,21 @@ class TV(object):
                                               image=img_pl,
                                               tags=("usata",) if k == self.media_in_uso else ())
                 self.iid_media[figlio] = k
+        self.iid_file, self.iid_url = {}, {}   # (non piu' righe dentro: tutto a sinistra)
         if self.cfg.get("importati"):
             chiave = ("importati", None)
             iid = self.el_liste.insert("", "end", text=" %s (%d)" % (
                 _("Imported media"), len(self.cfg["importati"])), image=img_pl,
+                values=("\u2715",), tags=("usata",) if chiave == self.media_in_uso else ())
+            self.iid_media[iid] = chiave
+        # gli indirizzi aperti con Open URL: col globo e il conto; cliccando,
+        # a sinistra, uno per riga
+        if self.cfg.get("url_aperti"):
+            chiave = ("url", None)
+            if "url" not in self.globi:
+                self.globi["url"] = globo("#64d2ff") or self.vuoto
+            iid = self.el_liste.insert("", "end", text=" %s (%d)" % (
+                _("Opened URLs"), len(self.cfg["url_aperti"])), image=self.globi["url"],
                 values=("\u2715",), tags=("usata",) if chiave == self.media_in_uso else ())
             self.iid_media[iid] = chiave
         # poi le liste sciolte, e le categorie con le loro dentro
@@ -3834,6 +4212,8 @@ class TV(object):
             if d not in gia:
                 riga(iptv, d)
         for nome, dentro in categorie():
+            if nome == PREFERITI and not PREFERITI_ACCESI:
+                continue
             colore = colore_cartella(nome, posto[0])
             if nome != PREFERITI:
                 posto[0] += 1
@@ -3943,6 +4323,12 @@ class TV(object):
 
     def scegli_lista(self):
         s = self.el_liste.selection()
+        if s and s[0] in getattr(self, "iid_file", {}):
+            self.suona_da_barra(("importati", None), self.iid_file[s[0]])
+            return
+        if s and s[0] in getattr(self, "iid_url", {}):
+            self.suona_da_barra(("url", None), self.iid_url[s[0]])
+            return
         if s and s[0] in self.iid_reg:
             self.mostra_registrazioni(self.iid_reg[s[0]])
             return
@@ -3956,6 +4342,20 @@ class TV(object):
                   or self.media_in_uso is not None):
             self.reg_in_uso = self.media_in_uso = None
             self.carica(d)
+
+    def suona_da_barra(self, chiave, dove):
+        """Un file importato o un URL aperto, cliccato nella barra: a
+        sinistra la sua lista (se non c'e' gia') e parte lui."""
+        if self.media_in_uso != chiave:
+            self.mostra_media(chiave)
+        i = next((k for k, c in enumerate(self.visti) if c[1] == dove), -1)
+        if i >= 0 and self.elenco.exists(str(i)):
+            self.elenco.selection_set(str(i))
+            self.elenco.see(str(i))
+        if chiave[0] == "url":
+            self.apri_url_da(dove)
+        else:
+            self.riproduci(dove)
 
     def mostra_registrazioni(self, chiave):
         """A sinistra, al posto dei canali, i programmi registrati su quel
@@ -3991,11 +4391,13 @@ class TV(object):
         if self.registrando:
             self.ferma_registrazione()
         self.fermato = None                 # parte altro: lo stop di prima non conta piu'
+        if os.path.isabs(f) and not f.startswith(REGISTRAZIONI + os.sep):
+            self.cfg["recenti"] = ([f] + [x for x in self.cfg.get("recenti", []) if x != f])[:12]
         self.file_in_onda = f
         self.nome = self.nome_in_onda = nome or os.path.splitext(os.path.basename(f))[0]
         self.ide_in_onda = None
         dvd = f.startswith("dvd://")
-        est = "dvd" if dvd else os.path.splitext(f)[1][1:].lower()
+        est = "dvd" if dvd else os.path.splitext(urlparse(f).path if e_media_url(f) else f)[1][1:].lower()
         self.et_formato.config(text=("  -  " + est) if est else "")
         # quello che mpv dira' di stare suonando (per il riprendi)
         self.percorso_mpv = "dvd://" if dvd else f
@@ -4023,7 +4425,7 @@ class TV(object):
             else:
                 self.mpv.play(f)
         except Exception as e:
-            self.scrivi(_("cannot read %s: %s") % (self.nome, e))
+            self.scrivi(_("cannot read %s: %s") % (self.nome, e), errore=True)
             return
         self.scrivi_riga()
 
@@ -4040,7 +4442,7 @@ class TV(object):
         try:
             canali = leggi_lista(dove)
         except Exception as e:
-            self.scrivi(_("cannot read %s: %s") % (nome_di(dove), e))
+            self.scrivi(_("cannot read %s: %s") % (nome_di(dove), e), errore=True)
             return
         self.canali = canali
         self.cfg["lista"] = dove
@@ -4048,14 +4450,28 @@ class TV(object):
         self.root.after(0, self.filtra)
         self.root.after(0, self.segna_in_uso, dove)
         self.scrivi(_("%s - %d channels") % (nome_di(dove), len(canali)))
-        # l'ultimo canale visto, se sta in questa lista, riparte da solo
+        # l'ultimo canale visto, se sta in questa lista: non parte da solo
+        # (sceglie chi usa XVB), ma e' selezionato e Play lo fa partire
         ultimo = self.cfg.get("canale")
         if ultimo:
             for nome, url, ide in canali:
                 if url == ultimo:
                     self.root.after(300, lambda n=nome, u=url, i=ide:
-                                    self.apri(n, u, i))
+                                    self.ricorda_canale(n, u, i))
                     break
+
+    def ricorda_canale(self, nome, url, ide):
+        """L'ultimo canale visto, pronto ma fermo: selezionato nella lista,
+        e Play (o doppio clic) lo avvia. Se sta gia' andando qualcosa, non
+        si tocca niente."""
+        if self.nome_in_onda or self.file_in_onda:
+            return
+        i = next((k for k, c in enumerate(self.visti) if c[1] == url), -1)
+        if i >= 0 and self.elenco.exists(str(i)):
+            self.elenco.selection_set(str(i))
+            self.elenco.see(str(i))
+        self.fermato = ("canale", nome, url, ide)
+        self.faccia(self.b_pausa, "play", _("Resume"))
 
     def chiedi_lista_url(self):
         """Una lista da url, col nome che si vuole: resta url, la copia
@@ -4102,7 +4518,7 @@ class TV(object):
             filetypes=[(_("All files"), "*"), (_("Playlists"), "*.m3u *.m3u8")])
         if f:
             if not e_una_lista(f):
-                self.scrivi(_("%s does not look like an m3u playlist") % os.path.basename(f))
+                self.scrivi(_("%s does not look like an m3u playlist") % os.path.basename(f), errore=True)
                 return
             self.aggiungi(f)
 
@@ -4113,16 +4529,59 @@ class TV(object):
         if not f:
             return
         self.cfg["ultima_cartella"] = os.path.dirname(f)
-        importati = [x for x in self.cfg.get("importati", []) if x != f] + [f]
-        self.cfg["importati"] = importati
+        self.apri_da_fuori([f])
+
+    def apri_da_fuori(self, dove):
+        """File e cartelle che arrivano da fuori: "Apri con XVB" dal file
+        manager, la riga di comando, un'altra XVB aperta dopo, i recenti.
+        Le cartelle entrano nella barra come con Open folder; le playlist
+        m3u fra le playlist; i file multimediali: se stanno in una cartella
+        gia' aggiunta si apre quella, se no vanno fra gli Importati. Parte
+        il primo."""
+        self.root.deiconify()
+        self.root.lift()
+        file_, primo = [], None
+        for d in dove:
+            d = os.path.abspath(d)
+            if os.path.isdir(d):
+                if d not in self.cfg.get("cartelle", []):
+                    self.cfg.setdefault("cartelle", []).append(d)
+                primo = primo or ("cartella", d)
+            elif os.path.isfile(d) and e_media(d):
+                file_.append(d)
+            elif os.path.isfile(d):
+                self.aggiungi(d)                # una playlist
+                return
+        if file_:
+            f = file_[0]
+            cartella = next((c for c in self.cfg.get("cartelle", [])
+                             if f.startswith(c.rstrip(os.sep) + os.sep)), None)
+            if len(file_) == 1 and cartella:
+                primo = ("cartella", cartella)
+            else:
+                importati = [x for x in self.cfg.get("importati", []) if x not in file_]
+                self.cfg["importati"] = importati + file_
+                primo = ("importati", None)
+        if not primo:
+            return
         scrivi_config(self.cfg)
         self.rifai_albero()
-        self.mostra_media(("importati", None))
-        i = next((k for k, c in enumerate(self.visti) if c[1] == f), -1)
-        if i >= 0 and self.elenco.exists(str(i)):
-            self.elenco.selection_set(str(i))
-            self.elenco.see(str(i))
-        self.riproduci(f)
+        self.mostra_media(primo)
+        if file_:
+            f = file_[0]
+            i = next((k for k, c in enumerate(self.visti) if c[1] == f), -1)
+            if i >= 0 and self.elenco.exists(str(i)):
+                self.elenco.selection_set(str(i))
+                self.elenco.see(str(i))
+            self.riproduci(f)
+
+    def recenti(self):
+        """Gli ultimi file aperti che ci sono ancora, dal piu' recente."""
+        return [f for f in self.cfg.get("recenti", []) if os.path.isfile(f)][:8]
+
+    def pulisci_recenti(self):
+        self.cfg["recenti"] = []
+        scrivi_config(self.cfg)
 
     def apri_cartella_media(self):
         """Una cartella di video o musica: entra nella barra di destra con
@@ -4188,13 +4647,14 @@ class TV(object):
                 provati = json.load(h)
         except Exception:
             provati = {}
+        gia_provati = dict(provati)         # quelli delle volte prima (non di questo giro)
         for n, f in enumerate(file_, 1):
             if not zitto:
                 self.scrivi(_("downloading posters and covers... %d/%d") % (n, len(file_)))
             cartella, base = os.path.split(f)
             # in silenzio (all'avvio) non si ricerca quello gia' cercato
             voce = cartella if os.path.splitext(f)[1][1:].lower() in AUDIO else f
-            if zitto and voce in provati:
+            if zitto and voce in gia_provati:
                 continue
             provati[voce] = 1
             radice = os.path.splitext(base)[0]
@@ -4220,17 +4680,45 @@ class TV(object):
                         scarica_in(info["poster"], os.path.join(cartella, radice + ".jpg"))
                         fatti += 1
                 else:
-                    if cartella in album_visti or not HA_TAG:
+                    if not HA_TAG:
+                        continue
+                    t = mutagen.File(f, easy=True)
+                    tags = t.tags if t is not None and t.tags else {}
+                    artista = (tags.get("albumartist") or tags.get("artist") or [""])[0].strip()
+                    album = (tags.get("album") or [""])[0].strip()
+                    titolo = (tags.get("title") or [""])[0].strip()
+                    ha_anno = str((tags.get("date") or [""])[0])[:4].isdigit()
+                    if not (artista and album):
+                        # niente tag: artista, album e titolo dalle cartelle
+                        t2, a2, b2, y2 = dal_percorso(f, self.cfg.get("cartelle", []))
+                        artista, album, titolo = artista or a2, album or b2, titolo or t2
+                        ha_anno = ha_anno or bool(y2)
+                    if artista and titolo and not album:
+                        # l'album non si sa: si cerca il brano, e la copertina
+                        # va accanto a lui col suo nome (vale solo per lui)
+                        suo = [radice + e for e in (".jpg", ".jpeg", ".png")]
+                        if any(os.path.isfile(os.path.join(cartella, g)) for g in suo) \
+                                or copertina_dentro(f) is not None:
+                            continue
+                        urls, anno_mb, album_mb = copertina_da_brano(artista, titolo)
+                        time.sleep(1.1)     # MusicBrainz: una richiesta al secondo
+                        if album_mb or anno_mb:
+                            self.info[f] = {"album": album_mb, "anno": anno_mb}
+                            nuove += 1
+                        for url in urls:    # la prima che c'e' davvero
+                            try:
+                                scarica_in(url, os.path.join(cartella, radice + ".jpg"))
+                                fatti += 1
+                                break
+                            except Exception:
+                                continue
+                        continue
+                    if cartella in album_visti:
                         continue
                     album_visti.add(cartella)
                     gia = [c + e for c in ("cover", "folder") for e in (".jpg", ".jpeg", ".png")]
                     ha_copertina = any(os.path.isfile(os.path.join(cartella, g)) for g in gia) \
                         or copertina_dentro(f) is not None
-                    t = mutagen.File(f, easy=True)
-                    tags = t.tags if t is not None and t.tags else {}
-                    artista = (tags.get("albumartist") or tags.get("artist") or [""])[0].strip()
-                    album = (tags.get("album") or [""])[0].strip()
-                    ha_anno = str((tags.get("date") or [""])[0])[:4].isdigit()
                     # si chiede a MusicBrainz se manca la copertina o l'anno
                     if not (artista and album) or (ha_copertina and ha_anno):
                         continue
@@ -4272,6 +4760,9 @@ class TV(object):
         self.reg_in_uso, self.media_in_uso = None, chiave
         if tipo == "cartella":
             self.canali, nome = media_in(c), os.path.basename(c.rstrip(os.sep)) or c
+        elif tipo == "url":
+            self.canali = [(titolo_url(u), u, None) for u in self.cfg.get("url_aperti", [])]
+            nome = _("Opened URLs")
         elif tipo == "disco":
             nome = os.path.basename(c.rstrip(os.sep)) or c
             # un DVD video e' un film solo; un disco di dati, i suoi file
@@ -4294,7 +4785,8 @@ class TV(object):
                 self.el_liste.item(iid, tags=())
         self.non_sul_verde(self.el_liste, "usata")
         self.scrivi(_("%s - %d files") % (nome, len(self.canali)))
-        threading.Thread(target=self.tagga, args=(chiave,), daemon=True).start()
+        if tipo != "url":                   # gli indirizzi non hanno tag ne' copertine
+            threading.Thread(target=self.tagga, args=(chiave,), daemon=True).start()
 
     def aggiungi(self, dove):
         dove = os.path.abspath(dove)
@@ -4336,8 +4828,32 @@ class TV(object):
             if self.conferma(_("Remove %s") % nome, _("The guide will be removed from the list.")):
                 self.togli_epg(self.iid_epg[iid])
             return
+        if iid in getattr(self, "iid_file", {}) or iid in getattr(self, "iid_url", {}):
+            # una riga sola: via dall'elenco, senza chiedere (non si cancella niente)
+            if iid in self.iid_file:
+                self.cfg["importati"] = [x for x in self.cfg.get("importati", []) if x != self.iid_file[iid]]
+                chiave = ("importati", None)
+            else:
+                self.cfg["url_aperti"] = [x for x in self.cfg.get("url_aperti", []) if x != self.iid_url[iid]]
+                chiave = ("url", None)
+            scrivi_config(self.cfg)
+            self.rifai_albero()
+            if self.media_in_uso == chiave:
+                self.mostra_media(chiave)
+            return
         if iid in self.iid_media:
             tipo, c = self.iid_media[iid]
+            if tipo == "url":
+                if not self.conferma_via(nome, _("The addresses will be removed from the list.")):
+                    return
+                self.cfg["url_aperti"] = []
+                scrivi_config(self.cfg)
+                if self.media_in_uso == (tipo, c):
+                    self.media_in_uso = None
+                    self.canali = []
+                    self.filtra()
+                self.rifai_albero()
+                return
             if tipo == "cartella":
                 if not self.conferma_via(nome, _("The folder will be removed from the list. Files are not touched.")):
                     return
@@ -4366,7 +4882,7 @@ class TV(object):
                         self.file_in_onda = None
                     os.remove(f)
                 except Exception as e:
-                    self.scrivi(_("cannot delete %s: %s") % (os.path.basename(f), e))
+                    self.scrivi(_("cannot delete %s: %s") % (os.path.basename(f), e), errore=True)
             try:
                 os.rmdir(os.path.dirname(file_[0]))       # la cartella del canale, se vuota
             except Exception:
@@ -4393,7 +4909,7 @@ class TV(object):
                 if os.path.basename(cartella) == PREFERITI and not os.listdir(cartella):
                     os.rmdir(cartella)
             except Exception as e:
-                self.scrivi(_("cannot delete %s: %s") % (nome, e))
+                self.scrivi(_("cannot delete %s: %s") % (nome, e), errore=True)
                 return
             self.cfg["liste"] = [x for x in self.cfg.get("liste", []) if x != d]
             if self.cfg.get("lista") == d:
@@ -4440,6 +4956,12 @@ class TV(object):
             self.segna_in_onda(adesso)
         elif self.file_in_onda:
             self.segna_in_onda(self.file_in_onda)
+        elif getattr(self, "fermato", None):
+            # fermo (all'avvio o dopo lo stop): resta selezionato quello
+            # che Play farebbe ripartire, anche quando la lista si ridisegna
+            i = next((k for k, c in enumerate(self.visti) if c[1] == self.fermato[2]), -1)
+            if i >= 0 and self.elenco.exists(str(i)):
+                self.elenco.selection_set(str(i))
 
     def testo_riga(self, nome, url, ide):
         """Le due righe di un elemento a sinistra: il nome e, sotto, il
@@ -4456,10 +4978,15 @@ class TV(object):
         '2023 · Drama · ★ 7.8' (senza info, l'anno dal nome). Musica: il
         titolo e sotto 'Artista · Album · 1975'."""
         if not os.path.isabs(f):
-            return nome, ""
+            return nome, (tipo_url(f) if self.media_in_uso and self.media_in_uso[0] == "url" else "")
         if os.path.splitext(f)[1][1:].lower() in AUDIO:
             titolo, artista, album, anno = self.tag_file.get(f, ("", "", "", ""))
-            anno = anno or self.info.get(os.path.dirname(f), {}).get("anno", "")
+            if not (titolo or artista or album):
+                # niente tag: si ricava tutto da cartelle e nome del file
+                titolo, artista, album, anno = dal_percorso(f, self.cfg.get("cartelle", []))
+            trovato = self.info.get(f, {})      # album e anno cercando il brano
+            album = album or trovato.get("album", "")
+            anno = anno or trovato.get("anno", "") or self.info.get(os.path.dirname(f), {}).get("anno", "")
             return titolo or nome, " \u00b7 ".join(x for x in (artista, album, anno) if x)
         if f.startswith(REGISTRAZIONI + os.sep):
             # registrazione: sotto l'ora e, se si sa gia', la durata
@@ -4579,7 +5106,9 @@ class TV(object):
                 self.img_liste["disco_grande"] = disco(TESTO, lato=LOGO_L, alta=LOGO_A) \
                     if os.path.isfile(os.path.join(QUI, "icone", "disco.png")) else disco(TESTO, lato=LOGO_A)
             return self.img_liste["disco_grande"]
-        if not os.path.isabs(url) or not self.icona_file or not HA_PIL:
+        # i file sul disco e, nella lista degli URL aperti, gli indirizzi
+        in_url = bool(self.media_in_uso and self.media_in_uso[0] == "url")
+        if not (os.path.isabs(url) or in_url) or not self.icona_file or not HA_PIL:
             return None
         if getattr(self, "icona_colonna", None) is None:
             self.icona_colonna = carica_logo(self.icona_file, LOGO_L, LOGO_A)
@@ -4623,14 +5152,15 @@ class TV(object):
             self.apri(nome, url, ide)
 
     def segna_in_onda(self, url):
-        """La riga del canale che si sta guardando prende il colore del
-        suo pallino come sfondo; testo e pallino diventano neri o bianchi
-        a seconda di quanto e' chiaro. Quella di prima torna normale."""
+        """La riga di quello che si sta guardando: fondo argento fisso
+        (IN_RIPRODUZIONE), testo e pallino neri. Il colore del canale resta
+        su comandi, riga di stato e linea di avanzamento. Quella di prima
+        torna normale."""
         for i, (nome, u, _l) in enumerate(self.visti[:3000]):
             if not self.elenco.exists(str(i)):
                 continue
             if u == url:
-                colore = self.colore_canale(nome, u)
+                colore = IN_RIPRODUZIONE
                 r, g, b = (int(colore[k:k + 2], 16) for k in (1, 3, 5))
                 # sui colori molto accesi (verde, giallo, azzurro...) testo
                 # nero, sugli altri bianco: la luminanza vera del colore
@@ -4666,11 +5196,13 @@ class TV(object):
         self.apri(nome, url, ide)
 
     def preferito(self):
-        """Il canale in onda entra nei preferiti, o ne esce se c'e' gia'.
-        I preferiti sono la lista playlists/favorite/favorite.m3u. Con un
-        file in onda (musica, video, registrazione) entra il file."""
+        """Quello che va entra nei preferiti, o ne esce se c'e' gia'. Tre
+        liste in playlists/favorite/: iptv.m3u per quello che viene dalle
+        playlist IPTV, music.m3u per i brani e video.m3u per i video sul
+        disco. Niente per quello aperto con Open URL e per i DVD (vedi
+        cuore_possibile)."""
         url = self.file_in_onda or self.cfg.get("canale")
-        if not url or not self.nome_in_onda:
+        if not self.nome_in_onda or not self.cuore_possibile(url):
             return
         media = tipo_preferiti(url)
         pref = leggi_preferiti(media)
@@ -4684,7 +5216,7 @@ class TV(object):
         try:
             scrivi_preferiti(pref, media)
         except Exception as e:
-            self.scrivi(_("cannot write favorites: %s") % e)
+            self.scrivi(_("cannot write favorites: %s") % e, errore=True)
             return
         self.icona_preferito()
         f = file_preferiti(media)
@@ -4704,8 +5236,25 @@ class TV(object):
         return any(u == url or (piatto and nome_piatto(n) == piatto)
                    for n, u, _i in pref)
 
+    def cuore_possibile(self, url):
+        """Il cuore solo per quello che si ha davvero: i file sul disco e i
+        canali (o video) che vengono da una playlist aggiunta. Non per quello
+        aperto al volo con Open URL, e non per i DVD."""
+        if not PREFERITI_ACCESI or not url or url.startswith("dvd://"):
+            return False
+        if os.path.isabs(url):
+            return e_media(url)
+        return url != getattr(self, "al_volo", None)
+
     def icona_preferito(self):
         url = self.file_in_onda or self.cfg.get("canale")
+        # il cuore si vede solo dove ha senso
+        if (not self.cuore_possibile(url) or not (self.file_in_onda or self.nome_in_onda)
+                or getattr(self, "fermato", None)):
+            self.b_pref.pack_forget()
+            return
+        if not self.b_pref.winfo_manager():
+            self.b_pref.pack(side="right", padx=2, pady=6, before=self.b_pieno)
         acceso = bool(url) and self.e_preferito(leggi_preferiti(tipo_preferiti(url)), url,
                                                 self.nome_in_onda)
         self.faccia(self.b_pref, "favorite_on" if acceso else "favorite_off",
@@ -4773,8 +5322,11 @@ class TV(object):
 
     def apri(self, nome, url, ide=None):
         self.fermato = None                 # parte altro: lo stop di prima non conta piu'
+        # viene da una lista (Open URL lo rimette dopo); dalla lista degli
+        # URL aperti resta roba al volo, senza cuore
+        self.al_volo = url if (self.media_in_uso and self.media_in_uso[0] == "url") else None
         if url.startswith("dvd://") or url.startswith(REGISTRAZIONI + os.sep) or (
-                os.path.isabs(url) and e_media(url) and os.path.isfile(url)):
+                os.path.isabs(url) and e_media(url) and os.path.isfile(url)) or e_media_url(url):
             self.riproduci(url, nome)
             return
         # ci si ricorda del canale di prima, per lo switch
@@ -4911,6 +5463,11 @@ class TV(object):
     def riga(self):
         """I tre pezzi della riga di stato: il canale, il titolo del
         programma in onda (del colore del canale) e il suo orario."""
+        # aperto al volo con Open URL: non viene da una lista IPTV, quindi
+        # niente guida; sotto, cos'e' e da dove viene
+        volo = getattr(self, "al_volo", None)
+        if volo and volo in (self.file_in_onda, self.cfg.get("canale")):
+            return (self.nome, tipo_url(volo), "")
         p = self.programma()
         if not p:
             if self.file_in_onda:
@@ -5046,6 +5603,7 @@ class TV(object):
         self.mostra_sfondo(True)
         self.faccia(self.b_pausa, "play", _("Resume"))
         self.et_formato.config(text="")
+        self.icona_preferito()              # fermo: il cuore sparisce
         self.scrivi(_("ready"))
 
     def pausa(self):
@@ -5133,9 +5691,19 @@ class TV(object):
     def maniglia(self, pannello, chiave, verso):
         """Una striscia sottile accanto al pannello: trascinandola il
         pannello si allarga o si stringe; la larghezza resta salvata."""
-        m = tk.Frame(self.root, bg=PANNELLO, width=5, cursor="sb_h_double_arrow")
-        m.bind("<Enter>", lambda e: m.config(bg=SCELTO))
-        m.bind("<Leave>", lambda e: m.config(bg=PANNELLO))
+        # 8 px con tre puntini a meta' altezza: si capisce che si tira
+        m = tk.Canvas(self.root, bg=PANNELLO, width=8, highlightthickness=0, bd=0,
+                      cursor="sb_h_double_arrow")
+
+        def puntini(acceso=False):
+            m.delete("all")
+            h, c = m.winfo_height(), ("#9a9aa8" if acceso else "#5a5a64")
+            for dy in (-8, 0, 8):
+                y = h // 2 + dy
+                m.create_oval(2, y - 2, 6, y + 2, fill=c, outline=c)
+        m.bind("<Configure>", lambda e: puntini())
+        m.bind("<Enter>", lambda e: (m.config(bg=SCELTO), puntini(True)))
+        m.bind("<Leave>", lambda e: (m.config(bg=PANNELLO), puntini()))
 
         def trascina(ev):
             if verso > 0:
@@ -5163,6 +5731,13 @@ class TV(object):
             w.pack_forget()
         if not pieno:
             self.cima.pack(side="top", fill="x")
+        # comandi e riga di stato al piede, larghi quanto tutta la finestra
+        # (prima delle barre laterali, che stanno sopra di loro)
+        if not pieno:
+            self.riga_stato.pack(side="bottom", fill="x")
+            self.barra.pack(side="bottom", fill="x")
+        if avviso_aperto:
+            self.avviso.pack(side="bottom", fill="x")
         # le barre laterali: aperte o chiuse, uguale a schermo intero e no
         if not self.nascosti.get(self.sinistra):
             self.sinistra.pack(side="left", fill="y")
@@ -5170,13 +5745,15 @@ class TV(object):
         if not self.nascosti.get(self.destra):
             self.destra.pack(side="right", fill="y")
             self.maniglia_dx.pack(side="right", fill="y")
-        if not pieno:
-            self.riga_stato.pack(side="bottom", fill="x")
-            self.barra.pack(side="bottom", fill="x")
-        if avviso_aperto:
-            self.avviso.pack(side="bottom", fill="x")
         self.video.pack(side="right", fill="both", expand=True)
         self.root.config(cursor="")
+
+    def primo_pannello(self):
+        """Il primo fra barre laterali e video nell'ordine di impacchettamento:
+        quello che va al piede (comandi, avviso) si mette prima di lui, cosi'
+        e' largo quanto la finestra."""
+        pannelli = (self.sinistra, self.maniglia_sx, self.destra, self.maniglia_dx, self.video)
+        return next((w for w in self.root.pack_slaves() if w in pannelli), self.video)
 
     def schermo_intero(self, ev=None, acceso=None):
         self.pieno = (not self.pieno) if acceso is None else acceso
@@ -5208,7 +5785,7 @@ class TV(object):
         """Il mouse si muove, i comandi si fanno vedere; sta fermo tre
         secondi e se ne vanno, col mouse."""
         if not self.barra_visibile:
-            self.barra.pack(side="bottom", fill="x", before=self.video)
+            self.barra.pack(side="bottom", fill="x", before=self.primo_pannello())
             self.barra_visibile = True
         self.root.config(cursor="")
         if self.timer_barra:
@@ -5232,7 +5809,15 @@ class TV(object):
         et = tk.Label(self.cima, text=_(titolo), bg=BARRA, fg=TESTO,
                       padx=10, cursor="hand2")
         et.pack(side="left", fill="y")
-        et.bind("<Enter>", lambda e: et.config(bg=SCELTO))
+        # passandoci sopra si apre, senza clic (ma non se si e' appena
+        # chiusa proprio questa: se no si apre e chiude di continuo)
+        def entra(e):
+            et.config(bg=SCELTO)
+            chi, quando = getattr(self.tendina, "chiusa", (None, 0))
+            if self.tendina.chi is et or (chi is et and time.time() - quando < 0.6):
+                return
+            self.apri_menu_cima(et, voci)
+        et.bind("<Enter>", entra)
         et.bind("<Leave>", lambda e: self.tendina.chi is not et and et.config(bg=BARRA))
         et.bind("<Button-1>", lambda e: self.apri_menu_cima(et, voci))
         self.menu_cima[titolo] = (et, voci)
@@ -5246,14 +5831,18 @@ class TV(object):
                           altrove=self.clic_altrove)
         et.config(bg=SCELTO)
 
-    def clic_altrove(self, x, y):
-        """Con una tendina aperta si e' cliccato fuori: se era su un'altra
-        voce della barra in alto, si apre la sua tendina."""
+    def clic_altrove(self, x, y, subito=False):
+        """Con una tendina aperta si e' cliccato fuori (o ci si e' passati
+        sopra, subito=True): se era su un'altra voce della barra in alto, si
+        apre la sua tendina. True se l'ha aperta."""
         for titolo, (et, voci) in self.menu_cima.items():
+            if et is self.tendina.chi:
+                continue
             x0, y0 = et.winfo_rootx(), et.winfo_rooty()
             if x0 <= x < x0 + et.winfo_width() and y0 <= y < y0 + et.winfo_height():
                 self.root.after(10, lambda et=et, voci=voci: self.apri_menu_cima(et, voci))
-                return
+                return True
+        return False
 
     def cambia_lingua(self, codice):
         """La lingua nuova subito, senza riavviare: si riscrive quello che
@@ -5301,7 +5890,7 @@ class TV(object):
         self.avviso_chiave = (chiave, secondi)
         self.et_avviso.config(text=testo)
         if not self.avviso.winfo_ismapped():
-            self.avviso.pack(side="bottom", fill="x", before=self.video)
+            self.avviso.pack(side="bottom", fill="x", before=self.primo_pannello())
         if self.timer_avviso:
             self.root.after_cancel(self.timer_avviso)
             self.timer_avviso = None
@@ -5380,7 +5969,7 @@ class TV(object):
             self.mpv.command("screenshot", "video")
             self.scrivi(_("screenshot saved in %s") % os.path.join("~", "Pictures", "xvb"))
         except Exception as e:
-            self.scrivi(_("cannot take a screenshot: %s") % e)
+            self.scrivi(_("cannot take a screenshot: %s") % e, errore=True)
         self.root.after(3000, self.scrivi_riga)
 
     def sempre_in_cima(self):
@@ -5432,7 +6021,7 @@ class TV(object):
             pagina = d.get("html_url", "")
         except Exception as e:
             if not zitto:
-                self.scrivi(_("cannot check for updates: %s") % e)
+                self.scrivi(_("cannot check for updates: %s") % e, errore=True)
             return
         if tag and piu_nuova(tag, VERSIONE):
             self.nuova, self.pagina_nuova = tag, pagina
@@ -5502,14 +6091,14 @@ class TV(object):
         try:
             subprocess.Popen(["xdg-open", DONA])
         except Exception as e:
-            self.scrivi(_("cannot open %s: %s") % (DONA, e))
+            self.scrivi(_("cannot open %s: %s") % (DONA, e), errore=True)
 
     def apri_release(self):
         if self.pagina_nuova:
             try:
                 subprocess.Popen(["xdg-open", self.pagina_nuova])
             except Exception as e:
-                self.scrivi(_("cannot open %s: %s") % (self.pagina_nuova, e))
+                self.scrivi(_("cannot open %s: %s") % (self.pagina_nuova, e), errore=True)
 
     def apri_cartella_liste(self):
         cartella = cartella_liste_in_uso()
@@ -5517,7 +6106,7 @@ class TV(object):
             os.makedirs(cartella, exist_ok=True)
             subprocess.Popen(["xdg-open", cartella])
         except Exception as e:
-            self.scrivi(_("cannot open %s: %s") % (cartella, e))
+            self.scrivi(_("cannot open %s: %s") % (cartella, e), errore=True)
 
     def sidebar_aperte(self):
         return not (self.nascosti.get(self.sinistra) and self.nascosti.get(self.destra))
@@ -5629,7 +6218,7 @@ class TV(object):
                     scrivi_config(self.cfg)
                 n, p = leggi_epg(f)
             except Exception as e:
-                self.scrivi(_("guide not loaded: %s") % e)
+                self.scrivi(_("guide not loaded: %s") % e, errore=True)
                 time.sleep(2)
                 continue
             for k, v in n.items():
@@ -5889,9 +6478,20 @@ class TV(object):
         All'ultimo ci si ferma."""
         f = self.file_in_onda
         i = next((k for k, c in enumerate(self.visti) if c[1] == f), -1)
-        if i < 0 or i + 1 >= len(self.visti):
+        if i < 0:
             return
-        self.vai_a_file(self.visti[i + 1])
+        ripeti = self.cfg.get("ripeti", "")
+        if ripeti == "uno":
+            self.vai_a_file(self.visti[i])          # lo stesso, da capo
+        elif i + 1 < len(self.visti):
+            self.vai_a_file(self.visti[i + 1])
+        elif ripeti == "tutti":
+            self.vai_a_file(self.visti[0])          # finita la lista, si ricomincia
+
+    def metti_ripeti(self, k):
+        """Dal menu Playback: niente, il file, o tutta la lista."""
+        self.cfg["ripeti"] = k
+        scrivi_config(self.cfg)
 
     def vai_a_file(self, c):
         nome, url, ide = c
@@ -5913,7 +6513,7 @@ class TV(object):
             pass
         self.mostra_carico(False)
         self.mostra_sfondo(True)
-        self.scrivi(_("This DVD can't be played"))
+        self.scrivi(_("This DVD can't be played"), errore=True)
 
     def canale_morto(self):
         """Il canale non va: avanti col prossimo, ma non all'infinito. Se
@@ -5926,18 +6526,40 @@ class TV(object):
         self.salti += 1
         if self.salti >= min(10, max(1, len(self.visti))):
             self.salti = 0
-            self.scrivi(_("%s is not responding, nor are the next ones") % self.nome)
+            self.scrivi(_("%s is not responding, nor are the next ones") % self.nome, errore=True)
             self.mostra_sfondo(True)
             return
-        self.scrivi(_("%s is not responding: skipping to the next") % self.nome)
+        self.scrivi(_("%s is not responding: skipping to the next") % self.nome, errore=True)
         self.root.after(600, lambda: self.salta(+1))
+
+    def ha_immagine(self):
+        """Quello che suona ha qualcosa da vedere: un video o la copertina
+        (per mpv e' una traccia video anche lei). Si chiede una volta per
+        cosa che suona, poi si ricorda."""
+        k = self.file_in_onda or self.cfg.get("canale") or ""
+        if not hasattr(self, "con_immagine"):
+            self.con_immagine = {}
+        if k not in self.con_immagine:
+            try:
+                tracce = self.mpv.track_list or []
+            except Exception:
+                return True
+            if not tracce:
+                return True                 # non ancora caricato: non si decide
+            self.con_immagine[k] = any(t.get("type") == "video" for t in tracce)
+        return self.con_immagine[k]
 
     def _va(self, _nome, pos):
         """Il tempo avanza: sta suonando davvero, il cerchietto va via."""
         if pos is not None:
             self.attesa_da, self.salti = 0.0, 0     # va: niente da saltare
-            if self.sfondo_su:
+            # senza niente da vedere (musica senza copertina, radio) resta
+            # lo schermo di XVB; con un'immagine (video o copertina) va via
+            immagine = self.ha_immagine()
+            if self.sfondo_su and immagine:
                 self.root.after(0, self.mostra_sfondo, False)
+            elif not self.sfondo_su and not immagine:
+                self.root.after(0, self.mostra_sfondo, True)
             if self.file_in_onda and getattr(self, "riprendi_da", 0.0):
                 # solo quando e' davvero il file nuovo a suonare: subito
                 # dopo play() arriva ancora qualche tempo di quello di prima
@@ -5991,7 +6613,7 @@ class TV(object):
                 pulisci(titolo), time.strftime("%Y-%m-%d %H-%M")))
             self.mpv.stream_record = f
         except Exception as e:
-            self.scrivi(_("cannot record: %s") % e)
+            self.scrivi(_("cannot record: %s") % e, errore=True)
             return
         self.registrando, self.fine_rec = f, fine
         self.inizio_rec = time.time()
@@ -6053,7 +6675,7 @@ class TV(object):
             t0 = self.ora_di(inizio)
             t1 = self.ora_di(fine, dopo=t0)
         except ValueError:
-            self.scrivi(_("time must be HH:MM"))
+            self.scrivi(_("time must be HH:MM"), errore=True)
             return
         self.piano = (self.nome_in_onda, self.cfg["canale"], self.ide_in_onda, t0, t1)
         self.scrivi(_("scheduled: %s from %s to %s") % (
@@ -6102,7 +6724,72 @@ class TV(object):
             os.makedirs(REGISTRAZIONI, exist_ok=True)
             subprocess.Popen(["xdg-open", REGISTRAZIONI])
         except Exception as e:
-            self.scrivi(_("cannot open %s: %s") % (REGISTRAZIONI, e))
+            self.scrivi(_("cannot open %s: %s") % (REGISTRAZIONI, e), errore=True)
+
+    def apri_url(self):
+        """Uno stream o un file in rete, al volo: parte come un canale,
+        senza finire fra le playlist."""
+        url = self.chiedi(_("Open URL..."), _("Address of the stream or file:"))
+        if not url or not url.strip():
+            return
+        url = url.strip()
+        self.cfg["url_aperti"] = ([url] + [u for u in self.cfg.get("url_aperti", []) if u != url])[:20]
+        scrivi_config(self.cfg)
+        self.rifai_albero()
+        # a sinistra la lista degli URL aperti (rifatta: c'e' lui in cima),
+        # selezionato, e parte
+        self.mostra_media(("url", None))
+        self.suona_da_barra(("url", None), url)
+
+    def apri_url_da(self, url):
+        """Un indirizzo degli URL aperti: parte, senza cuore (e' al volo)."""
+        self.apri(titolo_url(url), url)
+        self.al_volo = url
+        self.icona_preferito()
+
+    def carica_sottotitoli(self):
+        """Un file di sottotitoli scelto a mano per il video che va."""
+        f = self.file_in_onda or ""
+        da = os.path.dirname(f) if os.path.isabs(f) else self.cfg.get("ultima_cartella", CASA)
+        s = sfoglia(self.root, _("Load subtitles..."), da, tipi=SOTTOTITOLI)
+        if not s:
+            return
+        try:
+            self.mpv.command("sub-add", s, "select")
+        except Exception as e:
+            self.scrivi(_("cannot read %s: %s") % (os.path.basename(s), e), errore=True)
+            return
+        self.scrivi(_("subtitles: %s") % os.path.basename(s))
+        self.root.after(2500, self.scrivi_riga)
+
+    def ritardo_sottotitoli(self, di):
+        try:
+            v = round(float(self.mpv["sub-delay"] or 0.0) + di, 1)
+            self.mpv["sub-delay"] = v
+        except Exception:
+            self.scrivi(_("nothing is playing"))
+            return
+        self.scrivi(_("subtitle delay %+.1fs") % v)
+        self.root.after(2500, self.scrivi_riga)
+
+    def scala_sottotitoli(self, di):
+        try:
+            v = min(3.0, max(0.5, round(float(self.mpv["sub-scale"] or 1.0) + di, 1)))
+            self.mpv["sub-scale"] = v
+        except Exception:
+            self.scrivi(_("nothing is playing"))
+            return
+        self.scrivi(_("subtitle size %d%%") % round(v * 100))
+        self.root.after(2500, self.scrivi_riga)
+
+    def azzera_sottotitoli(self):
+        try:
+            self.mpv["sub-delay"] = 0.0
+            self.mpv["sub-scale"] = 1.0
+        except Exception:
+            pass
+        self.scrivi(_("subtitle delay %+.1fs") % 0.0)
+        self.root.after(2500, self.scrivi_riga)
 
     def ritardo_audio(self, di):
         """Sposta l'audio di `di` secondi rispetto al video e se lo segna
@@ -6138,10 +6825,12 @@ class TV(object):
         except Exception:
             pass
 
-    def scrivi(self, t):
-        """Un messaggio nella riga di stato: titolo e orario si tolgono."""
+    def scrivi(self, t, errore=False):
+        """Un messaggio nella riga di stato: titolo e orario si tolgono. Gli
+        errori hanno davanti l'icona icone/error.png (se c'e')."""
         def fai():
-            self.stato.config(text=t)
+            img = self.icona_errore if errore and self.icona_errore else ""
+            self.stato.config(text=(" " + t) if img else t, image=img, compound="left")
             self.et_titolo.config(text="")
             self.et_ora.config(text="")
         self.root.after(0, fai)
@@ -6155,14 +6844,39 @@ class TV(object):
         nome, titolo, ora = self.riga_mostrata
 
         def fai():
-            self.stato.config(text=nome)
+            self.stato.config(text=nome, image="")
             self.et_titolo.config(text=("  -  " + titolo) if titolo else "")
             self.et_ora.config(text=("  (" + ora + ")") if titolo and ora else
                                ("  -  " + ora if ora else ""))
         self.root.after(0, fai)
 
 
+    def ascolta(self):
+        """In un thread: le XVB aperte dopo mandano qui i loro file, uno
+        per riga (nessun file = porta solo la finestra davanti)."""
+        while True:
+            try:
+                conn, _a = self.porta.accept()
+                with conn:
+                    dati = b""
+                    while True:
+                        pezzo = conn.recv(65536)
+                        if not pezzo:
+                            break
+                        dati += pezzo
+                dove = [x for x in dati.decode("utf-8", "replace").split("\n") if x]
+                self.root.after(0, lambda d=dove: self.apri_da_fuori(d) if d else (
+                    self.root.deiconify(), self.root.lift()))
+            except Exception:
+                return
+
     def chiudi(self):
+        try:
+            if self.porta is not None:
+                self.porta.close()
+                os.remove(PORTA)
+        except Exception:
+            pass
         scrivi_config(self.cfg)
         try:
             self.mpv.terminate()
@@ -6171,5 +6885,44 @@ class TV(object):
         self.root.destroy()
 
 
+def corto(t, n):
+    """Un testo lungo accorciato con i puntini, per i menu."""
+    return t if len(t) <= n else t[:n - 1] + "\u2026"
+
+
+def porta_unica():
+    """Una XVB sola: se ce n'e' gia' una aperta le si passano i file e
+    questa finisce qui (None); se no si apre la porta per quelle dopo."""
+    try:
+        c = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        c.settimeout(2)
+        c.connect(PORTA)
+        c.sendall("\n".join(os.path.abspath(a) for a in sys.argv[1:]).encode("utf-8"))
+        c.close()
+        return None
+    except OSError:
+        pass
+    try:
+        os.makedirs(os.path.dirname(PORTA), exist_ok=True)
+        os.remove(PORTA)                # rimasta da una XVB chiusa male
+    except OSError:
+        pass
+    try:
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.bind(PORTA)
+        s.listen(4)
+        return s
+    except OSError:
+        return False                    # niente porta: si va lo stesso
+
+
 if __name__ == "__main__":
-    TV(sys.argv[1] if len(sys.argv) > 1 else None).root.mainloop()
+    porta = porta_unica()
+    if porta is not None:
+        argomenti = sys.argv[1:]
+        # una playlist m3u come prima (la si apre fra le playlist); file
+        # multimediali e cartelle si aprono come dal menu Media
+        lista = None
+        if len(argomenti) == 1 and os.path.isfile(argomenti[0]) and not e_media(argomenti[0]):
+            lista, argomenti = argomenti[0], []
+        TV(lista, da_aprire=argomenti, porta=porta or None).root.mainloop()
