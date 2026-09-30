@@ -48,7 +48,7 @@ try:                            # per i loghi: ridimensiona e legge i jpg
 except ImportError:             # senza, si va di PhotoImage: solo png
     HA_PIL = False
 
-VERSIONE = "3.1"
+VERSIONE = "3.2"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"        # dove stanno le release, per l'avviso di aggiornamento
@@ -85,6 +85,7 @@ LINGUE = (("en", "English"), ("it", "Italiano"), ("es", "Español"), ("fr", "Fra
 LINGUA = "en"
 TESTI = {
     "it": {
+        "Picture in picture": "Immagine nell'immagine",
         "Audio CD": "CD audio",
         "Track %d": "Traccia %d",
         "Set logo...": "Imposta logo...",
@@ -273,6 +274,7 @@ TESTI = {
         "Show playlists": "Mostra playlist", "Language": "Lingua",
     },
     "es": {
+        "Picture in picture": "Imagen en imagen",
         "Audio CD": "CD de audio",
         "Track %d": "Pista %d",
         "Set logo...": "Poner logo...",
@@ -461,6 +463,7 @@ TESTI = {
         "Show playlists": "Mostrar listas", "Language": "Idioma",
     },
     "fr": {
+        "Picture in picture": "Image dans l'image",
         "Audio CD": "CD audio",
         "Track %d": "Piste %d",
         "Set logo...": "Choisir le logo...",
@@ -649,6 +652,7 @@ TESTI = {
         "Show playlists": "Afficher les listes", "Language": "Langue",
     },
     "de": {
+        "Picture in picture": "Bild-in-Bild",
         "Audio CD": "Audio-CD",
         "Track %d": "Titel %d",
         "Set logo...": "Logo festlegen...",
@@ -853,6 +857,7 @@ TESTI = {
         "Language": "Sprache",
     },
     "pt": {
+        "Picture in picture": "Imagem em imagem",
         "Audio CD": "CD de áudio",
         "Track %d": "Faixa %d",
         "Set logo...": "Definir logo...",
@@ -1058,6 +1063,7 @@ TESTI = {
         "Language": "Idioma",
     },
     "ru": {
+        "Picture in picture": "Картинка в картинке",
         "Audio CD": "Аудио-CD",
         "Track %d": "Трек %d",
         "Set logo...": "Задать логотип...",
@@ -3590,7 +3596,7 @@ class TV(object):
                   "rec", "rec_stop",
                   "volume", "volume_high",
                   "volume_low", "volume_off", "muto", "pieno", "prima", "dopo",
-                  "aperto", "chiuso", "setting", "epg", "shuffle", "stop"):
+                  "aperto", "chiuso", "setting", "epg", "shuffle", "stop", "pip"):
             p = os.path.join(QUI, "icone", n + ".png")
             if os.path.isfile(p):
                 if HA_PIL:
@@ -3722,6 +3728,7 @@ class TV(object):
             (_("Open recordings folder"), self.apri_registrazioni)])
         self.menu("View", lambda: [
             (_("Fullscreen"), self.schermo_intero),
+            (_("Picture in picture"), self.pip_si_no),
             (("*  " if self.cfg.get("in_cima") else "   ") + _("Always on top"), self.sempre_in_cima),
             None,
             (_("Show list") if self.nascosti.get(self.sinistra) else _("Hide list"),
@@ -3981,6 +3988,7 @@ class TV(object):
         self.b_pieno = self.tasto("pieno", _("Fullscreen"), self.schermo_intero, 14,
                                   lato="right")
         self.b_pref.pack_forget()           # il cuore c'e' solo quando serve
+        self.tasto("pip", "PiP", self.pip_si_no, 4, lato="right")
         self.tasto("epg", "EPG", self.apri_guida, 4, lato="right", padx=(2, 6))
         self.b_velocita = self.tasto("x1", "x1", self.gira_velocita, 4, lato="right",
                                      padx=(6, 2))
@@ -4057,7 +4065,7 @@ class TV(object):
         try:
             @self.mpv.on_key_press("MBTN_LEFT_DBL")
             def _doppio():
-                self.root.after(0, self.schermo_intero)
+                self.root.after(0, self.doppio_clic)
         except Exception:
             pass
         for valore in ("embedded-first", "attachment"):
@@ -4104,7 +4112,16 @@ class TV(object):
         self.et_carico.pack(side="left", padx=(10, 0), before=self.stato)
         # icone/screen.png sopra al video quando non c'e' niente che va
         self.sfondo = tk.Label(self.video, bg="black", bd=0)
-        self.sfondo.bind("<Double-Button-1>", lambda e: self.schermo_intero())
+        self.sfondo.bind("<Double-Button-1>", lambda e: self.doppio_clic())
+        # PiP: il tasto per tornare normale, sopra al video quando ci si passa
+        self.pip = False
+        self.b_pip_esci = tk.Label(self.video, bg="#000000", fg="#ffffff", cursor="hand2",
+                                   bd=0, padx=4, pady=4)
+        if "pip" in self.icone:
+            self.b_pip_esci.config(image=self.icone["pip"])
+        else:
+            self.b_pip_esci.config(text="\u2922", font=("TkDefaultFont", 14))
+        self.b_pip_esci.bind("<Button-1>", lambda e: self.esci_pip())
         # un fratello di un pixel: serve solo per poter rialzare lo sfondo
         # sopra la finestra di mpv (Tk non manda l'ordine a X se crede di
         # essere gia' in cima)
@@ -4159,7 +4176,7 @@ class TV(object):
         self.root.bind("<Prior>", lambda e: self.salta(-1))
         self.root.bind("<Next>", lambda e: self.salta(+1))
         self.root.bind("<F11>", self.schermo_intero)
-        self.root.bind("<Escape>", lambda e: self.schermo_intero(None, False))
+        self.root.bind("<Escape>", lambda e: self.esci_pip() if self.pip else self.schermo_intero(None, False))
         self.root.protocol("WM_DELETE_WINDOW", self.chiudi)
 
         if lista and os.path.isfile(lista):
@@ -6309,6 +6326,10 @@ class TV(object):
                   self.barra, self.avviso, self.video, self.maniglia_sx,
                   self.maniglia_dx):
             w.pack_forget()
+        if getattr(self, "pip", False):
+            # immagine nell'immagine: solo il video, niente altro
+            self.video.pack(side="right", fill="both", expand=True)
+            return
         if not pieno:
             self.cima.pack(side="top", fill="x")
         # comandi e riga di stato al piede, larghi quanto tutta la finestra
@@ -6334,6 +6355,72 @@ class TV(object):
         e' largo quanto la finestra."""
         pannelli = (self.sinistra, self.maniglia_sx, self.destra, self.maniglia_dx, self.video)
         return next((w for w in self.root.pack_slaves() if w in pannelli), self.video)
+
+    def doppio_clic(self):
+        """Doppio clic sul video: schermo intero; in PiP, torna normale."""
+        if self.pip:
+            self.esci_pip()
+        else:
+            self.schermo_intero()
+
+    def pip_si_no(self):
+        if self.pip:
+            self.esci_pip()
+        else:
+            self.entra_pip()
+
+    def entra_pip(self):
+        """Immagine nell'immagine: una finestrella di solo video, sempre in
+        primo piano, che si sposta dalla sua barra del titolo. Passandoci
+        sopra col mouse compare il tasto per tornare normale (icone/pip.png);
+        anche doppio clic o Esc."""
+        if self.pieno:
+            self.schermo_intero(None, False)
+        self.pip_prima = self.root.geometry()
+        self.pip = True
+        self.tendina.chiudi()
+        self.disponi(False)
+        self.root.attributes("-topmost", True)
+        # 480x270 (16:9), nell'angolo in basso a destra della finestra di
+        # adesso: cosi' resta sul monitor dove si stava guardando (con due
+        # schermi, "in basso a destra dello schermo" era sull'altro)
+        x = max(0, self.root.winfo_rootx() + self.root.winfo_width() - 480 - 20)
+        y = max(0, self.root.winfo_rooty() + self.root.winfo_height() - 270 - 20)
+        self.root.geometry("480x270+%d+%d" % (x, y))
+        self.root.config(cursor="")
+        self.sorveglia_pip()
+
+    def esci_pip(self):
+        if not self.pip:
+            return
+        self.pip = False
+        self.b_pip_esci.place_forget()
+        self.root.attributes("-topmost", bool(self.cfg.get("in_cima")))
+        if getattr(self, "pip_prima", None):
+            self.root.geometry(self.pip_prima)
+        self.ridisponi()
+
+    def sorveglia_pip(self):
+        """In PiP: col mouse sopra la finestra, il tasto per tornare normale
+        (sopra al video di mpv, che Tk non vede); via, se ne va."""
+        if not self.pip:
+            return
+        try:
+            x, y = self.root.winfo_pointerxy()
+            dentro = (self.root.winfo_rootx() <= x < self.root.winfo_rootx() + self.root.winfo_width()
+                      and self.root.winfo_rooty() <= y < self.root.winfo_rooty() + self.root.winfo_height())
+        except tk.TclError:
+            dentro = False
+        if dentro and not self.b_pip_esci.winfo_ismapped():
+            self.b_pip_esci.place(relx=1.0, x=-8, y=8, anchor="ne")
+            try:
+                self.b_pip_esci.lower(self.sotto)
+                self.b_pip_esci.lift()
+            except tk.TclError:
+                pass
+        elif not dentro and self.b_pip_esci.winfo_ismapped():
+            self.b_pip_esci.place_forget()
+        self.root.after(250, self.sorveglia_pip)
 
     def schermo_intero(self, ev=None, acceso=None):
         self.pieno = (not self.pieno) if acceso is None else acceso
@@ -6364,6 +6451,8 @@ class TV(object):
     def mosso(self, ev=None):
         """Il mouse si muove, i comandi si fanno vedere; sta fermo tre
         secondi e se ne vanno, col mouse."""
+        if getattr(self, "pip", False):
+            return                          # in PiP i comandi non ci sono
         if not self.barra_visibile:
             self.barra.pack(side="bottom", fill="x", before=self.primo_pannello())
             self.barra_visibile = True

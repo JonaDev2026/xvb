@@ -18,7 +18,7 @@ guide and recording.
 - Audio CDs, video DVDs (not encrypted), data discs and ISO images, several at once; Blu-ray is not supported
 - IPTV: m3u playlists from file or URL, XMLTV guide
 - Recording of IPTV channels, radio and streams (also scheduled) and of unencrypted DVDs
-- Video and audio adjustments, tracks, external subtitles with delay and size, screenshots
+- Video and audio adjustments, tracks, external subtitles with delay and size, screenshots, picture in picture
 - Dark interface in English, Italian, Spanish, French, German, Portuguese and Russian, following the system language
 
 ## Installation
@@ -97,7 +97,7 @@ TV e registrazione.
 - CD audio, DVD video (non cifrati), dischi di dati e immagini ISO, anche più insieme; Blu-ray non supportati
 - IPTV: playlist m3u da file o URL, guida XMLTV
 - Registrazione di canali IPTV, radio e stream (anche programmata) e dei DVD non cifrati
-- Regolazioni video e audio, tracce, sottotitoli esterni con ritardo e dimensione, istantanee
+- Regolazioni video e audio, tracce, sottotitoli esterni con ritardo e dimensione, istantanee, immagine nell'immagine (PiP)
 - Interfaccia scura in inglese, italiano, spagnolo, francese, tedesco, portoghese e russo, secondo la lingua del sistema
 
 ## Installazione
