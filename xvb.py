@@ -46,7 +46,7 @@ try:                            # per i loghi: ridimensiona e legge i jpg
 except ImportError:             # senza, si va di PhotoImage: solo png
     HA_PIL = False
 
-VERSIONE = "2.7"
+VERSIONE = "2.8"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"        # dove stanno le release, per l'avviso di aggiornamento
@@ -169,6 +169,25 @@ TESTI = {
         "loading %s...": "carico %s...",
         "cannot read %s: %s": "non riesco a leggere %s: %s",
         "This DVD is encrypted and can't be played": "Questo DVD e' cifrato e non si puo' riprodurre",
+        "Media": "Media",
+        "Playback": "Riproduzione",
+        "IPTV": "IPTV",
+        "Help": "Aiuto",
+        "Play / Pause": "Play / Pausa",
+        "Back 10 s": "Indietro 10 s",
+        "Forward 10 s": "Avanti 10 s",
+        "Previous": "Precedente",
+        "Next": "Successivo",
+        "Add playlist URL": "Aggiungi URL playlist",
+        "Open playlists folder": "Apri cartella playlist",
+        "Reload playlists": "Ricarica playlist",
+        "Add guide URL": "Aggiungi URL guida",
+        "Reload guide": "Ricarica guida",
+        "Recording": "Registrazione",
+        "Show list": "Mostra elenco",
+        "Hide list": "Nascondi elenco",
+        "Show sidebar": "Mostra barra laterale",
+        "Hide sidebar": "Nascondi barra laterale",
         "%s - %d channels": "%s - %d canali",
         "Choose a playlist": "Scegli una playlist",
         "All files": "Tutti i file",
@@ -302,6 +321,25 @@ TESTI = {
         "loading %s...": "cargando %s...",
         "cannot read %s: %s": "no puedo leer %s: %s",
         "This DVD is encrypted and can't be played": "Este DVD está cifrado y no se puede reproducir",
+        "Media": "Medios",
+        "Playback": "Reproducción",
+        "IPTV": "IPTV",
+        "Help": "Ayuda",
+        "Play / Pause": "Reproducir / Pausa",
+        "Back 10 s": "Atrás 10 s",
+        "Forward 10 s": "Adelante 10 s",
+        "Previous": "Anterior",
+        "Next": "Siguiente",
+        "Add playlist URL": "Añadir URL de lista",
+        "Open playlists folder": "Abrir carpeta de listas",
+        "Reload playlists": "Recargar listas",
+        "Add guide URL": "Añadir URL de guía",
+        "Reload guide": "Recargar guía",
+        "Recording": "Grabación",
+        "Show list": "Mostrar lista",
+        "Hide list": "Ocultar lista",
+        "Show sidebar": "Mostrar barra lateral",
+        "Hide sidebar": "Ocultar barra lateral",
         "%s - %d channels": "%s - %d canales",
         "Choose a playlist": "Elige una lista",
         "All files": "Todos los archivos",
@@ -435,6 +473,25 @@ TESTI = {
         "loading %s...": "chargement de %s...",
         "cannot read %s: %s": "impossible de lire %s : %s",
         "This DVD is encrypted and can't be played": "Ce DVD est chiffré et ne peut pas être lu",
+        "Media": "Médias",
+        "Playback": "Lecture",
+        "IPTV": "IPTV",
+        "Help": "Aide",
+        "Play / Pause": "Lecture / Pause",
+        "Back 10 s": "Reculer de 10 s",
+        "Forward 10 s": "Avancer de 10 s",
+        "Previous": "Précédent",
+        "Next": "Suivant",
+        "Add playlist URL": "Ajouter une URL de liste",
+        "Open playlists folder": "Ouvrir le dossier des listes",
+        "Reload playlists": "Recharger les listes",
+        "Add guide URL": "Ajouter une URL de guide",
+        "Reload guide": "Recharger le guide",
+        "Recording": "Enregistrement",
+        "Show list": "Afficher la liste",
+        "Hide list": "Masquer la liste",
+        "Show sidebar": "Afficher la barre latérale",
+        "Hide sidebar": "Masquer la barre latérale",
         "%s - %d channels": "%s - %d chaînes",
         "Choose a playlist": "Choisir une liste",
         "All files": "Tous les fichiers",
@@ -1941,6 +1998,7 @@ class Elenco(tk.Text):
         # niente comportamento da editor: si tiene solo quello nostro
         self.bindtags((str(self), str(self.winfo_toplevel()), "all"))
         self.voci = []                      # iid, in ordine
+        self.posto = {}                     # iid -> posto in voci
         self.dati = {}                      # iid -> dict(text, image, tags, colore, img)
         self.scelta = None
         self.tag_configure("scelto", background=SCELTO, foreground="#ffffff")
@@ -1981,6 +2039,7 @@ class Elenco(tk.Text):
             iid = str(len(self.voci))
         self.dati[iid] = dict(text=text, image=image, tags=tuple(tags), colore=colore,
                               logo=logo, img=None)
+        self.posto[iid] = len(self.voci)
         self.voci.append(iid)
         self.disegna(iid)
         return iid
@@ -1990,7 +2049,7 @@ class Elenco(tk.Text):
             return
         if set(iids) >= set(self.voci):
             tk.Text.delete(self, "1.0", "end")
-            self.voci, self.dati, self.scelta = [], {}, None
+            self.voci, self.dati, self.scelta, self.posto = [], {}, None, {}
             self.ridisegna_colonna()
         else:
             for iid in iids:
@@ -2001,6 +2060,7 @@ class Elenco(tk.Text):
                     del self.dati[iid]
                     if self.scelta == iid:
                         self.scelta = None
+            self.posto = {v: k for k, v in enumerate(self.voci)}
 
     def item(self, iid, option=None, **kw):
         d = self.dati[iid]
@@ -2036,7 +2096,7 @@ class Elenco(tk.Text):
 
     # --- il disegno
     def riga(self, iid):
-        return 3 * self.voci.index(iid) + 1
+        return 3 * self.posto[iid] + 1
 
     def spanne(self, iid):
         r = self.riga(iid)
@@ -2081,7 +2141,7 @@ class Elenco(tk.Text):
             else:
                 self.tag_configure(tinta, foreground=colore, lmargin1=0, lmargin2=0)
             self.tag_lower(tinta, "zebra")
-        zebra = ("zebra",) if self.voci.index(iid) % 2 else ()
+        zebra = ("zebra",) if self.posto[iid] % 2 else ()
         extra = tuple(d["tags"]) + (("scelto",) if self.scelta == iid else ())
         # tre righe: nome, sottotitolo, stacco. Il bordo colorato e' il
         # margine sinistro del tag colore, su tutte e due le righe; il
@@ -2492,48 +2552,27 @@ class TV(object):
         self.cima.pack_propagate(False)
         self.menu_cima = {}
         self.tendina = Tendina(self.root)
-        self.menu("File", lambda: [
+        # prima quello che vale per ogni file (un player), poi l'IPTV
+        # tutta in un menu suo, poi vista e aiuto
+        self.menu("Media", lambda: [
             (_("Open file..."), self.apri_file),
             (_("Open folder..."), self.apri_cartella_media),
             None,
-            (_("Download posters and covers"), self.scarica_copertine),
+            (_("Download posters and covers"), self.scarica_copertine)])
+        self.menu("Playback", lambda: [
+            (_("Play / Pause"), self.pausa),
             None,
-            (("*  " if self.cfg.get("shuffle") else "   ") + _("Shuffle"), self.shuffle)])
-        self.menu("Playlists", lambda: [
-            (_("Add URL"), self.chiedi_lista_url),
-            (_("Open folder"), self.apri_cartella_liste),
-            (_("Reload"), self.ricarica_liste)] + (
-            [None] if self.cfg.get("liste_url") else []) + [
-            (_("Remove %s") % n, lambda u=u: self.togli_lista_url(u))
-            for u, n in self.cfg.get("liste_url", {}).items()])
-        self.menu("TV guide", lambda: [
-            (_("Programme guide"), self.apri_guida),
+            (_("Back 10 s"), lambda: self.avanza(-10)),
+            (_("Forward 10 s"), lambda: self.avanza(+10)),
             None,
-            (_("Add URL"), self.chiedi_epg),
-            (_("Reload"), self.ricarica_epg if self.cfg.get("epg") else None)] + (
-            [None] if self.cfg.get("epg") else []) + [
-            (_("Remove %s") % self.nome_guida(d), lambda d=d: self.togli_epg(d))
-            for d in self.cfg.get("epg", [])])
-        self.menu("View", lambda: [
-            (_("Fullscreen"), self.schermo_intero),
-            (_("Show channels") if self.nascosti.get(self.sinistra) else _("Hide channels"),
-             lambda: self.nascondi(self.sinistra)),
-            (_("Show playlists") if self.nascosti.get(self.destra) else _("Hide playlists"),
-             lambda: self.nascondi(self.destra)),
+            (_("Previous"), lambda: self.salta(-1)),
+            (_("Next"), lambda: self.salta(+1)),
+            None,
+            (("*  " if self.cfg.get("shuffle") else "   ") + _("Shuffle"), self.shuffle),
             None] + [
-            (("*  " if self.cfg.get("segno", "logo") == k else "   ") + _(n),
-             lambda k=k: self.metti_segno(k))
-            for k, n in (("logo", "Logos"), ("dot", "Dots"), ("bordo", "Border"))])
-        self.menu("Record", lambda: [
-            (_("Stop recording") if self.registrando else _("Record now"), self.registra),
-            None,
-            (_("Schedule..."), self.pianifica),
-            (_("Cancel schedule"), self.annulla_piano if self.piano else None),
-            None,
-            (_("Open recordings folder"), self.apri_registrazioni)])
-        self.menu("Video", lambda: [
             (("*  " if v == self.velocita else "   ") + _("Speed x%g") % v,
-             lambda v=v: self.metti_velocita(v)) for v in sorted(VELOCITA)] + [None] + [
+             lambda v=v: self.metti_velocita(v)) for v in sorted(VELOCITA)])
+        self.menu("Video", lambda: [
             (("*  " if self.cfg.get("proporzioni", "-1") == val and not self.cfg.get("riempi")
               else "   ") + _("Aspect %s") % nome, lambda val=val: self.metti_proporzioni(val))
             for nome, val in PROPORZIONI] + [
@@ -2549,8 +2588,7 @@ class TV(object):
             (_("Saturation -"), lambda: self.regola("saturation", -10)),
             (_("Reset picture"), self.azzera_immagine),
             None,
-            (_("Screenshot"), self.istantanea),
-            (("*  " if self.cfg.get("in_cima") else "   ") + _("Always on top"), self.sempre_in_cima)])
+            (_("Screenshot"), self.istantanea)])
         self.menu("Audio", lambda: [
             (("*  " if t["selected"] else "   ") + _("Track: %s") % self.nome_traccia(t),
              lambda i=t["id"]: self.metti_traccia("aid", i))
@@ -2566,7 +2604,45 @@ class TV(object):
             (_("Delay +100 ms"), lambda: self.ritardo_audio(+0.1)),
             (_("Delay -100 ms"), lambda: self.ritardo_audio(-0.1)),
             (_("Reset delay"), self.azzera_ritardo)])
-        self.menu("About", lambda: [
+        # l'IPTV: playlist, guida e registrazione, ognuna col suo titolo
+        # grigio (una voce spenta) e separate da una riga
+        self.menu("IPTV", lambda: [
+            (_("Playlists"), None),
+            (_("Add playlist URL"), self.chiedi_lista_url),
+            (_("Open playlists folder"), self.apri_cartella_liste),
+            (_("Reload playlists"), self.ricarica_liste)] + [
+            (_("Remove %s") % n, lambda u=u: self.togli_lista_url(u))
+            for u, n in self.cfg.get("liste_url", {}).items()] + [
+            None,
+            (_("TV guide"), None),
+            (_("Programme guide"), self.apri_guida),
+            (_("Add guide URL"), self.chiedi_epg),
+            (_("Reload guide"), self.ricarica_epg if self.cfg.get("epg") else None)] + [
+            (_("Remove %s") % self.nome_guida(d), lambda d=d: self.togli_epg(d))
+            for d in self.cfg.get("epg", [])] + [
+            None,
+            (_("Recording"), None),
+            (_("Stop recording") if self.registrando else _("Record now"), self.registra),
+            (_("Schedule..."), self.pianifica),
+            (_("Cancel schedule"), self.annulla_piano if self.piano else None),
+            (_("Open recordings folder"), self.apri_registrazioni)])
+        self.menu("View", lambda: [
+            (_("Fullscreen"), self.schermo_intero),
+            (("*  " if self.cfg.get("in_cima") else "   ") + _("Always on top"), self.sempre_in_cima),
+            None,
+            (_("Show list") if self.nascosti.get(self.sinistra) else _("Hide list"),
+             lambda: self.nascondi(self.sinistra)),
+            (_("Show sidebar") if self.nascosti.get(self.destra) else _("Hide sidebar"),
+             lambda: self.nascondi(self.destra)),
+            None] + [
+            (("*  " if self.cfg.get("segno", "logo") == k else "   ") + _(n),
+             lambda k=k: self.metti_segno(k))
+            for k, n in (("logo", "Logos"), ("dot", "Dots"), ("bordo", "Border"))] + [
+            None,
+            (_("Language"), None)] + [
+            (("*  " if codice == LINGUA else "   ") + nome,
+             lambda c=codice: self.cambia_lingua(c)) for codice, nome in LINGUE])
+        self.menu("Help", lambda: [
             (_("About XVB..."), self.informazioni),
             None,
             (_("Check for updates"), self.controlla_versione),
@@ -2574,9 +2650,6 @@ class TV(object):
              self.apri_release if self.nuova else None),
             None,
             (_("Donate"), self.dona)])
-        self.menu("Language", lambda: [
-            (("*  " if codice == LINGUA else "   ") + nome,
-             lambda c=codice: self.cambia_lingua(c)) for codice, nome in LINGUE])
 
         self.sinistra = tk.Frame(self.root, bg=PANNELLO,
                                  width=int(self.cfg.get("larga_sx", 220)))
@@ -3861,7 +3934,9 @@ class TV(object):
             except Exception:
                 c = None
             self.colori[url] = c or ""      # "" = provato, niente colore
-            scrivi_colori(self.colori)
+            if not self.coda_colori or time.time() - getattr(self, "colori_scritti", 0) > 2:
+                self.colori_scritti = time.time()
+                scrivi_colori(self.colori)
             if c:
                 self.root.after(0, self.aggiorna_pallino, url, c)
 
@@ -3942,7 +4017,9 @@ class TV(object):
                 if testo not in self.pallini:
                     self.pallini[testo] = pallino(testo) or self.vuoto
                 self.elenco.item(str(i), tags=("onda",), image=self.pallini[testo])
-            else:
+            elif "onda" in self.elenco.item(str(i), "tags"):
+                # solo quella di prima torna normale: ridisegnarle tutte
+                # (migliaia) rallentava ogni cambio di lista e di canale
                 self.elenco.item(str(i), tags=(), image=self.pallino_di(nome, u))
         self.non_sul_verde(self.elenco, "onda")
 
