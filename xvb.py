@@ -168,7 +168,7 @@ TESTI = {
         "no playlist: put one in playlists/": "nessuna playlist: mettine una in playlists/",
         "loading %s...": "carico %s...",
         "cannot read %s: %s": "non riesco a leggere %s: %s",
-        "This DVD is encrypted and can't be played": "Questo DVD e' cifrato e non si puo' riprodurre",
+        "This DVD can't be played": "Questo DVD non si puo' riprodurre",
         "Media": "Media",
         "Playback": "Riproduzione",
         "IPTV": "IPTV",
@@ -320,7 +320,7 @@ TESTI = {
         "no playlist: put one in playlists/": "ninguna lista: pon una en playlists/",
         "loading %s...": "cargando %s...",
         "cannot read %s: %s": "no puedo leer %s: %s",
-        "This DVD is encrypted and can't be played": "Este DVD está cifrado y no se puede reproducir",
+        "This DVD can't be played": "Este DVD no se puede reproducir",
         "Media": "Medios",
         "Playback": "Reproducción",
         "IPTV": "IPTV",
@@ -472,7 +472,7 @@ TESTI = {
         "no playlist: put one in playlists/": "aucune liste : mets-en une dans playlists/",
         "loading %s...": "chargement de %s...",
         "cannot read %s: %s": "impossible de lire %s : %s",
-        "This DVD is encrypted and can't be played": "Ce DVD est chiffré et ne peut pas être lu",
+        "This DVD can't be played": "Ce DVD ne peut pas être lu",
         "Media": "Médias",
         "Playback": "Lecture",
         "IPTV": "IPTV",
@@ -3389,7 +3389,9 @@ class TV(object):
         self.percorso_mpv = "dvd://" if dvd else f
         self.varianti, self.quale = [], -1
         self.da_riallineare = False
-        self.attesa_da = time.time()
+        # sui DVD niente conto alla rovescia: il lettore puo' metterci un
+        # po' a partire; se non va, lo dice mpv con un errore
+        self.attesa_da = 0.0 if dvd else time.time()
         self.mostra_carico(True)
         self.colora_stato(self.colore_canale(self.nome, f))
         self.segna_in_onda(f)
@@ -3406,7 +3408,6 @@ class TV(object):
                 # suona il film principale
                 self.mpv["dvd-device"] = f[len("dvd://"):]
                 self.mpv.play("dvd://")
-                self.root.after(10000, lambda: self.controlla_dvd(f))
             else:
                 self.mpv.play(f)
         except Exception as e:
@@ -5239,8 +5240,8 @@ class TV(object):
         self.apri(nome, url, ide)
 
     def dvd_bloccato(self):
-        """Un DVD che non parte: e' cifrato (i DVD commerciali). Lo si dice
-        chiaro e ci si ferma; la cifratura non si aggira."""
+        """Un DVD per cui mpv ha dato errore: lo si dice e ci si ferma
+        (un DVD non si salta al prossimo come un canale)."""
         if not (self.file_in_onda or "").startswith("dvd://"):
             return
         self.attesa_da = 0.0
@@ -5250,25 +5251,13 @@ class TV(object):
             pass
         self.mostra_carico(False)
         self.mostra_sfondo(True)
-        self.scrivi(_("This DVD is encrypted and can't be played"))
-
-    def controlla_dvd(self, f):
-        """Dieci secondi dopo aver aperto un DVD: se non c'e' ancora
-        l'immagine, e' cifrato."""
-        if self.file_in_onda != f:
-            return
-        try:
-            immagine = self.mpv.video_params
-        except Exception:
-            immagine = None
-        if not immagine:
-            self.dvd_bloccato()
+        self.scrivi(_("This DVD can't be played"))
 
     def canale_morto(self):
         """Il canale non va: avanti col prossimo, ma non all'infinito. Se
         li si e' provati tutti o dieci di fila, ci si ferma."""
         if (self.file_in_onda or "").startswith("dvd://"):
-            self.dvd_bloccato()                 # un DVD non si salta: e' cifrato
+            self.dvd_bloccato()                 # un DVD non si salta
             return
         self.attesa_da = 0.0
         self.mostra_carico(False)
