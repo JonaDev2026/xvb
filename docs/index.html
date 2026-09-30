@@ -154,27 +154,21 @@ html[lang=it] [data-lang=it]{display:revert}
 
 <section id="install" class="steps">
   <h2><span data-lang="en">Install</span><span data-lang="it">Installazione</span></h2>
-  <p data-lang="en">Debian, Ubuntu, Linux Mint. Download the <code>.deb</code> from the latest release and:</p>
-  <p data-lang="it">Debian, Ubuntu, Linux Mint. Scarica il <code>.deb</code> dall'ultima release e:</p>
+  <p data-lang="en"><b>Supported systems:</b> Linux Mint 21 and 22, Ubuntu 22.04 and newer, Debian 12 and newer (and their derivatives). Developed and tested on Linux Mint. Other Linux distributions, Windows and macOS are not supported.</p>
+  <p data-lang="it"><b>Sistemi supportati:</b> Linux Mint 21 e 22, Ubuntu 22.04 e successive, Debian 12 e successive (e le loro derivate). Sviluppata e provata su Linux Mint. Le altre distribuzioni Linux, Windows e macOS non sono supportati.</p>
+  <p data-lang="en">Download the <code>.deb</code> from the latest release and:</p>
+  <p data-lang="it">Scarica il <code>.deb</code> dall'ultima release e:</p>
   <pre id="cmd">sudo apt install ./xvb_*_all.deb</pre>
   <p data-lang="en">Then launch <b>XVB</b> from the menu, or type <code>xvb</code>. To update, install the new package over the old one. To remove: <code>sudo apt remove xvb</code>.</p>
   <p data-lang="it">Poi apri <b>XVB</b> dal menu, o scrivi <code>xvb</code>. Per aggiornare installa il nuovo pacchetto sopra il vecchio. Per togliere: <code>sudo apt remove xvb</code>.</p>
-  <p data-lang="en">Without the package, on any distribution. XVB needs libmpv, Python 3 with tkinter, Pillow with its Tk module, python‑mpv, mutagen (music tags) and ffmpeg (video thumbnails):</p>
-  <p data-lang="it">Senza pacchetto, su qualsiasi distribuzione. Servono libmpv, Python 3 con tkinter, Pillow col suo modulo Tk, python‑mpv, mutagen (tag della musica) e ffmpeg (anteprime dei video):</p>
-  <pre><span class="c"># Debian, Ubuntu, Linux Mint</span>
-sudo apt install -y libmpv2 python3-tk python3-pil python3-pil.imagetk python3-mpv python3-mutagen ffmpeg
-<span class="c"># Fedora</span>
-sudo dnf install -y mpv-libs python3-tkinter python3-pillow python3-pillow-tk python3-mutagen ffmpeg python3-pip &amp;&amp; pip install --user python-mpv
-<span class="c"># Arch, Manjaro</span>
-sudo pacman -S --needed mpv tk python-pillow python-mpv python-mutagen ffmpeg
-<span class="c"># openSUSE</span>
-sudo zypper install -y libmpv2 python3-tk python3-Pillow python3-Pillow-tk python3-mutagen ffmpeg python3-pip &amp;&amp; pip install --user python-mpv</pre>
-  <p data-lang="en">then:</p>
-  <p data-lang="it">poi:</p>
-  <pre>git clone https://github.com/JonaDev2026/xvb.git ~/xvb
+  <p data-lang="en">Without the package, on the same systems, straight from the source:</p>
+  <p data-lang="it">Senza pacchetto, sugli stessi sistemi, direttamente dal sorgente:</p>
+  <pre>sudo apt install -y python3-tk python3-pil python3-pil.imagetk python3-mpv python3-mutagen ffmpeg
+sudo apt install -y libmpv2 || sudo apt install -y libmpv1
+git clone https://github.com/JonaDev2026/xvb.git ~/xvb
 python3 ~/xvb/xvb.py</pre>
-  <p data-lang="en">Playlists then live in <code>~/xvb/playlists/</code>. If pip refuses, add <code>--break-system-packages</code>.</p>
-  <p data-lang="it">Le playlist vanno in <code>~/xvb/playlists/</code>. Se pip si rifiuta, aggiungi <code>--break-system-packages</code>.</p>
+  <p data-lang="en">Playlists then live in <code>~/xvb/playlists/</code>.</p>
+  <p data-lang="it">Le playlist vanno in <code>~/xvb/playlists/</code>.</p>
 </section>
 
 <section id="donate">
