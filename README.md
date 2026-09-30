@@ -16,7 +16,7 @@ guide and recording.
 - IPTV: m3u playlists from file or URL, XMLTV guide, recording and scheduling
 - Favourites for channels, music and videos
 - Video and audio adjustments, tracks and subtitles, screenshots
-- Dark interface, available in English, Italian, Spanish and French
+- Dark interface in English, Italian, Spanish, French, German, Portuguese and Russian, following the system language
 
 ## Installation
 
@@ -44,6 +44,7 @@ python3 ~/xvb/xvb.py
 - **IPTV** — add playlists and TV guides, record and schedule recordings.
 - **Playback**, **Video**, **Audio** — playback, picture and sound controls.
 - **View** — full screen, layout and language.
+- **Sidebar** — media folders, discs and favourites on top; playlists, TV guides and recordings inside the IPTV folder.
 
 | Key | Action |
 |---|---|
@@ -91,7 +92,7 @@ TV e registrazione.
 - IPTV: playlist m3u da file o URL, guida XMLTV, registrazione e programmazione
 - Preferiti per canali, musica e video
 - Regolazioni video e audio, tracce e sottotitoli, istantanee
-- Interfaccia scura, in inglese, italiano, spagnolo e francese
+- Interfaccia scura in inglese, italiano, spagnolo, francese, tedesco, portoghese e russo, secondo la lingua del sistema
 
 ## Installazione
 
@@ -119,6 +120,7 @@ python3 ~/xvb/xvb.py
 - **IPTV** — aggiungi playlist e guide TV, registra e programma le registrazioni.
 - **Playback**, **Video**, **Audio** — comandi di riproduzione, immagine e suono.
 - **View** — schermo intero, layout e lingua.
+- **Barra laterale** — cartelle media, dischi e preferiti in alto; playlist, guide TV e registrazioni nella cartella IPTV.
 
 | Tasto | Azione |
 |---|---|

@@ -29,6 +29,7 @@ import threading
 import time
 import tkinter as tk
 from tkinter import filedialog, ttk
+import tkinter.font as tkfont
 import xml.etree.ElementTree as ET
 from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
@@ -46,7 +47,7 @@ try:                            # per i loghi: ridimensiona e legge i jpg
 except ImportError:             # senza, si va di PhotoImage: solo png
     HA_PIL = False
 
-VERSIONE = "2.8"
+VERSIONE = "2.9"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"        # dove stanno le release, per l'avviso di aggiornamento
@@ -78,7 +79,8 @@ CARTELLE_VECCHIE = tuple(c for c in (os.path.join(QUI, "lists"),
 PUNTO = 24                      # il riquadro del pallino, nell'elenco
 # i colori dei pallini: quelli delle etichette del Mac
 # ------------------------------------------------------------- le lingue
-LINGUE = (("en", "English"), ("it", "Italiano"), ("es", "Español"), ("fr", "Français"))
+LINGUE = (("en", "English"), ("it", "Italiano"), ("es", "Español"), ("fr", "Français"),
+          ("de", "Deutsch"), ("pt", "Português"), ("ru", "Русский"))
 LINGUA = "en"
 TESTI = {
     "it": {
@@ -128,7 +130,7 @@ TESTI = {
         "About XVB...": "Informazioni su XVB...",
         "Version": "Versione",
         "new version %s available": "nuova versione %s disponibile",
-        "new version %s available: About > Download": "nuova versione %s disponibile: Info > Scarica",
+        "new version %s available: Help > Download": "nuova versione %s disponibile: Aiuto > Scarica",
         "Check for updates": "Cerca aggiornamenti",
         "Donate": "Dona",
         "Download %s": "Scarica la %s",
@@ -280,7 +282,7 @@ TESTI = {
         "About XVB...": "Acerca de XVB...",
         "Version": "Versión",
         "new version %s available": "nueva versión %s disponible",
-        "new version %s available: About > Download": "nueva versión %s disponible: Acerca de > Descargar",
+        "new version %s available: Help > Download": "nueva versión %s disponible: Ayuda > Descargar",
         "Check for updates": "Buscar actualizaciones",
         "Donate": "Donar",
         "Download %s": "Descargar la %s",
@@ -432,7 +434,7 @@ TESTI = {
         "About XVB...": "À propos de XVB...",
         "Version": "Version",
         "new version %s available": "nouvelle version %s disponible",
-        "new version %s available: About > Download": "nouvelle version %s disponible : À propos > Télécharger",
+        "new version %s available: Help > Download": "nouvelle version %s disponible : Aide > Télécharger",
         "Check for updates": "Rechercher des mises à jour",
         "Donate": "Faire un don",
         "Download %s": "Télécharger la %s",
@@ -537,7 +539,528 @@ TESTI = {
         "Show channels": "Afficher les chaînes", "Hide playlists": "Masquer les listes",
         "Show playlists": "Afficher les listes", "Language": "Langue",
     },
+    "de": {
+        "until %s": "bis %s",
+        "Delete": "Löschen",
+        "Delete %s": "%s löschen",
+        "The guide will be removed from the list.": "Der Programmführer wird aus der Liste entfernt.",
+        "%d recording(s) will be deleted from disk. This cannot be undone.": "%d Aufnahme(n) werden von der Festplatte gelöscht. Das kann nicht rückgängig gemacht werden.",
+        "The playlist will be removed from the list.": "Die Playlist wird aus der Liste entfernt.",
+        "The file %s will be deleted from disk. This cannot be undone.": "Die Datei %s wird von der Festplatte gelöscht. Das kann nicht rückgängig gemacht werden.",
+        "cannot delete %s: %s": "%s kann nicht gelöscht werden: %s",
+        "%s - %d recordings": "%s - %d Aufnahmen",
+        "Recordings": "Aufnahmen",
+        "Video": "Video",
+        "Speed x%g": "Geschwindigkeit x%g",
+        "Aspect %s": "Seitenverhältnis %s",
+        "Fill screen (crop)": "Bild füllen (zuschneiden)",
+        "Deinterlace": "Deinterlacing",
+        "Brightness +": "Helligkeit +",
+        "Brightness -": "Helligkeit -",
+        "Contrast +": "Kontrast +",
+        "Contrast -": "Kontrast -",
+        "Saturation +": "Sättigung +",
+        "Saturation -": "Sättigung -",
+        "Reset picture": "Bild zurücksetzen",
+        "Screenshot": "Bildschirmfoto",
+        "Always on top": "Immer im Vordergrund",
+        "Track: %s": "Tonspur: %s",
+        "Subtitles off": "Untertitel aus",
+        "Subtitles: %s": "Untertitel: %s",
+        "Volume boost +50%": "Lautstärke +50%",
+        "Normalize loudness": "Lautstärke angleichen",
+        "speed x%g": "Geschwindigkeit x%g",
+        "brightness": "Helligkeit",
+        "contrast": "Kontrast",
+        "saturation": "Sättigung",
+        "screenshot saved in %s": "Bildschirmfoto gespeichert in %s",
+        "cannot take a screenshot: %s": "Bildschirmfoto nicht möglich: %s",
+        "Programme guide": "Programmübersicht",
+        "no guide data for this playlist": "keine Programmdaten für diese Playlist",
+        "OK": "OK",
+        "Cancel": "Abbrechen",
+        "MIT license": "MIT-Lizenz",
+        "URL of the playlist (m3u):": "URL der Playlist (m3u):",
+        "Name:": "Name:",
+        "About": "Über",
+        "About XVB...": "Über XVB...",
+        "Version": "Version",
+        "new version %s available": "neue Version %s verfügbar",
+        "new version %s available: Help > Download": "neue Version %s verfügbar: Hilfe > Herunterladen",
+        "Check for updates": "Nach Updates suchen",
+        "Donate": "Spenden",
+        "Download %s": "%s herunterladen",
+        "Up to date": "Aktuell",
+        "cannot check for updates: %s": "Suche nach Updates nicht möglich: %s",
+        "up to date (%s)": "aktuell (%s)",
+        "Remove %s": "%s entfernen",
+        "removed %s": "%s entfernt",
+        "%s is already there": "%s ist schon vorhanden",
+        "Record": "Aufnehmen",
+        "Stop": "Stopp",
+        "Record now": "Jetzt aufnehmen",
+        "Stop recording": "Aufnahme beenden",
+        "Schedule...": "Planen...",
+        "Cancel schedule": "Planung abbrechen",
+        "Open recordings folder": "Aufnahmeordner öffnen",
+        "cannot record: %s": "Aufnahme nicht möglich: %s",
+        "saved %s": "%s gespeichert",
+        "REC until %s": "REC bis %s",
+        "open the channel to record first": "öffne zuerst den Sender, der aufgenommen werden soll",
+        "Schedule": "Planen",
+        "Start (HH:MM):": "Beginn (HH:MM):",
+        "End (HH:MM):": "Ende (HH:MM):",
+        "time must be HH:MM": "die Zeit muss HH:MM sein",
+        "scheduled: %s from %s to %s": "geplant: %s von %s bis %s",
+        "schedule cancelled": "Planung abgebrochen",
+        "Delay +100 ms": "Verzögerung +100 ms",
+        "Delay -100 ms": "Verzögerung -100 ms",
+        "Reset delay": "Verzögerung zurücksetzen",
+        "audio delay %+.1fs": "Tonverzögerung %+.1fs",
+        "guide loaded: %d channels, %d programmes": "Programmführer geladen: %d Sender, %d Sendungen",
+        "not in the guide": "nicht im Programmführer",
+        "Search channels": "Sender suchen",
+        "File": "Datei",
+        "Playlists": "Playlists",
+        "ready": "bereit",
+        "unnamed": "ohne Namen",
+        "single quality": "nur eine Qualität",
+        "missing icons: %s": "fehlende Symbole: %s",
+        "no playlist: put one in playlists/": "keine Playlist: lege eine in playlists/ ab",
+        "loading %s...": "lade %s...",
+        "cannot read %s: %s": "%s kann nicht gelesen werden: %s",
+        "This DVD can't be played": "Diese DVD kann nicht abgespielt werden",
+        "Media": "Medien",
+        "Playback": "Wiedergabe",
+        "IPTV": "IPTV",
+        "Help": "Hilfe",
+        "Play / Pause": "Abspielen / Pause",
+        "Back 10 s": "10 s zurück",
+        "Forward 10 s": "10 s vor",
+        "Previous": "Zurück",
+        "Next": "Weiter",
+        "Add playlist URL": "Playlist-URL hinzufügen",
+        "Open playlists folder": "Playlist-Ordner öffnen",
+        "Reload playlists": "Playlists neu laden",
+        "Add guide URL": "Programmführer-URL hinzufügen",
+        "Reload guide": "Programmführer neu laden",
+        "Recording": "Aufnahme",
+        "Show list": "Liste einblenden",
+        "Hide list": "Liste ausblenden",
+        "Show sidebar": "Seitenleiste einblenden",
+        "Hide sidebar": "Seitenleiste ausblenden",
+        "%s - %d channels": "%s - %d Sender",
+        "Choose a playlist": "Playlist wählen",
+        "All files": "Alle Dateien",
+        "Open file...": "Datei öffnen...",
+        "Choose a file": "Datei wählen",
+        "Media files": "Mediendateien",
+        "Open folder...": "Ordner öffnen...",
+        "Download posters and covers": "Poster und Cover herunterladen",
+        "Film titles and genres": "Filmtitel und Genres",
+        "Download film titles and genres again in the new language?": "Filmtitel und Genres in der neuen Sprache erneut herunterladen?",
+        "Download": "Herunterladen",
+        "open a folder of films or music first": "öffne zuerst einen Ordner mit Filmen oder Musik",
+        "downloading posters and covers... %d/%d": "lade Poster und Cover... %d/%d",
+        "%d posters and covers downloaded": "%d Poster und Cover heruntergeladen",
+        "Choose a folder": "Ordner wählen",
+        "Imported media": "Importierte Medien",
+        "Open": "Öffnen",
+        "%s - %d files": "%s - %d Dateien",
+        "The folder will be removed from the list. Files are not touched.": "Der Ordner wird aus der Liste entfernt. Die Dateien bleiben unberührt.",
+        "The imported files will be removed from the list. Files are not touched.": "Die importierten Dateien werden aus der Liste entfernt. Die Dateien bleiben unberührt.",
+        "%s does not look like an m3u playlist": "%s sieht nicht wie eine m3u-Playlist aus",
+        "select the playlist to remove first": "wähle zuerst die Playlist, die entfernt werden soll",
+        "this one lives in playlists/: remove it by moving the file": "diese liegt in playlists/: entferne sie, indem du die Datei verschiebst",
+        "%s removed from favorites": "%s aus den Favoriten entfernt",
+        "%s added to favorites": "%s zu den Favoriten hinzugefügt",
+        "cannot write favorites: %s": "Favoriten können nicht gespeichert werden: %s",
+        "looking for %s qualities...": "suche Qualitäten von %s...",
+        "TV guide": "TV-Programm",
+        "URL or file of the guide (XMLTV, .gz is fine):": "URL oder Datei des Programmführers (XMLTV, auch .gz):",
+        "loading the guide...": "lade den Programmführer...",
+        "guide not loaded: %s": "Programmführer nicht geladen: %s",
+        "no TV guide set": "kein Programmführer eingestellt",
+        "%s is not responding, nor are the next ones": "%s antwortet nicht, die nächsten auch nicht",
+        "%s is not responding: skipping to the next": "%s antwortet nicht: weiter zum nächsten",
+        "cannot open %s: %s": "%s kann nicht geöffnet werden: %s",
+        "Pause": "Pause",
+        "Resume": "Fortsetzen",
+        "Favorite": "Favorit",
+        "Fullscreen": "Vollbild",
+        "quality": "Qualität",
+        "Mute": "Stumm",
+        "Logos": "Logos",
+        "Dots": "Punkte",
+        "Border": "Rand",
+        "Unmute": "Ton an",
+        "Switch": "Wechseln",
+        "Shuffle": "Zufällig",
+        "Open folder": "Ordner öffnen",
+        "Reload": "Neu laden",
+        "Add URL": "URL hinzufügen",
+        "Remove": "Entfernen",
+        "View": "Ansicht",
+        "Hide channels": "Sender ausblenden",
+        "Show channels": "Sender einblenden",
+        "Hide playlists": "Playlists ausblenden",
+        "Show playlists": "Playlists einblenden",
+        "Language": "Sprache",
+    },
+    "pt": {
+        "Audio": "Áudio",
+        "until %s": "até %s",
+        "Delete": "Excluir",
+        "Delete %s": "Excluir %s",
+        "The guide will be removed from the list.": "O guia será removido da lista.",
+        "%d recording(s) will be deleted from disk. This cannot be undone.": "%d gravação(ões) serão excluídas do disco. Isso não pode ser desfeito.",
+        "The playlist will be removed from the list.": "A playlist será removida da lista.",
+        "The file %s will be deleted from disk. This cannot be undone.": "O arquivo %s será excluído do disco. Isso não pode ser desfeito.",
+        "cannot delete %s: %s": "não foi possível excluir %s: %s",
+        "%s - %d recordings": "%s - %d gravações",
+        "Recordings": "Gravações",
+        "Video": "Vídeo",
+        "Speed x%g": "Velocidade x%g",
+        "Aspect %s": "Proporção %s",
+        "Fill screen (crop)": "Preencher a tela (cortar)",
+        "Deinterlace": "Desentrelaçar",
+        "Brightness +": "Brilho +",
+        "Brightness -": "Brilho -",
+        "Contrast +": "Contraste +",
+        "Contrast -": "Contraste -",
+        "Saturation +": "Saturação +",
+        "Saturation -": "Saturação -",
+        "Reset picture": "Redefinir imagem",
+        "Screenshot": "Captura de tela",
+        "Always on top": "Sempre no topo",
+        "Track: %s": "Faixa: %s",
+        "Subtitles off": "Legendas desativadas",
+        "Subtitles: %s": "Legendas: %s",
+        "Volume boost +50%": "Volume extra +50%",
+        "Normalize loudness": "Normalizar volume",
+        "speed x%g": "velocidade x%g",
+        "brightness": "brilho",
+        "contrast": "contraste",
+        "saturation": "saturação",
+        "screenshot saved in %s": "captura salva em %s",
+        "cannot take a screenshot: %s": "não foi possível capturar a tela: %s",
+        "Programme guide": "Guia de programação",
+        "no guide data for this playlist": "sem dados de guia para esta playlist",
+        "OK": "OK",
+        "Cancel": "Cancelar",
+        "MIT license": "Licença MIT",
+        "URL of the playlist (m3u):": "URL da playlist (m3u):",
+        "Name:": "Nome:",
+        "About": "Sobre",
+        "About XVB...": "Sobre o XVB...",
+        "Version": "Versão",
+        "new version %s available": "nova versão %s disponível",
+        "new version %s available: Help > Download": "nova versão %s disponível: Ajuda > Baixar",
+        "Check for updates": "Verificar atualizações",
+        "Donate": "Doar",
+        "Download %s": "Baixar %s",
+        "Up to date": "Atualizado",
+        "cannot check for updates: %s": "não foi possível verificar atualizações: %s",
+        "up to date (%s)": "atualizado (%s)",
+        "Remove %s": "Remover %s",
+        "removed %s": "%s removido",
+        "%s is already there": "%s já está na lista",
+        "Record": "Gravar",
+        "Stop": "Parar",
+        "Record now": "Gravar agora",
+        "Stop recording": "Parar gravação",
+        "Schedule...": "Agendar...",
+        "Cancel schedule": "Cancelar agendamento",
+        "Open recordings folder": "Abrir pasta de gravações",
+        "cannot record: %s": "não foi possível gravar: %s",
+        "saved %s": "%s salvo",
+        "REC until %s": "REC até %s",
+        "open the channel to record first": "abra primeiro o canal a ser gravado",
+        "Schedule": "Agendar",
+        "Start (HH:MM):": "Início (HH:MM):",
+        "End (HH:MM):": "Fim (HH:MM):",
+        "time must be HH:MM": "o horário deve ser HH:MM",
+        "scheduled: %s from %s to %s": "agendado: %s das %s às %s",
+        "schedule cancelled": "agendamento cancelado",
+        "Delay +100 ms": "Atraso +100 ms",
+        "Delay -100 ms": "Atraso -100 ms",
+        "Reset delay": "Redefinir atraso",
+        "audio delay %+.1fs": "atraso de áudio %+.1fs",
+        "guide loaded: %d channels, %d programmes": "guia carregado: %d canais, %d programas",
+        "not in the guide": "fora do guia",
+        "Search channels": "Buscar canais",
+        "File": "Arquivo",
+        "Playlists": "Playlists",
+        "ready": "pronto",
+        "unnamed": "sem nome",
+        "single quality": "qualidade única",
+        "missing icons: %s": "ícones ausentes: %s",
+        "no playlist: put one in playlists/": "nenhuma playlist: coloque uma em playlists/",
+        "loading %s...": "carregando %s...",
+        "cannot read %s: %s": "não foi possível ler %s: %s",
+        "This DVD can't be played": "Este DVD não pode ser reproduzido",
+        "Media": "Mídia",
+        "Playback": "Reprodução",
+        "IPTV": "IPTV",
+        "Help": "Ajuda",
+        "Play / Pause": "Reproduzir / Pausar",
+        "Back 10 s": "Voltar 10 s",
+        "Forward 10 s": "Avançar 10 s",
+        "Previous": "Anterior",
+        "Next": "Próximo",
+        "Add playlist URL": "Adicionar URL de playlist",
+        "Open playlists folder": "Abrir pasta de playlists",
+        "Reload playlists": "Recarregar playlists",
+        "Add guide URL": "Adicionar URL de guia",
+        "Reload guide": "Recarregar guia",
+        "Recording": "Gravação",
+        "Show list": "Mostrar lista",
+        "Hide list": "Ocultar lista",
+        "Show sidebar": "Mostrar barra lateral",
+        "Hide sidebar": "Ocultar barra lateral",
+        "%s - %d channels": "%s - %d canais",
+        "Choose a playlist": "Escolha uma playlist",
+        "All files": "Todos os arquivos",
+        "Open file...": "Abrir arquivo...",
+        "Choose a file": "Escolha um arquivo",
+        "Media files": "Arquivos de mídia",
+        "Open folder...": "Abrir pasta...",
+        "Download posters and covers": "Baixar pôsteres e capas",
+        "Film titles and genres": "Títulos e gêneros dos filmes",
+        "Download film titles and genres again in the new language?": "Baixar de novo títulos e gêneros dos filmes no novo idioma?",
+        "Download": "Baixar",
+        "open a folder of films or music first": "abra primeiro uma pasta de filmes ou músicas",
+        "downloading posters and covers... %d/%d": "baixando pôsteres e capas... %d/%d",
+        "%d posters and covers downloaded": "%d pôsteres e capas baixados",
+        "Choose a folder": "Escolha uma pasta",
+        "Imported media": "Mídia importada",
+        "Open": "Abrir",
+        "%s - %d files": "%s - %d arquivos",
+        "The folder will be removed from the list. Files are not touched.": "A pasta será removida da lista. Os arquivos não são alterados.",
+        "The imported files will be removed from the list. Files are not touched.": "Os arquivos importados serão removidos da lista. Os arquivos não são alterados.",
+        "%s does not look like an m3u playlist": "%s não parece uma playlist m3u",
+        "select the playlist to remove first": "selecione primeiro a playlist a remover",
+        "this one lives in playlists/: remove it by moving the file": "esta fica em playlists/: remova-a movendo o arquivo",
+        "%s removed from favorites": "%s removido dos favoritos",
+        "%s added to favorites": "%s adicionado aos favoritos",
+        "cannot write favorites: %s": "não foi possível salvar os favoritos: %s",
+        "looking for %s qualities...": "procurando qualidades de %s...",
+        "TV guide": "Guia de TV",
+        "URL or file of the guide (XMLTV, .gz is fine):": "URL ou arquivo do guia (XMLTV, .gz também serve):",
+        "loading the guide...": "carregando o guia...",
+        "guide not loaded: %s": "guia não carregado: %s",
+        "no TV guide set": "nenhum guia de TV definido",
+        "%s is not responding, nor are the next ones": "%s não responde, nem os próximos",
+        "%s is not responding: skipping to the next": "%s não responde: indo para o próximo",
+        "cannot open %s: %s": "não foi possível abrir %s: %s",
+        "Pause": "Pausar",
+        "Resume": "Continuar",
+        "Favorite": "Favorito",
+        "Fullscreen": "Tela cheia",
+        "quality": "qualidade",
+        "Mute": "Mudo",
+        "Logos": "Logos",
+        "Dots": "Pontos",
+        "Border": "Borda",
+        "Unmute": "Com som",
+        "Switch": "Alternar",
+        "Shuffle": "Aleatório",
+        "Open folder": "Abrir pasta",
+        "Reload": "Recarregar",
+        "Add URL": "Adicionar URL",
+        "Remove": "Remover",
+        "View": "Exibir",
+        "Hide channels": "Ocultar canais",
+        "Show channels": "Mostrar canais",
+        "Hide playlists": "Ocultar playlists",
+        "Show playlists": "Mostrar playlists",
+        "Language": "Idioma",
+    },
+    "ru": {
+        "Audio": "Аудио",
+        "until %s": "до %s",
+        "Delete": "Удалить",
+        "Delete %s": "Удалить %s",
+        "The guide will be removed from the list.": "Телегид будет удалён из списка.",
+        "%d recording(s) will be deleted from disk. This cannot be undone.": "Записей будет удалено с диска: %d. Это действие нельзя отменить.",
+        "The playlist will be removed from the list.": "Плейлист будет удалён из списка.",
+        "The file %s will be deleted from disk. This cannot be undone.": "Файл %s будет удалён с диска. Это действие нельзя отменить.",
+        "cannot delete %s: %s": "не удалось удалить %s: %s",
+        "%s - %d recordings": "%s - записей: %d",
+        "Recordings": "Записи",
+        "Video": "Видео",
+        "Speed x%g": "Скорость x%g",
+        "Aspect %s": "Пропорции %s",
+        "Fill screen (crop)": "Заполнить экран (обрезать)",
+        "Deinterlace": "Деинтерлейсинг",
+        "Brightness +": "Яркость +",
+        "Brightness -": "Яркость -",
+        "Contrast +": "Контраст +",
+        "Contrast -": "Контраст -",
+        "Saturation +": "Насыщенность +",
+        "Saturation -": "Насыщенность -",
+        "Reset picture": "Сбросить изображение",
+        "Screenshot": "Снимок экрана",
+        "Always on top": "Поверх всех окон",
+        "Track: %s": "Дорожка: %s",
+        "Subtitles off": "Без субтитров",
+        "Subtitles: %s": "Субтитры: %s",
+        "Volume boost +50%": "Усиление громкости +50%",
+        "Normalize loudness": "Выравнивать громкость",
+        "speed x%g": "скорость x%g",
+        "brightness": "яркость",
+        "contrast": "контраст",
+        "saturation": "насыщенность",
+        "screenshot saved in %s": "снимок сохранён в %s",
+        "cannot take a screenshot: %s": "не удалось сделать снимок: %s",
+        "Programme guide": "Программа передач",
+        "no guide data for this playlist": "нет данных телегида для этого плейлиста",
+        "OK": "OK",
+        "Cancel": "Отмена",
+        "MIT license": "Лицензия MIT",
+        "URL of the playlist (m3u):": "URL плейлиста (m3u):",
+        "Name:": "Название:",
+        "About": "О программе",
+        "About XVB...": "О программе XVB...",
+        "Version": "Версия",
+        "new version %s available": "доступна новая версия %s",
+        "new version %s available: Help > Download": "доступна новая версия %s: Справка > Скачать",
+        "Check for updates": "Проверить обновления",
+        "Donate": "Поддержать",
+        "Download %s": "Скачать %s",
+        "Up to date": "Актуальная версия",
+        "cannot check for updates: %s": "не удалось проверить обновления: %s",
+        "up to date (%s)": "актуальная версия (%s)",
+        "Remove %s": "Удалить %s",
+        "removed %s": "удалено: %s",
+        "%s is already there": "%s уже есть",
+        "Record": "Запись",
+        "Stop": "Стоп",
+        "Record now": "Записать сейчас",
+        "Stop recording": "Остановить запись",
+        "Schedule...": "Запланировать...",
+        "Cancel schedule": "Отменить план",
+        "Open recordings folder": "Открыть папку записей",
+        "cannot record: %s": "не удалось записать: %s",
+        "saved %s": "сохранено: %s",
+        "REC until %s": "REC до %s",
+        "open the channel to record first": "сначала откройте канал для записи",
+        "Schedule": "Запланировать",
+        "Start (HH:MM):": "Начало (ЧЧ:ММ):",
+        "End (HH:MM):": "Конец (ЧЧ:ММ):",
+        "time must be HH:MM": "время должно быть в формате ЧЧ:ММ",
+        "scheduled: %s from %s to %s": "запланировано: %s с %s до %s",
+        "schedule cancelled": "план отменён",
+        "Delay +100 ms": "Задержка +100 мс",
+        "Delay -100 ms": "Задержка -100 мс",
+        "Reset delay": "Сбросить задержку",
+        "audio delay %+.1fs": "задержка звука %+.1f с",
+        "guide loaded: %d channels, %d programmes": "телегид загружен: каналов %d, передач %d",
+        "not in the guide": "нет в телегиде",
+        "Search channels": "Поиск каналов",
+        "File": "Файл",
+        "Playlists": "Плейлисты",
+        "ready": "готово",
+        "unnamed": "без названия",
+        "single quality": "одно качество",
+        "missing icons: %s": "нет значков: %s",
+        "no playlist: put one in playlists/": "нет плейлиста: положите его в playlists/",
+        "loading %s...": "загрузка %s...",
+        "cannot read %s: %s": "не удалось прочитать %s: %s",
+        "This DVD can't be played": "Этот DVD не может быть воспроизведён",
+        "Media": "Медиа",
+        "Playback": "Плеер",
+        "IPTV": "IPTV",
+        "Help": "Справка",
+        "Play / Pause": "Пуск / Пауза",
+        "Back 10 s": "Назад 10 с",
+        "Forward 10 s": "Вперёд 10 с",
+        "Previous": "Предыдущий",
+        "Next": "Следующий",
+        "Add playlist URL": "Добавить URL плейлиста",
+        "Open playlists folder": "Открыть папку плейлистов",
+        "Reload playlists": "Обновить плейлисты",
+        "Add guide URL": "Добавить URL телегида",
+        "Reload guide": "Обновить телегид",
+        "Recording": "Запись",
+        "Show list": "Показать список",
+        "Hide list": "Скрыть список",
+        "Show sidebar": "Показать боковую панель",
+        "Hide sidebar": "Скрыть боковую панель",
+        "%s - %d channels": "%s - каналов: %d",
+        "Choose a playlist": "Выберите плейлист",
+        "All files": "Все файлы",
+        "Open file...": "Открыть файл...",
+        "Choose a file": "Выберите файл",
+        "Media files": "Медиафайлы",
+        "Open folder...": "Открыть папку...",
+        "Download posters and covers": "Скачать постеры и обложки",
+        "Film titles and genres": "Названия и жанры фильмов",
+        "Download film titles and genres again in the new language?": "Скачать названия и жанры фильмов заново на новом языке?",
+        "Download": "Скачать",
+        "open a folder of films or music first": "сначала откройте папку с фильмами или музыкой",
+        "downloading posters and covers... %d/%d": "загрузка постеров и обложек... %d/%d",
+        "%d posters and covers downloaded": "скачано постеров и обложек: %d",
+        "Choose a folder": "Выберите папку",
+        "Imported media": "Импортированные файлы",
+        "Open": "Открыть",
+        "%s - %d files": "%s - файлов: %d",
+        "The folder will be removed from the list. Files are not touched.": "Папка будет удалена из списка. Сами файлы не затрагиваются.",
+        "The imported files will be removed from the list. Files are not touched.": "Импортированные файлы будут удалены из списка. Сами файлы не затрагиваются.",
+        "%s does not look like an m3u playlist": "%s не похож на плейлист m3u",
+        "select the playlist to remove first": "сначала выберите плейлист для удаления",
+        "this one lives in playlists/: remove it by moving the file": "он лежит в playlists/: удалите его, переместив файл",
+        "%s removed from favorites": "%s удалён из избранного",
+        "%s added to favorites": "%s добавлен в избранное",
+        "cannot write favorites: %s": "не удалось сохранить избранное: %s",
+        "looking for %s qualities...": "поиск вариантов качества для %s...",
+        "TV guide": "Телегид",
+        "URL or file of the guide (XMLTV, .gz is fine):": "URL или файл телегида (XMLTV, можно .gz):",
+        "loading the guide...": "загрузка телегида...",
+        "guide not loaded: %s": "телегид не загружен: %s",
+        "no TV guide set": "телегид не задан",
+        "%s is not responding, nor are the next ones": "%s не отвечает, как и следующие",
+        "%s is not responding: skipping to the next": "%s не отвечает: переход к следующему",
+        "cannot open %s: %s": "не удалось открыть %s: %s",
+        "Pause": "Пауза",
+        "Resume": "Продолжить",
+        "Favorite": "Избранное",
+        "Fullscreen": "Полный экран",
+        "quality": "качество",
+        "Mute": "Без звука",
+        "Logos": "Логотипы",
+        "Dots": "Точки",
+        "Border": "Полоса",
+        "Unmute": "Со звуком",
+        "Switch": "Назад к каналу",
+        "Shuffle": "Перемешать",
+        "Open folder": "Открыть папку",
+        "Reload": "Обновить",
+        "Add URL": "Добавить URL",
+        "Remove": "Удалить",
+        "View": "Вид",
+        "Hide channels": "Скрыть каналы",
+        "Show channels": "Показать каналы",
+        "Hide playlists": "Скрыть плейлисты",
+        "Show playlists": "Показать плейлисты",
+        "Language": "Язык",
+    },
 }
+
+
+def lingua_sistema():
+    """La lingua del sistema, se XVB ce l'ha; se no l'inglese. Nell'ordine
+    in cui la cerca gettext: LANGUAGE (anche piu' d'una), LC_ALL,
+    LC_MESSAGES, LANG."""
+    for var in ("LANGUAGE", "LC_ALL", "LC_MESSAGES", "LANG"):
+        codici = [v.split(".")[0].split("@")[0].split("_")[0].lower()
+                  for v in os.environ.get(var, "").split(":")]
+        codici = [c for c in codici if c and c not in ("c", "posix")]
+        if not codici:
+            continue                # non impostata: si guarda la prossima
+        # la prima impostata decide: la prima lingua che XVB ha, se no inglese
+        return next((c for c in codici if c in dict(LINGUE)), "en")
+    return "en"
 
 
 def _(testo):
@@ -774,7 +1297,8 @@ TMDB_CHIAVE = ("eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiIxMzIxMjRhMzU0YjRmYzE4NGVmYjgwODk
 TMDB_IMG = "https://image.tmdb.org/t/p/w342"
 FILE_PROVATI = os.path.join(CASA, ".cache", "xvb", "info_provate.json")
 FILE_INFO = os.path.join(CASA, ".cache", "xvb", "info.json")
-LINGUE_TMDB = {"en": "en-US", "it": "it-IT", "es": "es-ES", "fr": "fr-FR"}
+LINGUE_TMDB = {"en": "en-US", "it": "it-IT", "es": "es-ES", "fr": "fr-FR",
+               "de": "de-DE", "pt": "pt-BR", "ru": "ru-RU"}
 
 
 def leggi_json(f):
@@ -1338,6 +1862,27 @@ def ore_min_sec(secondi):
 
 
 REGISTRAZIONI = os.path.join(CASA, "Videos", "xvb")
+
+
+_DURATE = {}
+
+
+def durata_di(f):
+    """La durata di un file in secondi, con ffprobe (viene con ffmpeg);
+    None se non si riesce. In memoria per percorso e data di modifica."""
+    try:
+        k = (f, os.path.getmtime(f))
+    except OSError:
+        return None
+    if k not in _DURATE:
+        try:
+            r = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                                "-of", "default=nw=1:nk=1", f],
+                               capture_output=True, text=True, timeout=15)
+            _DURATE[k] = float(r.stdout.strip())
+        except Exception:
+            _DURATE[k] = None
+    return _DURATE[k]
 EPG_VECCHIA = 6 * 3600          # dopo sei ore la guida si riscarica
 
 
@@ -1878,6 +2423,14 @@ class Tendina(object):
         dentro = tk.Frame(top, bg=PANNELLO)
         dentro.pack(padx=1, pady=1)
         larga = max([len(v[0]) for v in voci if v] + [18]) * 8 + 60
+        # misurata davvero col font: certe lingue (il russo) hanno lettere
+        # piu' larghe della stima e il testo si tagliava
+        try:
+            f = tkfont.nametofont("TkDefaultFont")
+            larga = max([larga] + [f.measure(v[0][3:] if v[0][:3] in ("*  ", "   ") else v[0]) + 70
+                                   for v in voci if v])
+        except tk.TclError:
+            pass
         for voce in voci:
             if voce is None:
                 tk.Frame(dentro, bg=SCELTO, height=1).pack(fill="x", padx=10, pady=4)
@@ -2422,8 +2975,12 @@ class TV(object):
     def __init__(self, lista=None):
         self.cfg = leggi_config()
         global LINGUA
+        # quella scelta dal menu; se non se n'e' mai scelta una, quella del
+        # sistema (se XVB ce l'ha, se no l'inglese)
         if self.cfg.get("lingua") in dict(LINGUE):
             LINGUA = self.cfg["lingua"]
+        else:
+            LINGUA = lingua_sistema()
         # le guide: una lista di url o file (prima era una sola stringa)
         e = self.cfg.get("epg")
         self.cfg["epg"] = [e] if isinstance(e, str) and e else (e if isinstance(e, list) else [])
@@ -2509,7 +3066,7 @@ class TV(object):
                   "rec", "rec_stop",
                   "volume", "volume_high",
                   "volume_low", "volume_off", "muto", "pieno", "prima", "dopo",
-                  "aperto", "chiuso", "setting", "epg", "shuffle"):
+                  "aperto", "chiuso", "setting", "epg", "shuffle", "stop"):
             p = os.path.join(QUI, "icone", n + ".png")
             if os.path.isfile(p):
                 if HA_PIL:
@@ -2540,7 +3097,7 @@ class TV(object):
             "rec", "rec_stop", "volume",
             "volume_high", "volume_low",
             "volume_off", "muto", "pieno", "prima", "dopo", "aperto", "chiuso",
-            "setting") if n not in self.icone]
+            "setting", "stop") if n not in self.icone]
         if self.icone_mancanti:
             sys.stderr.write("missing icons in %s: %s\n" % (
                 os.path.join(QUI, "icone"), ", ".join(self.icone_mancanti)))
@@ -2561,6 +3118,7 @@ class TV(object):
             (_("Download posters and covers"), self.scarica_copertine)])
         self.menu("Playback", lambda: [
             (_("Play / Pause"), self.pausa),
+            (_("Stop"), self.ferma),
             None,
             (_("Back 10 s"), lambda: self.avanza(-10)),
             (_("Forward 10 s"), lambda: self.avanza(+10)),
@@ -2846,6 +3404,7 @@ class TV(object):
         self.tasto("prima", "<", lambda: self.salta(-1), 3, padx=(24, 2))
         self.tasto("-10", "-10", lambda: self.avanza(-10), 4)
         self.b_pausa = self.tasto("pausa", _("Pause"), self.pausa, 8)
+        self.tasto("stop", _("Stop"), self.ferma, 4)
         self.tasto("+10", "+10", lambda: self.avanza(+10), 4)
         self.tasto("dopo", ">", lambda: self.salta(+1), 3)
         self.b_rec = self.tasto("rec", _("Record"), self.registra)
@@ -3117,8 +3676,19 @@ class TV(object):
             scegli = self.lista_dell_ultimo_canale()
         i = self.trova_lista(scegli)
         if self.liste[i] in self.iid_di:
-            self.el_liste.see(self.iid_di[self.liste[i]])
+            self.mostra_riga(self.iid_di[self.liste[i]])
         self.carica(self.liste[i])
+
+    def mostra_riga(self, iid):
+        """Scorre la barra fino a quella riga senza aprire le cartelle
+        chiuse (see() le aprirebbe): se e' dentro una chiusa, si vede la
+        cartella."""
+        vista, p = iid, self.el_liste.parent(iid)
+        while p:
+            if not self.el_liste.item(p, "open"):
+                vista = p
+            p = self.el_liste.parent(p)
+        self.el_liste.see(vista)
 
     def rifai_albero(self):
         """Solo la barra delle liste, senza aprirne nessuna."""
@@ -3150,13 +3720,30 @@ class TV(object):
                                        tags=("usata",) if d == adesso else ())
             self.iid_di[d] = iid
 
-        # in cima, se c'e', la guida: una cartella EPG col nome del file
         self.cartella_di = {}
+        # ogni cartella resta aperta o chiusa come la si e' lasciata, anche
+        # quando la barra si rifa' e dopo un riavvio; se non la si e' mai
+        # toccata, vale il suo modo di sempre (es. aperta se c'e' dentro
+        # la lista in uso)
+        self.chiave_di = {}                 # riga della cartella -> chiave
+        aperte = self.cfg.get("aperte", {})
+
+        def aperta_di(chiave, di_norma):
+            return bool(aperte.get(chiave, di_norma))
+
+        # tutto quello che e' IPTV (guide, registrazioni, playlist) sta in
+        # una cartella grigia sua; a fine giro la si sposta in fondo, dopo
+        # i media e i preferiti
+        aperta = aperta_di("iptv", self.cfg.get("iptv_aperta", True))
+        iptv = self.el_liste.insert("", "end", text=" IPTV",
+                                    image=self.icona_cartella(GRIGIO, aperta), open=aperta)
+        self.cartella_di[iptv] = GRIGIO
+        self.chiave_di[iptv] = "iptv"
+        self.iid_iptv = iptv
+        # in cima, se ci sono, le guide: direttamente dentro IPTV, col nome
+        # del file (niente piu' cartella EPG)
         if self.cfg.get("epg"):
-            padre = self.el_liste.insert("", "end", text=" EPG",
-                                         image=self.icona_cartella(GRIGIO, True),
-                                         open=True)
-            self.cartella_di[padre] = GRIGIO
+            padre = iptv
             f = immagine_lista("")
             if f and f not in self.img_liste:
                 im = carica_logo(f, PUNTO, PUNTO)
@@ -3171,11 +3758,12 @@ class TV(object):
         self.iid_reg = {}
         self.reg = registrazioni()
         if self.reg:
-            aperta = self.reg_in_uso is not None
-            padre = self.el_liste.insert("", "end", text=" " + _("Recordings"),
+            aperta = aperta_di("registrazioni", self.reg_in_uso is not None)
+            padre = self.el_liste.insert(iptv, "end", text=" " + _("Recordings"),
                                          image=self.icona_cartella(GRIGIO, aperta),
                                          open=aperta)
             self.cartella_di[padre] = GRIGIO
+            self.chiave_di[padre] = "registrazioni"
             f_img = immagine_lista("")
             for (canale, giorno), _v in self.reg:
                 try:
@@ -3221,9 +3809,11 @@ class TV(object):
             in_uso = self.media_in_uso and self.media_in_uso[0] == "cartella" and (
                 self.media_in_uso[1] == c or self.media_in_uso[1].startswith(c + os.sep))
             iid = self.el_liste.insert("", "end", text=" %s (%d)" % (nome, len(media_in(c))),
-                                       image=img_pl, values=("\u2715",), open=bool(in_uso),
+                                       image=img_pl, values=("\u2715",),
+                                       open=aperta_di("media:" + c, bool(in_uso)),
                                        tags=("usata",) if chiave == self.media_in_uso else ())
             self.iid_media[iid] = chiave
+            self.chiave_di[iid] = "media:" + c
             for d, p, n in sotto:
                 k = ("cartella", p)
                 figlio = self.el_liste.insert(iid, "end", text=" %s (%d)" % (d, n),
@@ -3242,18 +3832,25 @@ class TV(object):
             gia.update(dentro)
         for d in self.liste:
             if d not in gia:
-                riga("", d)
+                riga(iptv, d)
         for nome, dentro in categorie():
             colore = colore_cartella(nome, posto[0])
             if nome != PREFERITI:
                 posto[0] += 1
-            aperta = any(d == adesso for d in dentro)
-            padre = self.el_liste.insert("", "end", text=" " + nome,
+            aperta = aperta_di("cat:" + nome, any(d == adesso for d in dentro))
+            # i preferiti restano fuori: dentro ci sono anche musica e video
+            padre = self.el_liste.insert("" if nome == PREFERITI else iptv, "end",
+                                         text=" " + nome,
                                          image=self.icona_cartella(colore, aperta),
                                          open=aperta)
             self.cartella_di[padre] = colore
+            self.chiave_di[padre] = "cat:" + nome
             for d in dentro:
                 riga(padre, d)
+        if self.el_liste.get_children(iptv):
+            self.el_liste.move(iptv, "", "end")
+        else:
+            self.el_liste.delete(iptv)
 
     def lista_dell_ultimo_canale(self):
         """La lista da aprire all'avvio: quella ricordata, se contiene
@@ -3328,6 +3925,11 @@ class TV(object):
         if iid in self.cartella_di:
             self.el_liste.item(iid, image=self.icona_cartella(
                 self.cartella_di[iid], aperta))
+        chiave = getattr(self, "chiave_di", {}).get(iid)
+        if chiave:
+            # si ricorda aperta o chiusa, per quando la barra si rifa'
+            self.cfg.setdefault("aperte", {})[chiave] = aperta
+            scrivi_config(self.cfg)
 
     def lista_selezionata(self):
         """Il percorso della riga selezionata, o None se e' una cartella."""
@@ -3357,10 +3959,19 @@ class TV(object):
 
     def mostra_registrazioni(self, chiave):
         """A sinistra, al posto dei canali, i programmi registrati su quel
-        canale quel giorno: '21:00 Evening News'. Doppio clic e parte."""
+        canale quel giorno: 'Evening News' e sotto '21:00'. Doppio clic e parte."""
         self.reg_in_uso, self.media_in_uso = chiave, None
         voci = dict(self.reg).get(chiave, [])
-        self.canali = [("%s  %s" % (ora, titolo), f, None) for ora, titolo, f in voci]
+        # il titolo del programma come nome, l'ora nel sottotitolo
+        self.ora_reg = {f: ora for ora, titolo, f in voci}
+        self.canali = [(titolo, f, None) for ora, titolo, f in voci]
+        # le durate (ffprobe) in un thread: poi la lista si ridisegna
+        def durate(file_=[f for _o, _t, f in voci]):
+            for f in file_:
+                durata_di(f)
+            if self.reg_in_uso == chiave:
+                self.root.after(0, self.filtra)
+        threading.Thread(target=durate, daemon=True).start()
         self.ordine_vero = list(self.canali)
         if self.cfg.get("shuffle"):
             self.mescola(disegna=False)
@@ -3379,6 +3990,7 @@ class TV(object):
         se ne sceglie un altro. La progress e' quanto del file e' passato."""
         if self.registrando:
             self.ferma_registrazione()
+        self.fermato = None                 # parte altro: lo stop di prima non conta piu'
         self.file_in_onda = f
         self.nome = self.nome_in_onda = nome or os.path.splitext(os.path.basename(f))[0]
         self.ide_in_onda = None
@@ -3676,7 +4288,7 @@ class TV(object):
             if self.el_liste.exists(iid):
                 self.el_liste.item(iid, tags=("usata",) if k == chiave else ())
                 if k == chiave:
-                    self.el_liste.see(iid)
+                    self.mostra_riga(iid)
         for iid in list(self.iid_reg) + list(self.iid_di.values()):
             if self.el_liste.exists(iid):
                 self.el_liste.item(iid, tags=())
@@ -3849,6 +4461,14 @@ class TV(object):
             titolo, artista, album, anno = self.tag_file.get(f, ("", "", "", ""))
             anno = anno or self.info.get(os.path.dirname(f), {}).get("anno", "")
             return titolo or nome, " \u00b7 ".join(x for x in (artista, album, anno) if x)
+        if f.startswith(REGISTRAZIONI + os.sep):
+            # registrazione: sotto l'ora e, se si sa gia', la durata
+            ora = getattr(self, "ora_reg", {}).get(f, "")
+            try:
+                durata = _DURATE.get((f, os.path.getmtime(f)))
+            except OSError:
+                durata = None
+            return nome, " \u00b7 ".join(x for x in (ora, ore_min_sec(durata) if durata else "") if x)
         i = self.info.get(f)
         if not i:
             titolo, anno = titolo_anno(f) if not f.startswith(REGISTRAZIONI + os.sep) else (nome, None)
@@ -4012,8 +4632,13 @@ class TV(object):
             if u == url:
                 colore = self.colore_canale(nome, u)
                 r, g, b = (int(colore[k:k + 2], 16) for k in (1, 3, 5))
-                luce = 0.299 * r + 0.587 * g + 0.114 * b
-                testo = "#000000" if luce > 150 else "#ffffff"
+                # sui colori molto accesi (verde, giallo, azzurro...) testo
+                # nero, sugli altri bianco: la luminanza vera del colore
+                def lin(c):
+                    c /= 255.0
+                    return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+                luce = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+                testo = "#000000" if luce > 0.4 else "#ffffff"
                 self.elenco.tag_configure("onda", background=colore, foreground=testo)
                 if testo not in self.pallini:
                     self.pallini[testo] = pallino(testo) or self.vuoto
@@ -4147,6 +4772,7 @@ class TV(object):
         self.apri(nome, url)
 
     def apri(self, nome, url, ide=None):
+        self.fermato = None                 # parte altro: lo stop di prima non conta piu'
         if url.startswith("dvd://") or url.startswith(REGISTRAZIONI + os.sep) or (
                 os.path.isabs(url) and e_media(url) and os.path.isfile(url)):
             self.riproduci(url, nome)
@@ -4398,7 +5024,42 @@ class TV(object):
         self.vestiti[b] = ImageTk.PhotoImage(fondo)
         b.config(image=self.vestiti[b], bg=self.tinta_barra(y + h // 2))
 
+    def ferma(self):
+        """Stop: si ferma tutto e torna lo schermo di XVB. Play dopo lo
+        stop riparte da quello che si stava guardando (i file da dove
+        erano rimasti)."""
+        if self.registrando:
+            self.ferma_registrazione()
+        if self.file_in_onda:
+            self.fermato = ("file", self.nome_in_onda, self.file_in_onda, None)
+        elif self.cfg.get("canale"):
+            self.fermato = ("canale", self.nome_in_onda, self.cfg.get("canale"),
+                            getattr(self, "ide_in_onda", None))
+        try:
+            self.mpv.command("stop")
+            self.mpv.pause = False
+        except Exception:
+            pass
+        self.file_in_onda = None
+        self.attesa_da = 0.0
+        self.mostra_carico(False)
+        self.mostra_sfondo(True)
+        self.faccia(self.b_pausa, "play", _("Resume"))
+        self.et_formato.config(text="")
+        self.scrivi(_("ready"))
+
     def pausa(self):
+        # dopo lo stop, play fa ripartire quello di prima
+        fermato = getattr(self, "fermato", None)
+        if fermato:
+            self.fermato = None
+            self.faccia(self.b_pausa, "pausa", _("Pause"))
+            tipo, nome, dove, ide = fermato
+            if tipo == "file":
+                self.riproduci(dove, nome)
+            else:
+                self.apri(nome, dove, ide)
+            return
         try:
             self.mpv.pause = not self.mpv.pause
         except Exception:
@@ -4604,6 +5265,7 @@ class TV(object):
         for titolo, (et, _v) in self.menu_cima.items():
             et.config(text=_(titolo))
         self.et_liste.config(text=_("Playlists"))
+        self.rifai_albero()
         vecchio = self.cerca.vuota
         self.cerca.vuota = _("Search channels")
         if self.cerca.testo.get() == vecchio:
@@ -4775,8 +5437,8 @@ class TV(object):
         if tag and piu_nuova(tag, VERSIONE):
             self.nuova, self.pagina_nuova = tag, pagina
             self.root.after(0, lambda: self.mostra_avviso(
-                _("new version %s available: About > Download") % tag, 0,
-                chiave=("new version %s available: About > Download", tag)))
+                _("new version %s available: Help > Download") % tag, 0,
+                chiave=("new version %s available: Help > Download", tag)))
         elif not zitto:
             self.scrivi(_("up to date (%s)") % VERSIONE)
             self.root.after(3000, self.scrivi_riga)
