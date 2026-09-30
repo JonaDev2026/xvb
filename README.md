@@ -1,6 +1,6 @@
 # XVB — Extended Video Broadcast
 
-A lightweight IPTV player for Linux Mint 22, written in Python on top of libmpv.
+A lightweight IPTV player for Linux Mint 22+, written in Python on top of libmpv.
 It reads m3u playlists (from disk or from a URL), shows an XMLTV TV
 guide, records, keeps favourites, and speaks four languages. Dark
 interface, drawn entirely by the app, with no GUI dependency beyond Tk.
@@ -29,11 +29,11 @@ interface, drawn entirely by the app, with no GUI dependency beyond Tk.
 
 ## Install
 
-**Supported system:** Linux Mint 22 (developed and tested there). Other
+**Supported system:** Linux Mint 22+ (developed and tested there). Other
 distributions will be added once they have been tested; Windows and
 macOS are not supported.
 
-### .deb package (Linux Mint 22)
+### .deb package (Linux Mint 22+)
 
 Download `xvb_<version>_all.deb` from the latest [release](../../releases/latest) and:
 
@@ -54,7 +54,7 @@ so the system monitor shows its own name and icon.
 
 ### Without the package
 
-On Linux Mint 22, straight from the source:
+On Linux Mint 22+, straight from the source:
 
 ```
 sudo apt install -y python3-tk python3-pil python3-pil.imagetk python3-mpv python3-mutagen ffmpeg
@@ -473,7 +473,7 @@ MIT. © 2026 Jonathan Sanfilippo.
 
 # XVB — Extended Video Broadcast (italiano)
 
-Lettore IPTV per Linux Mint 22, leggero, scritto in Python su libmpv. Legge le
+Lettore IPTV per Linux Mint 22+, leggero, scritto in Python su libmpv. Legge le
 playlist m3u (da disco o da url), mostra la guida TV XMLTV, registra,
 tiene i preferiti, e parla quattro lingue. Interfaccia scura, tutta
 disegnata dall'app, senza dipendenze grafiche oltre a Tk.
@@ -500,11 +500,11 @@ disegnata dall'app, senza dipendenze grafiche oltre a Tk.
 
 ## Installazione
 
-**Sistema supportato:** Linux Mint 22 (sviluppata e provata lì). Le altre
+**Sistema supportato:** Linux Mint 22+ (sviluppata e provata lì). Le altre
 distribuzioni si aggiungeranno quando saranno provate; Windows e macOS
 non sono supportati.
 
-### Pacchetto .deb (Linux Mint 22)
+### Pacchetto .deb (Linux Mint 22+)
 
 Scarica `xvb_<versione>_all.deb` dall'ultima [release](../../releases/latest) e:
 
@@ -524,7 +524,7 @@ monitor di sistema ha nome e icona suoi.
 
 ### Senza pacchetto
 
-Su Linux Mint 22, direttamente dal sorgente:
+Su Linux Mint 22+, direttamente dal sorgente:
 
 ```
 sudo apt install -y python3-tk python3-pil python3-pil.imagetk python3-mpv python3-mutagen ffmpeg
