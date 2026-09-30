@@ -48,7 +48,7 @@ try:                            # per i loghi: ridimensiona e legge i jpg
 except ImportError:             # senza, si va di PhotoImage: solo png
     HA_PIL = False
 
-VERSIONE = "3.2"
+VERSIONE = "3.3"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"        # dove stanno le release, per l'avviso di aggiornamento
@@ -4066,6 +4066,11 @@ class TV(object):
             @self.mpv.on_key_press("MBTN_LEFT_DBL")
             def _doppio():
                 self.root.after(0, self.doppio_clic)
+
+            # clic singolo: serve solo al tasto del PiP disegnato da mpv
+            @self.mpv.on_key_press("MBTN_LEFT")
+            def _clic():
+                self.root.after(0, self.clic_video)
         except Exception:
             pass
         for valore in ("embedded-first", "attachment"):
@@ -6395,6 +6400,7 @@ class TV(object):
             return
         self.pip = False
         self.b_pip_esci.place_forget()
+        self.pip_disegna(False)
         self.root.attributes("-topmost", bool(self.cfg.get("in_cima")))
         if getattr(self, "pip_prima", None):
             self.root.geometry(self.pip_prima)
@@ -6411,6 +6417,12 @@ class TV(object):
                       and self.root.winfo_rooty() <= y < self.root.winfo_rooty() + self.root.winfo_height())
         except tk.TclError:
             dentro = False
+        # con pip.png e un video sotto il tasto lo disegna mpv, trasparente;
+        # sopra lo sfondo di XVB (che e' di Tk) resta il tasto di Tk
+        con_mpv = "pip" in self.icone_pil and not getattr(self, "sfondo_su", False)
+        self.pip_disegna(dentro and con_mpv)
+        if con_mpv:
+            dentro = False
         if dentro and not self.b_pip_esci.winfo_ismapped():
             self.b_pip_esci.place(relx=1.0, x=-8, y=8, anchor="ne")
             try:
@@ -6421,6 +6433,59 @@ class TV(object):
         elif not dentro and self.b_pip_esci.winfo_ismapped():
             self.b_pip_esci.place_forget()
         self.root.after(250, self.sorveglia_pip)
+
+    def pip_disegna(self, si):
+        """Il tasto del PiP disegnato da mpv sopra al video, con la sua
+        trasparenza (un widget di Tk li' sopra avrebbe il fondo pieno)."""
+        ov = getattr(self, "pip_ov", None)
+        if not si:
+            if ov is not None:
+                try:
+                    self.mpv.remove_overlay(ov.overlay_id)
+                except Exception:
+                    pass
+                self.pip_ov = self.pip_ov_misura = self.pip_ov_riquadro = None
+            return
+        try:
+            vw, vh = self.video.winfo_width(), self.video.winfo_height()
+        except tk.TclError:
+            return
+        try:
+            ow = int(self.mpv.osd_width or 0)
+        except Exception:
+            ow = 0
+        k = (ow / vw) if (ow > 0 and vw > 0) else 1.0
+        if ov is not None and getattr(self, "pip_ov_misura", None) == (vw, vh, ow):
+            return
+        lato, bordo = 28, 10                # in pixel della finestra (Tk)
+        try:
+            im = self.icone_pil["pip"].copy()
+            im.thumbnail((max(1, round(lato * k)), max(1, round(lato * k))), Image.LANCZOS)
+            pos = (max(0, round((vw - bordo) * k) - im.width), round(bordo * k))
+            if ov is None:
+                ov = self.mpv.create_image_overlay(im, pos=pos)
+            else:
+                ov.update(im, pos=pos)
+        except Exception:
+            self.pip_ov = None
+            return
+        self.pip_ov, self.pip_ov_misura = ov, (vw, vh, ow)
+        self.pip_ov_riquadro = (pos[0] / k, pos[1] / k,
+                                (pos[0] + im.width) / k, (pos[1] + im.height) / k)
+
+    def clic_video(self):
+        """Un clic sul video (lo riceve mpv, non Tk): in PiP, se e' sul tasto
+        disegnato da mpv, si torna alla finestra normale."""
+        r = getattr(self, "pip_ov_riquadro", None)
+        if not (self.pip and getattr(self, "pip_ov", None) is not None and r):
+            return
+        try:
+            x = self.root.winfo_pointerx() - self.video.winfo_rootx()
+            y = self.root.winfo_pointery() - self.video.winfo_rooty()
+        except tk.TclError:
+            return
+        if r[0] - 4 <= x <= r[2] + 4 and r[1] - 4 <= y <= r[3] + 4:
+            self.esci_pip()
 
     def schermo_intero(self, ev=None, acceso=None):
         self.pieno = (not self.pieno) if acceso is None else acceso
