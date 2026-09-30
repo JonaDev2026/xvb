@@ -54,13 +54,13 @@ its Tk module, and python-mpv:
 
 ```
 # Debian, Ubuntu, Linux Mint
-sudo apt install -y libmpv2 python3-tk python3-pil python3-pil.imagetk python3-mpv
+sudo apt install -y libmpv2 python3-tk python3-pil python3-pil.imagetk python3-mpv python3-mutagen ffmpeg
 # Fedora
-sudo dnf install -y mpv-libs python3-tkinter python3-pillow python3-pillow-tk python3-pip && pip install --user python-mpv
+sudo dnf install -y mpv-libs python3-tkinter python3-pillow python3-pillow-tk python3-mutagen ffmpeg python3-pip && pip install --user python-mpv
 # Arch, Manjaro
-sudo pacman -S --needed mpv tk python-pillow python-mpv
+sudo pacman -S --needed mpv tk python-pillow python-mpv python-mutagen ffmpeg
 # openSUSE
-sudo zypper install -y libmpv2 python3-tk python3-Pillow python3-Pillow-tk python3-pip && pip install --user python-mpv
+sudo zypper install -y libmpv2 python3-tk python3-Pillow python3-Pillow-tk python3-mutagen ffmpeg python3-pip && pip install --user python-mpv
 ```
 
 then:
@@ -124,17 +124,67 @@ files; for URL lists and guides it only removes them from the list.
 
 **Local files.** The File menu works like a media player. File →
 Open folder… adds a folder of videos or music to the right-hand bar,
-with the player icon (`icone/player.png`) and the folder's name: click
-it and the left-hand bar lists the media files inside (first level,
-by name). File → Open file… plays one file right away and adds it to
-an "Imported media" entry, same icon, which keeps every file opened this way.
-Double-click plays, ‹ › go to the previous and next file, the progress
-line follows the file and the status row shows elapsed / total time.
-Click a playlist to get back to the channels. The ✕ removes the folder
-or empties Imported media, after confirmation: nothing is deleted from disk.
-The file and folder chooser is drawn by the app, dark like the rest:
-↑ or Backspace go up, double-click enters a folder or picks a file,
-the path on top can be typed. The formats are mpv's, that is ffmpeg's:
+with the player icon (`icone/player.png`), its name and the number of
+files in it; under it, one row per subfolder that has media, each with
+its own count: click the folder for everything (subfolders included,
+in path order, so albums stay together), click a subfolder for just
+that one. File → Open file… plays one file right away and adds it to
+an "Imported media" entry, same icon, which keeps every file opened
+this way. Double-click plays; when a file ends the next one in the list
+starts by itself and it stops at the last. ‹ › go to the previous and
+next file, the progress line follows the file and the status row shows
+elapsed / total time and the format ("- mp3"). Click a playlist to get
+back to the channels. The ✕ removes the folder or empties Imported
+media, after confirmation: nothing is deleted from disk. The file and
+folder chooser is drawn by the app, dark like the rest: ↑ or Backspace
+go up, double-click enters a folder or picks a file, the path on top
+can be typed.
+
+**Titles and details.** Music shows the title from its tags
+(python3-mutagen) and, under it, "Artist · Album · Year"; the year comes
+from MusicBrainz when the tags don't have it. Films show the title from
+TMDB and, under it, "2023 · Drama · ★ 7.8" (year, genre, rating); a film
+TMDB doesn't know keeps its file name, with the year from the name if
+there is one. Titles and genres come in the app's language: changing
+language asks whether to download them again in the new one. Each file
+has its own colour on the left, from a scale of 16 alternating warm and
+cold (it repeats only after 16 files); channels keep their logo's colour.
+Tags are kept in `~/.cache/xvb/tag.json`, the rest in `~/.cache/xvb/info.json`.
+
+**Shuffle.** The shuffle button (after switch; also File → Shuffle)
+mixes the list of files on the left, with the one playing on top; then
+it plays top to bottom as usual, so you always see what comes next and
+‹ really goes back. Off, the original order comes back. White when off,
+in the channel colour when on; remembered.
+
+**Seeking.** Click or drag on the progress line, the -10 / +10 buttons
+around play, or Shift+← →: ten seconds back or forward. On live
+channels it works only if mpv says the stream can be seeked (inside
+its buffer or the HLS window). The pointer becomes a hand over the
+line only when a file is playing.
+
+**Resume.** A file left halfway restarts where you were (from ten
+seconds in; within twenty seconds of the end it forgets and restarts
+from the beginning). Positions live in the config, at most 300.
+
+**Covers and posters.** With View → Logos (the default) each file has its
+picture in a column on the left, as tall as its row: music shows its
+embedded cover, or `cover.jpg` / `folder.jpg` from the album folder;
+videos an image with the same name or `poster.jpg`, otherwise a frame
+taken at 30 s with ffmpeg; with nothing at all, the app icon. Made in the
+background, kept in `~/.cache/xvb/anteprime/`.
+
+**Downloading them.** At start-up, in the background, the app looks for
+what's missing in the added folders and Imported media and downloads it:
+film posters from [TMDB](https://www.themoviedb.org) (by the name of the
+file or folder, "Title (Year)" or "Title.Year.1080p"), saved next to the
+film with its name; album covers from MusicBrainz / Cover Art Archive (by
+the artist and album in the tags), saved as `cover.jpg` in the folder.
+It never overwrites an image already there. Files already searched with
+no result (private ones) aren't searched again; File → Download posters
+and covers tries everything again. No key to set up.
+
+The formats are mpv's, that is ffmpeg's:
 
 - Video: mkv, mp4, m4v, avi, mov, webm, ts, m2ts, mpg, mpeg, wmv, flv, ogv.
 - Audio: mp3, flac, ogg, opus, m4a, aac, wav, wma, ape.
@@ -158,18 +208,26 @@ type; Esc clears it). Double-click or Enter to watch a channel, the
 previous or next one, the switch button to go back to the previous
 channel (and, pressed again, back to this one).
 
-**The dots.** Every channel has a coloured dot, macOS-tag style. If the
-list has logos (`tvg-logo`), the colour comes from the logo: the app
-downloads it to `~/.cache/xvb/loghi/`, discards whites, blacks and greys,
-takes the dominant hue and brings it to a brightness that shows on
-dark (blues a little lighter). It's computed once and kept in
-`~/.cache/xvb/colori.json`; Playlists → Reload redoes it. Without a logo
-the colour depends on the name, so it's always the same.
+**The rows.** Two lines each: the channel name (15 px) and, under it,
+the programme on air from the guide (12 px), in the channel's colour;
+it updates by itself every minute. Rows alternate two shades of dark,
+3 px apart. What marks the channel on the left is chosen in View:
+Logos (default: the list's `tvg-logo` in a column on the left, outside
+the rows and as tall as them, a dot where there's none), Dots
+(macOS-tag style) or Border (a 3 px strip in the colour).
 
-**The channel on air.** Its row takes the dot colour as background, with
-text and dot in white or black depending on how light it is. The same
-colour goes on the programme title in the row below, on the progress
-line and in the gradient behind the controls.
+**The colour.** If the list has logos (`tvg-logo`), the colour comes
+from the logo: the app downloads it to `~/.cache/xvb/loghi/`, discards
+whites, blacks and greys, takes the dominant hue and brings it to a
+brightness that shows on dark (blues a little lighter). It's computed
+once and kept in `~/.cache/xvb/colori.json`; Playlists → Reload redoes
+it. Without a logo the colour depends on the name, so it's always the
+same.
+
+**The channel on air.** Its row takes the colour as background, with
+text in white or black depending on how light it is. The same colour
+goes on the time and the programme title in the row below, on the
+progress line and in the gradient behind the controls.
 
 **Quality.** If the channel offers several qualities (HLS master), the
 app starts from the best and stays there: you change it only from the
@@ -246,11 +304,13 @@ Record → Open recordings folder opens the folder.
 
 ## Favourites
 
-The heart in the control bar adds or removes the channel on air from
-the favourites. Favourites are a real list, `playlists/favorite/favorite.m3u`,
-shown as a red folder: created with the first favourite and deleted
-when it's empty. A channel counts as a favourite even if it comes from
-another list with another address, as long as it has the same name.
+The heart in the control bar adds or removes what's on air from the
+favourites. They are real lists in the red `favorite` folder, one per
+kind: `iptv.m3u` for channels, `music.m3u` for audio files, `video.m3u`
+for videos; each appears with the first favourite and goes away when
+empty, the folder when all three are. A channel counts as a favourite
+even if it comes from another list with another address, as long as it
+has the same name. (An old `favorite.m3u` is renamed to `iptv.m3u`.)
 
 ## Video and audio
 
@@ -287,8 +347,8 @@ All of these are kept in the config, except the speed, which restarts at x1.
   window and in full screen; View → Hide/Show handles them one at a
   time. They resize by dragging the strip between the bar and the
   video (from 140 px to 60% of the window); the width is saved.
-- **Controls**: [sidebars] [‹ pause rec switch ›] … [speaker, gear]
-  [x1, EPG] [full screen, heart]. The volume works like YouTube's: the
+- **Controls**: [sidebars] [‹ -10 pause +10 › rec switch shuffle] …
+  [speaker, gear] [x1, EPG] [full screen, heart]. The volume works like YouTube's: the
   bar is hidden and slides out to the left of the speaker when the mouse
   is over it, then folds back; the speaker icon follows the level (off,
   low, medium, high, muted). Behind the controls there's a gradient in the
@@ -312,10 +372,10 @@ All of these are kept in the config, except the speed, which restarts at x1.
 
 | Menu | Entries |
 |---|---|
-| File | Open file…, Open folder… |
+| File | Open file…, Open folder…, Download posters and covers, Shuffle |
 | Playlists | Add URL, Open folder, Reload, Remove <URL list> |
 | TV guide | Programme guide, Add URL, Reload, Remove <guide> |
-| View | Fullscreen, Hide/Show channels, Hide/Show playlists |
+| View | Fullscreen, Hide/Show channels, Hide/Show playlists, Logos / Dots / Border |
 | Record | Record now / Stop recording, Schedule…, Cancel schedule, Open recordings folder |
 | Video | Speed, Aspect, Fill screen, Deinterlace, Brightness/Contrast/Saturation, Reset picture, Screenshot, Always on top |
 | Audio | Track, Subtitles, Volume boost, Normalize loudness, Delay +/−, Reset delay |
@@ -328,6 +388,7 @@ All of these are kept in the config, except the speed, which restarts at x1.
 |---|---|
 | Space | pause / resume |
 | ← → | previous / next channel (also PgUp PgDn) |
+| Shift+← → | ten seconds back / forward in a file |
 | ↑ ↓ | volume (also the wheel over the slider) |
 | M | mute |
 | + − | audio delay ±100 ms |
@@ -346,6 +407,7 @@ gives them back to the player.
 - downloaded TV guides: `~/.cache/xvb/epg/`
 - downloaded URL lists: `~/.cache/xvb/liste/`
 - channel logos and colours: `~/.cache/xvb/loghi/`, `~/.cache/xvb/colori.json`
+- music tags and covers / video frames: `~/.cache/xvb/tag.json`, `~/.cache/xvb/anteprime/`
 - the playlist of the quality in use: `~/.cache/xvb/variante.m3u8`
 
 The whole cache can be deleted: it rebuilds itself.
@@ -399,6 +461,11 @@ also a Donate entry in the About menu.
 XVB is a neutral playback tool: it does not provide channels, credentials,
 or content. Use XVB only with streams you are authorized to access. Avoid
 piracy or any method to bypass copyright protections.
+
+## Credits
+
+This product uses the TMDB API but is not endorsed or certified by
+TMDB. Album covers from MusicBrainz and the Cover Art Archive.
 
 ## Licence
 
@@ -460,13 +527,13 @@ suo modulo Tk, e python-mpv:
 
 ```
 # Debian, Ubuntu, Linux Mint
-sudo apt install -y libmpv2 python3-tk python3-pil python3-pil.imagetk python3-mpv
+sudo apt install -y libmpv2 python3-tk python3-pil python3-pil.imagetk python3-mpv python3-mutagen ffmpeg
 # Fedora
-sudo dnf install -y mpv-libs python3-tkinter python3-pillow python3-pillow-tk python3-pip && pip install --user python-mpv
+sudo dnf install -y mpv-libs python3-tkinter python3-pillow python3-pillow-tk python3-mutagen ffmpeg python3-pip && pip install --user python-mpv
 # Arch, Manjaro
-sudo pacman -S --needed mpv tk python-pillow python-mpv
+sudo pacman -S --needed mpv tk python-pillow python-mpv python-mutagen ffmpeg
 # openSUSE
-sudo zypper install -y libmpv2 python3-tk python3-Pillow python3-Pillow-tk python3-pip && pip install --user python-mpv
+sudo zypper install -y libmpv2 python3-tk python3-Pillow python3-Pillow-tk python3-mutagen ffmpeg python3-pip && pip install --user python-mpv
 ```
 
 poi:
@@ -527,18 +594,68 @@ file; per liste da url e guide le toglie solo dall'elenco.
 
 **File locali.** Il menu File lavora come un lettore multimediale.
 File → Open folder… aggiunge una cartella di video o musica alla barra
-di destra, con l'icona del player (`icone/player.png`) e il nome della
-cartella: cliccandola, a sinistra compaiono i file multimediali che ci
-sono dentro (primo livello, per nome). File → Open file… riproduce
-subito un file e lo aggiunge a una voce "Imported media", stessa icona, che
-tiene tutti i file aperti così. Doppio clic e parte, ‹ › vanno al file
-prima e dopo, la linea di avanzamento segue il file e la riga di stato
-mostra tempo passato / totale. Clic su una playlist per tornare ai
-canali. La ✕ toglie la cartella o svuota Imported media, dopo conferma: dal
-disco non si cancella niente. La finestra per scegliere file e cartelle
-è disegnata dall'app, scura come il resto: ↑ o Backspace salgono,
-doppio clic entra in una cartella o prende un file, il percorso in cima
-si può scrivere. I formati sono quelli di mpv, cioè di ffmpeg:
+di destra, con l'icona del player (`icone/player.png`), il nome e il
+numero di file; sotto, una riga per ogni sottocartella che ha dei
+media, ognuna col suo conteggio: clic sulla cartella per tutto
+(sottocartelle comprese, in ordine di percorso, così gli album restano
+insieme), clic su una sottocartella per quella sola. File → Open file…
+riproduce subito un file e lo aggiunge a una voce "Imported media",
+stessa icona, che tiene tutti i file aperti così. Doppio clic e parte;
+a fine file parte da solo il successivo dell'elenco e all'ultimo si
+ferma. ‹ › vanno al file prima e dopo, la linea di avanzamento segue
+il file e la riga di stato mostra tempo passato / totale e il formato
+("- mp3"). Clic su una playlist per tornare ai canali. La ✕ toglie la
+cartella o svuota Imported media, dopo conferma: dal disco non si
+cancella niente. La finestra per scegliere file e cartelle è disegnata
+dall'app, scura come il resto: ↑ o Backspace salgono, doppio clic entra
+in una cartella o prende un file, il percorso in cima si può scrivere.
+
+**Titoli e dettagli.** La musica mostra il titolo dai tag
+(python3-mutagen) e sotto "Artista · Album · Anno"; l'anno arriva da
+MusicBrainz se nei tag manca. I film mostrano il titolo da TMDB e sotto
+"2023 · Drama · ★ 7.8" (anno, genere, voto); un film che TMDB non conosce
+tiene il nome del file, con l'anno preso dal nome se c'è. Titoli e
+generi arrivano nella lingua dell'app: cambiando lingua chiede se
+riscaricarli in quella nuova. Ogni file ha il suo colore a sinistra, da
+una scala di 16 che alterna caldi e freddi (si ripete solo dopo 16
+file); i canali tengono il colore del loro logo. I tag stanno in
+`~/.cache/xvb/tag.json`, il resto in `~/.cache/xvb/info.json`.
+
+**Shuffle.** Il tasto shuffle (dopo switch; anche File → Shuffle)
+mescola l'elenco dei file a sinistra, con quello in onda in cima; poi si
+va dall'alto in basso come sempre, così vedi cosa viene dopo e ‹ torna
+davvero indietro. Spento, torna l'ordine originale. Bianco da spento,
+del colore del canale da acceso; ricordato.
+
+**Scorrere.** Clic o trascinamento sulla linea di avanzamento, i tasti
+-10 / +10 ai lati di play, o Shift+← →: dieci secondi indietro o
+avanti. Sui canali in diretta va solo se mpv dice che il flusso si può
+scorrere (dentro al suo buffer o alla finestra HLS). Sulla linea il
+puntatore diventa una manina solo con un file in riproduzione.
+
+**Riprendi.** Un file lasciato a metà riparte da dove eri (dopo i primi
+dieci secondi; a meno di venti secondi dalla fine dimentica e riparte
+da capo). Le posizioni stanno nel config, al massimo 300.
+
+**Copertine e poster.** Con View → Logos (il default) ogni file ha la sua
+immagine in una colonna a sinistra, alta quanto la sua riga: la musica
+mostra la copertina incorporata, o `cover.jpg` / `folder.jpg` della
+cartella dell'album; i video un'immagine con lo stesso nome o
+`poster.jpg`, se no un fotogramma preso a 30 s con ffmpeg; se non c'è
+niente, l'icona dell'app. Fatte in sottofondo, tenute in
+`~/.cache/xvb/anteprime/`.
+
+**Scaricarle.** All'avvio, in sottofondo, l'app cerca quello che manca
+nelle cartelle aggiunte e in Imported media e lo scarica: i poster dei
+film da [TMDB](https://www.themoviedb.org) (dal nome del file o della
+cartella, "Titolo (Anno)" o "Titolo.Anno.1080p"), salvati accanto al film
+col suo nome; le copertine degli album da MusicBrainz / Cover Art Archive
+(da artista e album dei tag), salvate come `cover.jpg` nella cartella.
+Non sovrascrive mai un'immagine che c'è già. I file già cercati senza
+risultato (quelli privati) non si ricercano; File → Download posters and
+covers riprova tutto. Nessuna chiave da configurare.
+
+I formati sono quelli di mpv, cioè di ffmpeg:
 
 - Video: mkv, mp4, m4v, avi, mov, webm, ts, m2ts, mpg, mpeg, wmv, flv, ogv.
 - Audio: mp3, flac, ogg, opus, m4a, aac, wav, wma, ape.
@@ -562,18 +679,26 @@ frecce ‹ › nella barra dei comandi o ← → sulla tastiera per passare al
 precedente o al successivo, il bottone switch per tornare al canale di
 prima (e ripremuto, di nuovo a questo).
 
-**I pallini.** Ogni canale ha un pallino colorato, stile etichette del
-Mac. Se la lista ha i loghi (`tvg-logo`), il colore viene dal logo: l'app
-lo scarica in `~/.cache/xvb/loghi/`, butta bianchi, neri e grigi, prende
-la tinta dominante e la porta a una luminosità che si veda sullo scuro
-(i blu un po' più chiari). Il calcolo si fa una volta e resta in
-`~/.cache/xvb/colori.json`; Playlists → Reload lo rifà. Senza logo il
-colore dipende dal nome, quindi è sempre lo stesso.
+**Le righe.** Due linee ciascuna: il nome del canale (15 px) e sotto
+il programma in onda dalla guida (12 px), nel colore del canale; si
+aggiorna da sola ogni minuto. Le righe alternano due tonalità di scuro,
+con 3 px di stacco. Cosa marca il canale a sinistra si sceglie in View:
+Logos (il default: il `tvg-logo` della lista in una colonna a sinistra,
+fuori dalle righe e alta quanto loro, un pallino dove manca), Dots
+(pallini stile etichette del Mac) o Border (una striscia di 3 px del
+colore).
 
-**Il canale in onda.** La sua riga prende come sfondo il colore del
-pallino, con testo e pallino bianchi o neri a seconda di quanto è
-chiaro. Lo stesso colore va sul titolo del programma nella riga sotto,
-sulla progress e nella sfumatura dietro ai comandi.
+**Il colore.** Se la lista ha i loghi (`tvg-logo`), il colore viene dal
+logo: l'app lo scarica in `~/.cache/xvb/loghi/`, butta bianchi, neri e
+grigi, prende la tinta dominante e la porta a una luminosità che si
+veda sullo scuro (i blu un po' più chiari). Il calcolo si fa una volta
+e resta in `~/.cache/xvb/colori.json`; Playlists → Reload lo rifà. Senza
+logo il colore dipende dal nome, quindi è sempre lo stesso.
+
+**Il canale in onda.** La sua riga prende come sfondo il colore, con
+testo bianco o nero a seconda di quanto è chiaro. Lo stesso colore va
+sull'ora e sul titolo del programma nella riga sotto, sulla progress e
+nella sfumatura dietro ai comandi.
 
 **Qualità.** Se il canale offre più qualità (master HLS), l'app parte
 dalla migliore e ci resta: si cambia solo dal menu dell'ingranaggio,
@@ -647,12 +772,13 @@ conferma. Record → Open recordings folder apre la cartella.
 
 ## Preferiti
 
-Il cuore nella barra dei comandi mette o toglie il canale in onda dai
-preferiti. I preferiti sono una lista vera,
-`playlists/favorite/favorite.m3u`, che compare come cartella rossa: la
-crea al primo preferito e la cancella quando resta vuota. Un canale
-conta come preferito anche se viene da un'altra lista con un altro
-indirizzo, purché abbia lo stesso nome.
+Il cuore nella barra dei comandi mette o toglie dai preferiti quello
+che è in onda. Sono liste vere nella cartella rossa `favorite`, una per
+tipo: `iptv.m3u` per i canali, `music.m3u` per i file audio, `video.m3u`
+per i video; ognuna compare col primo preferito e sparisce da vuota, la
+cartella quando lo sono tutte e tre. Un canale conta come preferito
+anche se viene da un'altra lista con un altro indirizzo, purché abbia
+lo stesso nome. (Un vecchio `favorite.m3u` viene rinominato `iptv.m3u`.)
 
 ## Video e audio
 
@@ -690,7 +816,7 @@ riparte da x1.
   chiuse), in finestra e a schermo intero; View → Hide/Show le gestisce
   una per una. Si allargano trascinando la striscia fra la barra e il
   video (da 140 px al 60% della finestra); la larghezza resta salvata.
-- **Comandi**: [sidebar] [‹ pausa rec switch ›] … [altoparlante,
+- **Comandi**: [sidebar] [‹ -10 pausa +10 › rec switch shuffle] … [altoparlante,
   ingranaggio] [x1, EPG] [schermo intero, cuore]. Il volume fa come
   YouTube: la barra sta nascosta e scorre fuori a sinistra
   dell'altoparlante quando ci passi col mouse, poi si richiude; l'icona
@@ -716,10 +842,10 @@ riparte da x1.
 
 | Menu | Voci |
 |---|---|
-| File | Open file…, Open folder… |
+| File | Open file…, Open folder…, Download posters and covers, Shuffle |
 | Playlists | Add URL, Open folder, Reload, Remove <lista da url> |
 | TV guide | Programme guide, Add URL, Reload, Remove <guida> |
-| View | Fullscreen, Hide/Show channels, Hide/Show playlists |
+| View | Fullscreen, Hide/Show channels, Hide/Show playlists, Logos / Dots / Border |
 | Record | Record now / Stop recording, Schedule…, Cancel schedule, Open recordings folder |
 | Video | Speed, Aspect, Fill screen, Deinterlace, Brightness/Contrast/Saturation, Reset picture, Screenshot, Always on top |
 | Audio | Track, Subtitles, Volume boost, Normalize loudness, Delay +/−, Reset delay |
@@ -732,6 +858,7 @@ riparte da x1.
 |---|---|
 | Spazio | pausa / riprendi |
 | ← → | canale precedente / successivo (anche Pag↑ Pag↓) |
+| Shift+← → | dieci secondi indietro / avanti in un file |
 | ↑ ↓ | volume (anche la rotella sopra al cursore) |
 | M | muto |
 | + − | ritardo audio ±100 ms |
@@ -750,6 +877,7 @@ video li rimette al lettore.
 - guide TV scaricate: `~/.cache/xvb/epg/`
 - liste da url scaricate: `~/.cache/xvb/liste/`
 - loghi e colori dei canali: `~/.cache/xvb/loghi/`, `~/.cache/xvb/colori.json`
+- tag della musica e copertine / fotogrammi: `~/.cache/xvb/tag.json`, `~/.cache/xvb/anteprime/`
 - la playlist della qualità in uso: `~/.cache/xvb/variante.m3u8`
 
 Tutta la cache si può cancellare: si rifà da sola.
@@ -804,6 +932,11 @@ anche la voce Donate nel menu Info.
 XVB è uno strumento di riproduzione neutro: non fornisce canali, credenziali
 o contenuti. Usa XVB solo con flussi a cui sei autorizzato ad accedere.
 Niente pirateria né metodi per aggirare le protezioni del copyright.
+
+## Crediti
+
+This product uses the TMDB API but is not endorsed or certified by
+TMDB. Copertine degli album da MusicBrainz e dal Cover Art Archive.
 
 ## Licenza
 

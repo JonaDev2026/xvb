@@ -47,7 +47,8 @@ Version: $VER
 Section: video
 Priority: optional
 Architecture: all
-Depends: python3, python3-tk, python3-pil, python3-pil.imagetk, python3-mpv, libmpv2 | libmpv1
+Depends: python3, python3-tk, python3-pil, python3-pil.imagetk, python3-mpv, python3-mutagen, libmpv2 | libmpv1
+Recommends: ffmpeg
 Maintainer: Jona <jonalinux.uk@gmail.com>
 Description: XVB - Extended Video Broadcast
  IPTV player: m3u playlists, XMLTV guide, favorites, recording.

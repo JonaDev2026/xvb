@@ -36,6 +36,12 @@ nav a{color:var(--dim)}
 .ver{font-size:13px;color:var(--dim);margin-top:12px;min-height:20px}
 .shot{margin:34px auto 0;border-radius:14px;overflow:hidden;border:1px solid var(--line);box-shadow:0 30px 80px rgba(0,0,0,.6)}
 .shot img{display:block;width:100%}
+.giostra{position:relative}
+.giostra .fila{display:flex;transition:transform .6s ease}
+.giostra .fila img{flex:0 0 100%;width:100%;display:block}
+.punti{display:flex;justify-content:center;gap:10px;margin-top:16px}
+.punti button{width:9px;height:9px;padding:0;border:0;border-radius:50%;background:var(--line);cursor:pointer;transition:background .3s,transform .3s}
+.punti button.on{background:var(--accent2);transform:scale(1.25)}
 section{padding:56px 0 0}
 h2{font-size:26px;margin:0 0 20px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
@@ -87,8 +93,14 @@ html[lang=it] [data-lang=it]{display:revert}
     <a class="btn" href="https://www.paypal.com/paypalme/Jonathanuk"><span style="color:#ec4899">&#9829;</span> <span data-lang="en">Donate</span><span data-lang="it">Dona</span></a>
   </div>
   <div class="ver" id="ver"></div>
-  <div class="shot"><img src="https://raw.githubusercontent.com/JonaDev2026/xvb/main/preview.png" alt="XVB screenshot"></div>
-  <div class="shot"><img src="https://raw.githubusercontent.com/JonaDev2026/xvb/main/preview2.png" alt="XVB playing local files"></div>
+  <div class="shot giostra" id="giostra">
+    <div class="fila">
+      <img src="https://raw.githubusercontent.com/JonaDev2026/xvb/main/preview.png" alt="XVB: live TV">
+      <img src="https://raw.githubusercontent.com/JonaDev2026/xvb/main/preview2.png" alt="XVB: local files">
+      <img src="https://raw.githubusercontent.com/JonaDev2026/xvb/main/preview3.png" alt="XVB: music">
+    </div>
+  </div>
+  <div class="punti" id="punti"></div>
 </div>
 
 <section id="features">
@@ -98,8 +110,8 @@ html[lang=it] [data-lang=it]{display:revert}
       <p data-lang="en">Reads every m3u it finds in its playlists folder; subfolders become categories. Remote lists are added by URL and kept as URLs: cached locally, refreshed every six hours and on demand, with the last copy used offline. Each entry can be removed with a click, after confirmation. The last playlist, the last channel, the volume and every setting are restored at start‑up.</p>
       <p data-lang="it">Legge ogni m3u nella cartella delle playlist; le sottocartelle diventano categorie. Le liste remote si aggiungono per url e restano url: copia in cache, aggiornata ogni sei ore e su richiesta, ultima copia usata se manca la rete. Ogni voce si toglie con un clic, dopo conferma. Ultima playlist, ultimo canale, volume e ogni impostazione tornano all'avvio.</p></div>
     <div class="card"><h3><i class="dot" style="background:#22c55e"></i><span data-lang="en">Channels</span><span data-lang="it">Canali</span></h3>
-      <p data-lang="en">Instant search as you type, previous/next from the bar or the keyboard, a switch button to jump back to the previous channel. Every channel carries a colour taken from its logo (dominant hue, tuned for a dark background); the channel on air, its programme title, the progress line and the gradient behind the controls all share it. Channels that fail or don't start within 30 seconds are skipped.</p>
-      <p data-lang="it">Ricerca istantanea mentre scrivi, precedente/successivo dalla barra o dalla tastiera, tasto switch per tornare al canale di prima. Ogni canale ha un colore preso dal suo logo (tinta dominante, regolata per lo sfondo scuro); canale in onda, titolo del programma, linea di avanzamento e sfumatura dietro i comandi lo condividono. I canali che falliscono o non partono entro 30 secondi vengono saltati.</p></div>
+      <p data-lang="en">Instant search as you type, previous/next from the bar or the keyboard, a switch button to jump back to the previous channel. Each row shows the channel and, under it, the programme on air; on the left its logo, a dot or a coloured border, as you prefer. Every channel carries a colour taken from its logo (dominant hue, tuned for a dark background); the channel on air, its programme title, the progress line and the gradient behind the controls all share it. Channels that fail or don't start within 30 seconds are skipped.</p>
+      <p data-lang="it">Ricerca istantanea mentre scrivi, precedente/successivo dalla barra o dalla tastiera, tasto switch per tornare al canale di prima. Ogni riga mostra il canale e sotto il programma in onda; a sinistra il logo, un pallino o un bordo colorato, a scelta. Ogni canale ha un colore preso dal suo logo (tinta dominante, regolata per lo sfondo scuro); canale in onda, titolo del programma, linea di avanzamento e sfumatura dietro i comandi lo condividono. I canali che falliscono o non partono entro 30 secondi vengono saltati.</p></div>
     <div class="card"><h3><i class="dot" style="background:#f59e0b"></i><span data-lang="en">TV guide</span><span data-lang="it">Guida TV</span></h3>
       <p data-lang="en">XMLTV sources by URL or path, plain or gzipped, more than one at a time (they merge). Channels are matched by <code>tvg-id</code>, then by normalised name, so "NEWS 24 HD" and "News24" line up; times are converted to local time. The row under the video shows the programme on air with its slot; the line above the controls shows how far it has run. The Programme guide window lays out the whole list on a timeline, half an hour back to six hours ahead, and opens a channel with a click.</p>
       <p data-lang="it">Guide XMLTV per url o percorso, xml o gz, anche più di una insieme (si fondono). I canali si abbinano per <code>tvg-id</code>, poi per nome normalizzato, così "NEWS 24 HD" e "News24" coincidono; gli orari sono convertiti nell'ora locale. La riga sotto il video mostra il programma in onda con la fascia; la linea sopra i comandi quanto è avanzato. La finestra Programme guide mette tutta la lista su una timeline, da mezz'ora fa a sei ore avanti, e apre un canale con un clic.</p></div>
@@ -107,8 +119,8 @@ html[lang=it] [data-lang=it]{display:revert}
       <p data-lang="en">Records the stream as‑is, without re‑encoding, so there is no extra CPU load and the quality is the one you are watching. Files are named after the programme in the guide and filed per channel and per day under <code>~/Videos/xvb/</code>. Start and end can be scheduled: at the given time the app tunes the channel, records, and stops. Recordings show up in the sidebar and play back in the player, with the progress line tracking the file.</p>
       <p data-lang="it">Registra il flusso così com'è, senza ricodifica: nessun carico extra sulla CPU e la qualità è quella che stai guardando. I file prendono il nome del programma in guida e finiscono per canale e per giorno sotto <code>~/Videos/xvb/</code>. Inizio e fine si possono pianificare: all'ora stabilita l'app sintonizza il canale, registra e si ferma. Le registrazioni compaiono nella sidebar e si riguardano nel lettore, con la linea di avanzamento sul file.</p></div>
     <div class="card"><h3><i class="dot" style="background:#14b8a6"></i><span data-lang="en">Local files</span><span data-lang="it">File locali</span></h3>
-      <p data-lang="en">The File menu works like a media player: Open folder… adds a folder of videos or music to the sidebar, and its files are listed on the left; Open file… plays a file right away and keeps it under "Imported media". Progress line on the file, elapsed / total time in the status row, ‹ › for previous and next. The chooser is drawn by the app, dark like the rest. Formats are mpv's, that is ffmpeg's. Video: mkv, mp4, m4v, avi, mov, webm, ts, m2ts, mpg, mpeg, wmv, flv, ogv. Audio: mp3, flac, ogg, opus, m4a, aac, wav, wma, ape. Subtitles srt, ass, ssa, sub, vtt next to the video are picked up by themselves.</p>
-      <p data-lang="it">Il menu File lavora come un lettore multimediale: Open folder… aggiunge una cartella di video o musica alla sidebar, e i file compaiono a sinistra; Open file… riproduce subito un file e lo tiene sotto "Imported media". Linea di avanzamento sul file, tempo passato / totale nella riga di stato, ‹ › per il file prima e dopo. La finestra di scelta è disegnata dall'app, scura come il resto. I formati sono quelli di mpv, cioè di ffmpeg. Video: mkv, mp4, m4v, avi, mov, webm, ts, m2ts, mpg, mpeg, wmv, flv, ogv. Audio: mp3, flac, ogg, opus, m4a, aac, wav, wma, ape. I sottotitoli srt, ass, ssa, sub, vtt accanto al video vengono presi da soli.</p></div>
+      <p data-lang="en">The File menu works like a media player: Open folder… adds a folder of videos or music to the sidebar with its file count and one row per subfolder; Open file… plays a file right away and keeps it under "Imported media". Files play one after the other, or shuffled (the list itself is mixed, so you see what comes next); each one restarts where you left it. Music shows its title and "Artist · Album · Year"; films their title and "2023 · Drama · ★ 7.8". Covers and posters sit in a column on the left: the ones missing are downloaded by themselves at start-up, film posters and details from TMDB and album covers from MusicBrainz, no key to set up. Click or drag on the progress line, -10 / +10, Shift+← → to seek. Formats are mpv's, that is ffmpeg's. Video: mkv, mp4, m4v, avi, mov, webm, ts, m2ts, mpg, mpeg, wmv, flv, ogv. Audio: mp3, flac, ogg, opus, m4a, aac, wav, wma, ape. Subtitles srt, ass, ssa, sub, vtt next to the video are picked up by themselves.</p>
+      <p data-lang="it">Il menu File lavora come un lettore multimediale: Open folder… aggiunge una cartella di video o musica alla sidebar col numero di file e una riga per sottocartella; Open file… riproduce subito un file e lo tiene sotto "Imported media". I file vanno uno dopo l'altro, o mescolati con lo shuffle (si mescola l'elenco stesso, così vedi cosa viene dopo); ognuno riparte da dove l'hai lasciato. La musica mostra il titolo e "Artista · Album · Anno"; i film il titolo e "2023 · Drama · ★ 7.8". Copertine e poster stanno in una colonna a sinistra: quelli che mancano si scaricano da soli all'avvio, poster e dettagli dei film da TMDB e copertine degli album da MusicBrainz, senza chiavi da configurare. Clic o trascinamento sulla linea di avanzamento, -10 / +10, Shift+← → per scorrere. I formati sono quelli di mpv, cioè di ffmpeg. Video: mkv, mp4, m4v, avi, mov, webm, ts, m2ts, mpg, mpeg, wmv, flv, ogv. Audio: mp3, flac, ogg, opus, m4a, aac, wav, wma, ape. I sottotitoli srt, ass, ssa, sub, vtt accanto al video vengono presi da soli.</p></div>
     <div class="card"><h3><i class="dot" style="background:#8b5cf6"></i><span data-lang="en">Quality</span><span data-lang="it">Qualità</span></h3>
       <p data-lang="en">On HLS streams with several variants the player starts from the best and stays there; the gear menu lists the available qualities by name and resolution and lets you pick one. Streams with audio in a separate group are handled through a local single‑variant master, so video and audio stay in one demuxer.</p>
       <p data-lang="it">Sugli HLS con più varianti parte dalla migliore e ci resta; il menu dell'ingranaggio elenca le qualità disponibili con nome e risoluzione e lascia scegliere. I flussi con l'audio in un gruppo separato passano da un master locale a variante singola, così video e audio restano in un solo demuxer.</p></div>
@@ -116,8 +128,8 @@ html[lang=it] [data-lang=it]{display:revert}
       <p data-lang="en">Playback speed from x0.5 to x2, aspect ratio (auto, 16:9, 4:3, 21:9) and fill screen, deinterlacing, brightness, contrast and saturation, screenshots, always on top. Audio and subtitle track selection, +50% volume boost, loudness normalisation, and an audio delay adjustable in 100 ms steps that is saved per channel for streams whose audio runs ahead of the picture.</p>
       <p data-lang="it">Velocità da x0.5 a x2, proporzioni (auto, 16:9, 4:3, 21:9) e riempi schermo, deinterlaccia, luminosità, contrasto e saturazione, istantanee, sempre in primo piano. Scelta di traccia audio e sottotitoli, boost +50%, normalizzazione del volume, e un ritardo audio regolabile a passi di 100 ms, salvato per canale, per i flussi con l'audio in anticipo sul video.</p></div>
     <div class="card"><h3><i class="dot" style="background:#ec4899"></i><span data-lang="en">Favourites</span><span data-lang="it">Preferiti</span></h3>
-      <p data-lang="en">The heart in the control bar adds or removes the channel on air. Favourites are a real m3u list, shown as a red folder shared by all playlists; a channel is recognised by name even when it comes from another list.</p>
-      <p data-lang="it">Il cuore nella barra dei comandi mette o toglie il canale in onda. I preferiti sono una vera lista m3u, mostrata come cartella rossa comune a tutte le playlist; il canale è riconosciuto dal nome anche se viene da un'altra lista.</p></div>
+      <p data-lang="en">The heart in the control bar adds or removes the channel on air. Favourites are real m3u lists in a red folder shared by all playlists, one each for channels, music and videos; a channel is recognised by name even when it comes from another list.</p>
+      <p data-lang="it">Il cuore nella barra dei comandi mette o toglie il canale in onda. I preferiti sono vere liste m3u in una cartella rossa comune a tutte le playlist, una per canali, musica e video; il canale è riconosciuto dal nome anche se viene da un'altra lista.</p></div>
     <div class="card"><h3><i class="dot" style="background:#a3a3b3"></i><span data-lang="en">Interface</span><span data-lang="it">Interfaccia</span></h3>
       <p data-lang="en">Dark throughout, including menus and dialogs drawn by the app itself. Two sidebars that resize by dragging and hide with one button; in full screen, or with the sidebars closed, controls and pointer disappear after three idle seconds. Interface in English, Italian, Spanish and French. Update check against GitHub releases, with a notice when a new version is out.</p>
       <p data-lang="it">Scura ovunque, menu e finestre compresi, disegnati dall'app stessa. Due sidebar che si ridimensionano trascinando e si nascondono con un tasto; a schermo intero, o con le sidebar chiuse, comandi e puntatore spariscono dopo tre secondi. Interfaccia in inglese, italiano, spagnolo e francese. Controllo aggiornamenti sulle release GitHub, con avviso quando esce una versione nuova.</p></div>
@@ -129,6 +141,7 @@ html[lang=it] [data-lang=it]{display:revert}
         <tr><td><kbd>Space</kbd></td><td><span data-lang="en">pause / resume</span><span data-lang="it">pausa / riprendi</span></td></tr>
         <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td><span data-lang="en">previous / next channel</span><span data-lang="it">canale precedente / successivo</span></td></tr>
         <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td><span data-lang="en">volume</span><span data-lang="it">volume</span></td></tr>
+        <tr><td><kbd>Shift</kbd> <kbd>←</kbd> <kbd>→</kbd></td><td><span data-lang="en">ten seconds back / forward</span><span data-lang="it">dieci secondi indietro / avanti</span></td></tr>
         <tr><td><kbd>M</kbd></td><td><span data-lang="en">mute</span><span data-lang="it">muto</span></td></tr>
         <tr><td><kbd>+</kbd> <kbd>−</kbd></td><td><span data-lang="en">audio delay ±100 ms</span><span data-lang="it">ritardo audio ±100 ms</span></td></tr>
         <tr><td><kbd>F11</kbd> <kbd>Esc</kbd></td><td><span data-lang="en">full screen / leave</span><span data-lang="it">schermo intero / esci</span></td></tr>
@@ -146,16 +159,16 @@ html[lang=it] [data-lang=it]{display:revert}
   <pre id="cmd">sudo apt install ./xvb_*_all.deb</pre>
   <p data-lang="en">Then launch <b>XVB</b> from the menu, or type <code>xvb</code>. To update, install the new package over the old one. To remove: <code>sudo apt remove xvb</code>.</p>
   <p data-lang="it">Poi apri <b>XVB</b> dal menu, o scrivi <code>xvb</code>. Per aggiornare installa il nuovo pacchetto sopra il vecchio. Per togliere: <code>sudo apt remove xvb</code>.</p>
-  <p data-lang="en">Without the package, on any distribution. XVB needs libmpv, Python 3 with tkinter, Pillow with its Tk module, and python‑mpv:</p>
-  <p data-lang="it">Senza pacchetto, su qualsiasi distribuzione. Servono libmpv, Python 3 con tkinter, Pillow col suo modulo Tk, e python‑mpv:</p>
+  <p data-lang="en">Without the package, on any distribution. XVB needs libmpv, Python 3 with tkinter, Pillow with its Tk module, python‑mpv, mutagen (music tags) and ffmpeg (video thumbnails):</p>
+  <p data-lang="it">Senza pacchetto, su qualsiasi distribuzione. Servono libmpv, Python 3 con tkinter, Pillow col suo modulo Tk, python‑mpv, mutagen (tag della musica) e ffmpeg (anteprime dei video):</p>
   <pre><span class="c"># Debian, Ubuntu, Linux Mint</span>
-sudo apt install -y libmpv2 python3-tk python3-pil python3-pil.imagetk python3-mpv
+sudo apt install -y libmpv2 python3-tk python3-pil python3-pil.imagetk python3-mpv python3-mutagen ffmpeg
 <span class="c"># Fedora</span>
-sudo dnf install -y mpv-libs python3-tkinter python3-pillow python3-pillow-tk python3-pip &amp;&amp; pip install --user python-mpv
+sudo dnf install -y mpv-libs python3-tkinter python3-pillow python3-pillow-tk python3-mutagen ffmpeg python3-pip &amp;&amp; pip install --user python-mpv
 <span class="c"># Arch, Manjaro</span>
-sudo pacman -S --needed mpv tk python-pillow python-mpv
+sudo pacman -S --needed mpv tk python-pillow python-mpv python-mutagen ffmpeg
 <span class="c"># openSUSE</span>
-sudo zypper install -y libmpv2 python3-tk python3-Pillow python3-Pillow-tk python3-pip &amp;&amp; pip install --user python-mpv</pre>
+sudo zypper install -y libmpv2 python3-tk python3-Pillow python3-Pillow-tk python3-mutagen ffmpeg python3-pip &amp;&amp; pip install --user python-mpv</pre>
   <p data-lang="en">then:</p>
   <p data-lang="it">poi:</p>
   <pre>git clone https://github.com/JonaDev2026/xvb.git ~/xvb
@@ -178,12 +191,23 @@ python3 ~/xvb/xvb.py</pre>
 </section>
 
 <footer>
-  <div>XVB — MIT licence — © 2026 Jonathan Sanfilippo</div>
+  <div>XVB — MIT licence — © 2026 Jonathan Sanfilippo<br><span style="font-size:12px">This product uses the TMDB API but is not endorsed or certified by TMDB. Album covers from MusicBrainz and the Cover Art Archive.</span></div>
   <div><a href="https://www.paypal.com/paypalme/Jonathanuk"><span data-lang="en">Donate</span><span data-lang="it">Dona</span></a> · <a href="https://github.com/JonaDev2026/xvb/issues"><span data-lang="en">Report a problem</span><span data-lang="it">Segnala un problema</span></a> · <a href="https://github.com/JonaDev2026/xvb/releases"><span data-lang="en">All releases</span><span data-lang="it">Tutte le release</span></a></div>
 </footer>
 
 </div>
 <script>
+(function(){
+  // il carosello: una immagine alla volta, ogni 5 secondi, i punti sotto
+  var g=document.getElementById('giostra'), fila=g.querySelector('.fila'),
+      imgs=fila.querySelectorAll('img'), punti=document.getElementById('punti'), i=0, t;
+  function vai(n){i=(n+imgs.length)%imgs.length;fila.style.transform='translateX('+(-100*i)+'%)';
+    [].forEach.call(punti.children,function(p,k){p.className=k==i?'on':''});}
+  function parti(){clearInterval(t);t=setInterval(function(){vai(i+1)},5000);}
+  [].forEach.call(imgs,function(_,k){var b=document.createElement('button');
+    b.setAttribute('aria-label','Slide '+(k+1));b.onclick=function(){vai(k);parti();};punti.appendChild(b);});
+  vai(0);parti();
+})();
 (function(){
   var html=document.documentElement;
   function lang(l){html.lang=l;document.getElementById('en').className=l=='en'?'on':'';document.getElementById('it').className=l=='it'?'on':'';try{localStorage.setItem('xvb-lang',l)}catch(e){}}
