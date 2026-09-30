@@ -1,7 +1,7 @@
 # XVB Player
 
 A media player for Linux Mint 22+, built on libmpv. It plays local
-videos and music, CDs, DVDs and ISO images, and IPTV playlists with a TV
+videos and music, video DVDs, data discs and ISO images, and IPTV playlists with a TV
 guide and recording.
 
 ![XVB](preview.png)
@@ -12,7 +12,7 @@ guide and recording.
 
 - Local videos and music, with resume, shuffle and seeking
 - Titles, covers and posters fetched automatically (TMDB, MusicBrainz)
-- CDs, DVDs and ISO images
+- Video DVDs (not encrypted), data CDs and DVDs, and ISO images; audio CDs and Blu-ray are not supported
 - IPTV: m3u playlists from file or URL, XMLTV guide, recording and scheduling
 - Favourites for channels, music and videos
 - Video and audio adjustments, tracks and subtitles, screenshots
@@ -80,14 +80,14 @@ MIT © 2026 Jonathan Sanfilippo
 # XVB Player (italiano)
 
 Lettore multimediale per Linux Mint 22+, basato su libmpv. Riproduce
-video e musica locali, CD, DVD e immagini ISO, e playlist IPTV con guida
+video e musica locali, DVD video, dischi di dati e immagini ISO, e playlist IPTV con guida
 TV e registrazione.
 
 ## Funzioni
 
 - Video e musica locali, con ripresa, riproduzione casuale e avanzamento
 - Titoli, copertine e poster scaricati in automatico (TMDB, MusicBrainz)
-- CD, DVD e immagini ISO
+- DVD video (non cifrati), CD e DVD di dati, e immagini ISO; CD audio e Blu-ray non sono supportati
 - IPTV: playlist m3u da file o URL, guida XMLTV, registrazione e programmazione
 - Preferiti per canali, musica e video
 - Regolazioni video e audio, tracce e sottotitoli, istantanee
