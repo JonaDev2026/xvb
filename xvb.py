@@ -32,7 +32,7 @@ import tkinter as tk
 from tkinter import filedialog, ttk
 import tkinter.font as tkfont
 import xml.etree.ElementTree as ET
-from urllib.parse import urljoin, urlparse
+from urllib.parse import quote, urljoin, urlparse
 from urllib.request import Request, urlopen
 
 import mpv
@@ -47,8 +47,194 @@ try:                            # per i loghi: ridimensiona e legge i jpg
     HA_PIL = True
 except ImportError:             # senza, si va di PhotoImage: solo png
     HA_PIL = False
+try:                            # MPRIS: tasti multimediali e pannello audio del desktop
+    import dbus
+    import dbus.service
+    import dbus.mainloop.glib
+    from gi.repository import GLib
+    HA_MPRIS = True
+except Exception:
+    HA_MPRIS = False
 
-VERSIONE = "3.3"
+MPRIS_RADICE = "org.mpris.MediaPlayer2"
+MPRIS_PLAYER = "org.mpris.MediaPlayer2.Player"
+MPRIS_PROP = "org.freedesktop.DBus.Properties"
+
+
+OV_SFONDO, OV_BARRA, OV_PIP, OV_MENU = 60, 61, 62, 63    # in ordine: sotto lo sfondo, poi
+                                                        # barra, PiP e il menu qualita'
+
+
+
+def premoltiplica(im):
+    """mpv vuole le sovrapposizioni con l'alfa gia' moltiplicato nei colori
+    (python-mpv dice di farlo ma non lo fa): senza, le parti semitrasparenti
+    escono coi colori pieni e la sfumatura diventa una fascia."""
+    from PIL import ImageChops
+    r, g, b, a = im.convert("RGBA").split()
+    return Image.merge("RGBA", (ImageChops.multiply(r, a), ImageChops.multiply(g, a),
+                                ImageChops.multiply(b, a), a))
+
+
+def avvia_mpris(app):
+    """XVB sul bus di sessione come lettore MPRIS: i tasti multimediali
+    della tastiera e il pannello audio di Cinnamon (titolo, copertina,
+    comandi). Il bus gira in un thread suo col ciclo di GLib; i comandi
+    tornano a Tk con root.after. None se dbus manca o il nome e' preso."""
+    if not HA_MPRIS:
+        return None
+    try:
+        dbus.mainloop.glib.threads_init()
+        dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
+        bus = dbus.SessionBus()
+        nome = dbus.service.BusName(MPRIS_RADICE + ".xvb", bus, do_not_queue=True)
+    except Exception:
+        return None
+
+    class Mpris(dbus.service.Object):
+        def __init__(self):
+            super().__init__(nome, "/org/mpris/MediaPlayer2")
+            self.stato = {}             # scritto da Tk (dati_mpris), letto qui
+
+        def tk(self, f, *a):
+            app.root.after(0, lambda: f(*a))
+
+        # --- org.mpris.MediaPlayer2
+        @dbus.service.method(MPRIS_RADICE)
+        def Raise(self):
+            self.tk(app.mpris_alza)
+
+        @dbus.service.method(MPRIS_RADICE)
+        def Quit(self):
+            self.tk(app.chiudi)
+
+        # --- org.mpris.MediaPlayer2.Player
+        @dbus.service.method(MPRIS_PLAYER)
+        def Next(self):
+            self.tk(app.salta, +1)
+
+        @dbus.service.method(MPRIS_PLAYER)
+        def Previous(self):
+            self.tk(app.salta, -1)
+
+        @dbus.service.method(MPRIS_PLAYER)
+        def PlayPause(self):
+            self.tk(app.mpris_comando, "playpause")
+
+        @dbus.service.method(MPRIS_PLAYER)
+        def Play(self):
+            self.tk(app.mpris_comando, "play")
+
+        @dbus.service.method(MPRIS_PLAYER)
+        def Pause(self):
+            self.tk(app.mpris_comando, "pause")
+
+        @dbus.service.method(MPRIS_PLAYER)
+        def Stop(self):
+            self.tk(app.ferma)
+
+        @dbus.service.method(MPRIS_PLAYER, in_signature="x")
+        def Seek(self, us):
+            self.tk(app.avanza, int(us) / 1e6)
+
+        @dbus.service.method(MPRIS_PLAYER, in_signature="ox")
+        def SetPosition(self, _traccia, us):
+            self.tk(app.mpris_posizione, int(us) / 1e6)
+
+        @dbus.service.method(MPRIS_PLAYER, in_signature="s")
+        def OpenUri(self, _uri):
+            pass
+
+        @dbus.service.signal(MPRIS_PLAYER, signature="x")
+        def Seeked(self, us):
+            pass
+
+        # --- le proprieta'
+        def tutte(self, iface):
+            if iface == MPRIS_RADICE:
+                return dbus.Dictionary({
+                    "CanQuit": True, "CanRaise": True, "HasTrackList": False,
+                    "Identity": "XVB Player", "DesktopEntry": "xvb",
+                    "SupportedUriSchemes": dbus.Array(["file", "http", "https"], signature="s"),
+                    "SupportedMimeTypes": dbus.Array([], signature="s"),
+                }, signature="sv")
+            if iface != MPRIS_PLAYER:
+                return dbus.Dictionary({}, signature="sv")
+            st = self.stato
+            meta = {"mpris:trackid": dbus.ObjectPath("/org/xvb/track/%d" % st.get("giro", 0))}
+            if st.get("titolo"):
+                meta["xesam:title"] = st["titolo"]
+            if st.get("artista"):
+                meta["xesam:artist"] = dbus.Array([st["artista"]], signature="s")
+            if st.get("album"):
+                meta["xesam:album"] = st["album"]
+            if st.get("arte"):
+                meta["mpris:artUrl"] = "file://" + quote(st["arte"])
+            if st.get("durata"):
+                meta["mpris:length"] = dbus.Int64(int(st["durata"] * 1e6))
+            try:
+                pos = int((app.mpv.time_pos or 0) * 1e6)
+            except Exception:
+                pos = 0
+            return dbus.Dictionary({
+                "PlaybackStatus": st.get("stato", "Stopped"),
+                "LoopStatus": st.get("giro_ripeti", "None"),
+                "Rate": 1.0, "MinimumRate": 1.0, "MaximumRate": 1.0,
+                "Shuffle": bool(st.get("shuffle")),
+                "Metadata": dbus.Dictionary(meta, signature="sv"),
+                "Volume": float(st.get("volume", 1.0)),
+                "Position": dbus.Int64(pos),
+                "CanGoNext": True, "CanGoPrevious": True,
+                "CanPlay": True, "CanPause": True,
+                "CanSeek": bool(st.get("durata")), "CanControl": True,
+            }, signature="sv")
+
+        @dbus.service.method(MPRIS_PROP, in_signature="ss", out_signature="v")
+        def Get(self, iface, prop):
+            return self.tutte(iface)[prop]
+
+        @dbus.service.method(MPRIS_PROP, in_signature="s", out_signature="a{sv}")
+        def GetAll(self, iface):
+            return self.tutte(iface)
+
+        @dbus.service.method(MPRIS_PROP, in_signature="ssv")
+        def Set(self, iface, prop, v):
+            if prop == "Volume":
+                self.tk(app.volume.set, int(max(0.0, min(1.5, float(v))) * 100))
+            elif prop == "Shuffle":
+                self.tk(app.mpris_shuffle, bool(v))
+            elif prop == "LoopStatus":
+                self.tk(app.metti_ripeti,
+                        {"Track": "uno", "Playlist": "tutti"}.get(str(v), ""))
+
+        @dbus.service.signal(MPRIS_PROP, signature="sa{sv}as")
+        def PropertiesChanged(self, iface, cambiati, tolti):
+            pass
+
+        def aggiorna(self, stato):
+            """Da Tk: se qualcosa e' cambiato, lo si dice al desktop."""
+            if stato == self.stato:
+                return
+            self.stato = stato
+
+            def manda():
+                try:
+                    tutto = self.tutte(MPRIS_PLAYER)
+                    del tutto["Position"]
+                    self.PropertiesChanged(MPRIS_PLAYER, tutto, dbus.Array([], signature="s"))
+                except Exception:
+                    pass
+                return False
+            GLib.idle_add(manda)
+
+    try:
+        m = Mpris()
+    except Exception:
+        return None
+    threading.Thread(target=GLib.MainLoop().run, daemon=True).start()
+    return m
+
+VERSIONE = "3.4"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"        # dove stanno le release, per l'avviso di aggiornamento
@@ -122,6 +308,7 @@ TESTI = {
         "No repeat": "Non ripetere",
         "Repeat one": "Ripeti il file",
         "Repeat all": "Ripeti tutto",
+        "Previous chapter": "Capitolo precedente", "Next chapter": "Capitolo successivo", "Chapter %d": "Capitolo %d", "Chapters": "Capitoli",
         "until %s": "fino alle %s",
         "Delete": "Elimina",
         "Delete %s": "Elimina %s",
@@ -136,7 +323,7 @@ TESTI = {
         "Speed x%g": "Velocità x%g",
         "Aspect %s": "Proporzioni %s",
         "Fill screen (crop)": "Riempi lo schermo (taglia)",
-        "Deinterlace": "Deinterlaccia",
+        "Deinterlace": "Deinterlaccia", "Hardware decoding": "Decodifica hardware",
         "Brightness +": "Luminosità +",
         "Brightness -": "Luminosità -",
         "Contrast +": "Contrasto +",
@@ -199,7 +386,7 @@ TESTI = {
         "audio delay %+.1fs": "ritardo audio %+.1fs",
         "guide loaded: %d channels, %d programmes": "guida caricata: %d canali, %d programmi",
         "not in the guide": "non in guida",
-        "Search channels": "Cerca un canale",
+        "Search": "Cerca",
         "File": "File", "Playlists": "Playlist",
         "ready": "pronto",
         "unnamed": "senza nome",
@@ -311,6 +498,7 @@ TESTI = {
         "No repeat": "Sin repetir",
         "Repeat one": "Repetir uno",
         "Repeat all": "Repetir todo",
+        "Previous chapter": "Capítulo anterior", "Next chapter": "Capítulo siguiente", "Chapter %d": "Capítulo %d", "Chapters": "Capítulos",
         "until %s": "hasta las %s",
         "Delete": "Eliminar",
         "Delete %s": "Eliminar %s",
@@ -325,7 +513,7 @@ TESTI = {
         "Speed x%g": "Velocidad x%g",
         "Aspect %s": "Proporción %s",
         "Fill screen (crop)": "Llenar pantalla (recortar)",
-        "Deinterlace": "Desentrelazar",
+        "Deinterlace": "Desentrelazar", "Hardware decoding": "Decodificación por hardware",
         "Brightness +": "Brillo +",
         "Brightness -": "Brillo -",
         "Contrast +": "Contraste +",
@@ -388,7 +576,7 @@ TESTI = {
         "audio delay %+.1fs": "retardo de audio %+.1fs",
         "guide loaded: %d channels, %d programmes": "guía cargada: %d canales, %d programas",
         "not in the guide": "no está en la guía",
-        "Search channels": "Buscar canal",
+        "Search": "Buscar",
         "File": "Archivo", "Playlists": "Listas",
         "ready": "listo",
         "unnamed": "sin nombre",
@@ -500,6 +688,7 @@ TESTI = {
         "No repeat": "Ne pas répéter",
         "Repeat one": "Répéter un",
         "Repeat all": "Répéter tout",
+        "Previous chapter": "Chapitre précédent", "Next chapter": "Chapitre suivant", "Chapter %d": "Chapitre %d", "Chapters": "Chapitres",
         "until %s": "jusqu'à %s",
         "Delete": "Supprimer",
         "Delete %s": "Supprimer %s",
@@ -514,7 +703,7 @@ TESTI = {
         "Speed x%g": "Vitesse x%g",
         "Aspect %s": "Format %s",
         "Fill screen (crop)": "Remplir l'écran (rogner)",
-        "Deinterlace": "Désentrelacer",
+        "Deinterlace": "Désentrelacer", "Hardware decoding": "Décodage matériel",
         "Brightness +": "Luminosité +",
         "Brightness -": "Luminosité -",
         "Contrast +": "Contraste +",
@@ -577,7 +766,7 @@ TESTI = {
         "audio delay %+.1fs": "retard audio %+.1fs",
         "guide loaded: %d channels, %d programmes": "guide chargé : %d chaînes, %d programmes",
         "not in the guide": "absent du guide",
-        "Search channels": "Rechercher une chaîne",
+        "Search": "Rechercher",
         "File": "Fichier", "Playlists": "Listes",
         "ready": "prêt",
         "unnamed": "sans nom",
@@ -689,6 +878,7 @@ TESTI = {
         "No repeat": "Nicht wiederholen",
         "Repeat one": "Eins wiederholen",
         "Repeat all": "Alle wiederholen",
+        "Previous chapter": "Vorheriges Kapitel", "Next chapter": "Nächstes Kapitel", "Chapter %d": "Kapitel %d", "Chapters": "Kapitel",
         "until %s": "bis %s",
         "Delete": "Löschen",
         "Delete %s": "%s löschen",
@@ -703,7 +893,7 @@ TESTI = {
         "Speed x%g": "Geschwindigkeit x%g",
         "Aspect %s": "Seitenverhältnis %s",
         "Fill screen (crop)": "Bild füllen (zuschneiden)",
-        "Deinterlace": "Deinterlacing",
+        "Deinterlace": "Deinterlacing", "Hardware decoding": "Hardware-Dekodierung",
         "Brightness +": "Helligkeit +",
         "Brightness -": "Helligkeit -",
         "Contrast +": "Kontrast +",
@@ -768,7 +958,7 @@ TESTI = {
         "audio delay %+.1fs": "Tonverzögerung %+.1fs",
         "guide loaded: %d channels, %d programmes": "Programmführer geladen: %d Sender, %d Sendungen",
         "not in the guide": "nicht im Programmführer",
-        "Search channels": "Sender suchen",
+        "Search": "Suchen",
         "File": "Datei",
         "Playlists": "Playlists",
         "ready": "bereit",
@@ -894,6 +1084,7 @@ TESTI = {
         "No repeat": "Não repetir",
         "Repeat one": "Repetir um",
         "Repeat all": "Repetir todos",
+        "Previous chapter": "Capítulo anterior", "Next chapter": "Próximo capítulo", "Chapter %d": "Capítulo %d", "Chapters": "Capítulos",
         "Audio": "Áudio",
         "until %s": "até %s",
         "Delete": "Excluir",
@@ -909,7 +1100,7 @@ TESTI = {
         "Speed x%g": "Velocidade x%g",
         "Aspect %s": "Proporção %s",
         "Fill screen (crop)": "Preencher a tela (cortar)",
-        "Deinterlace": "Desentrelaçar",
+        "Deinterlace": "Desentrelaçar", "Hardware decoding": "Decodificação por hardware",
         "Brightness +": "Brilho +",
         "Brightness -": "Brilho -",
         "Contrast +": "Contraste +",
@@ -974,7 +1165,7 @@ TESTI = {
         "audio delay %+.1fs": "atraso de áudio %+.1fs",
         "guide loaded: %d channels, %d programmes": "guia carregado: %d canais, %d programas",
         "not in the guide": "fora do guia",
-        "Search channels": "Buscar canais",
+        "Search": "Buscar",
         "File": "Arquivo",
         "Playlists": "Playlists",
         "ready": "pronto",
@@ -1100,6 +1291,7 @@ TESTI = {
         "No repeat": "Без повтора",
         "Repeat one": "Повторять один",
         "Repeat all": "Повторять все",
+        "Previous chapter": "Предыдущая глава", "Next chapter": "Следующая глава", "Chapter %d": "Глава %d", "Chapters": "Главы",
         "Audio": "Аудио",
         "until %s": "до %s",
         "Delete": "Удалить",
@@ -1115,7 +1307,7 @@ TESTI = {
         "Speed x%g": "Скорость x%g",
         "Aspect %s": "Пропорции %s",
         "Fill screen (crop)": "Заполнить экран (обрезать)",
-        "Deinterlace": "Деинтерлейсинг",
+        "Deinterlace": "Деинтерлейсинг", "Hardware decoding": "Аппаратное декодирование",
         "Brightness +": "Яркость +",
         "Brightness -": "Яркость -",
         "Contrast +": "Контраст +",
@@ -1180,7 +1372,7 @@ TESTI = {
         "audio delay %+.1fs": "задержка звука %+.1f с",
         "guide loaded: %d channels, %d programmes": "телегид загружен: каналов %d, передач %d",
         "not in the guide": "нет в телегиде",
-        "Search channels": "Поиск каналов",
+        "Search": "Поиск",
         "File": "Файл",
         "Playlists": "Плейлисты",
         "ready": "готово",
@@ -1332,17 +1524,20 @@ SCALA_FILE = ("#ff5257", "#30d158", "#ff7f11", "#42a0ff",   # rosso, verde, aran
 # selezionata al 14. Tk la trasparenza vera non ce l'ha, quindi sono i
 # grigi che verrebbero fuori da quel bianco sopra al pannello.
 FONDO = "#121212"          # lo sfondo
-PANNELLO = "#1e1e1e"       # la superficie dei pannelli
-BARRA = "#121212"          # la barra dei comandi
+PANNELLO = "#131215"       # la superficie dei pannelli (sidebar, come Celluloid)
+BARRA = PANNELLO           # la barra dei comandi: come quella dei menu in alto
 STATO = "#0c0c0c"          # la riga col nome del canale, piu' scura
 TASTO = "#2c2c2c"          # bianco 8% sopra al pannello: bottoni, casella
 SCELTO = "#3a3a3a"         # bianco 14%: la riga selezionata
-ZEBRA = "#252525"          # bianco 5%: una riga si' e una no nell'elenco
+ZEBRA = "#212024"          # una riga si' e una no, e le sottocategorie a destra
 TESTO = "#e0e0e0"          # bianco 87%: il testo
 GRIGIO = "#9e9e9e"         # bianco 60%: il testo secondario
 ACCENTO = "#bb86fc"        # il colore primario, per volume e caricamento
 IN_ONDA = "#3b2f4f"        # il primario in trasparenza: cio' che sta andando
 TESTO_ONDA = "#e9ddff"     # il testo sopra al viola
+CERCA = "#252428"          # la pillola della ricerca
+CIMA = PANNELLO            # la barra dei menu in alto: come le sidebar
+MENU = CERCA               # le tendine e la voce scelta nella barra in alto: come la ricerca
 
 
 # ------------------------------------------------------- quello che ricorda
@@ -1499,7 +1694,7 @@ FILE_COLORI = os.path.join(CASA, ".cache", "xvb", "colori.json")
 FILE_TAG = os.path.join(CASA, ".cache", "xvb", "tag.json")
 RIGA_ELENCO = 44                # due righe: nome e, sotto, programma o tag
 LOGO_L, LOGO_A = 56, 44         # logo / copertina nella colonna a sinistra dell'elenco
-COLONNA = LOGO_L + 4            # la colonna dei loghi: fuori dalle righe, alta quanto la voce
+COLONNA = LOGO_L                # la colonna dei loghi: fuori dalle righe, alta quanto la voce
 CACHE_ANTEPRIME = os.path.join(CASA, ".cache", "xvb", "anteprime")
 
 
@@ -1921,15 +2116,25 @@ def immagine_lista(dove):
     return None
 
 
-def carica_logo(f, larga, alta, dentro=None):
+def carica_logo(f, larga, alta, dentro=None, margine=0, quadrata=False):
     """Un'immagine come immagine Tk, dentro un riquadro fisso, centrata.
     Con `dentro` (px) l'immagine e' piu' piccola del riquadro, che resta
     quello (cosi' resta allineata alle altre). None se non si legge."""
     try:
         if HA_PIL:
             im = Image.open(f).convert("RGBA")
-            k = min((dentro or larga) / float(max(1, im.width)),
-                    (dentro or alta) / float(max(1, im.height)))
+            if quadrata and im.height > im.width:
+                # un poster (alto e stretto): il quadrato centrale, un po'
+                # verso l'alto (titolo e volti), alto quanto il riquadro
+                lato = im.width
+                y0 = int((im.height - lato) * 0.3)
+                im = im.crop((0, y0, lato, y0 + lato)).resize((alta, alta), Image.LANCZOS)
+                box = Image.new("RGBA", (larga, alta), (0, 0, 0, 0))
+                box.paste(im, ((larga - alta) // 2, 0))
+                return ImageTk.PhotoImage(box)
+            # margine: px vuoti tutto intorno (i loghi dei canali IPTV)
+            k = min((dentro or larga - 2 * margine) / float(max(1, im.width)),
+                    (dentro or alta - 2 * margine) / float(max(1, im.height)))
             im = im.resize((max(1, int(im.width * k)),
                             max(1, int(im.height * k))), Image.LANCZOS)
             box = Image.new("RGBA", (larga, alta), (0, 0, 0, 0))
@@ -2565,12 +2770,12 @@ class Ricerca(tk.Canvas):
     la lente a sinistra, la scritta grigia quando e' vuota. La pillola e'
     disegnata su una tela e la casella vera ci sta sopra."""
 
-    def __init__(self, dove, cambia, alta=36, vuota="Search channels"):
+    def __init__(self, dove, cambia, alta=36, vuota="Search"):
         tk.Canvas.__init__(self, dove, height=alta, bg=PANNELLO,
                            highlightthickness=0, bd=0)
         self.alta, self.cambia, self.vuota = alta, cambia, vuota
         self.testo = tk.StringVar()
-        self.casella = tk.Entry(self, textvariable=self.testo, bg=TASTO,
+        self.casella = tk.Entry(self, textvariable=self.testo, bg=CERCA,
                                 fg=TESTO, insertbackground=ACCENTO,
                                 relief="flat", bd=0, highlightthickness=0,
                                 font=("TkDefaultFont", 10))
@@ -2587,9 +2792,9 @@ class Ricerca(tk.Canvas):
         w, h, r = self.winfo_width(), self.alta, self.alta // 2
         # la pillola: due tondi e un rettangolo in mezzo
         for x in (0, w - 2 * r):
-            self.create_oval(x, 0, x + 2 * r, h, fill=TASTO, outline="",
+            self.create_oval(x, 0, x + 2 * r, h, fill=CERCA, outline="",
                              tags="pillola")
-        self.create_rectangle(r, 0, w - r, h, fill=TASTO, outline="",
+        self.create_rectangle(r, 0, w - r, h, fill=CERCA, outline="",
                               tags="pillola")
         # la lente
         cx, cy = r + 2, h / 2.0
@@ -2854,6 +3059,9 @@ class Guida(tk.Toplevel):
         self.destroy()
 
 
+SCORRE = object()                # nelle voci di una Tendina: un gruppo che scorre
+
+
 class Tendina(object):
     """Il menu a tendina disegnato noi, nello stile delle finestrelle:
     scuro, bordo sottile, voci con aria, spunta lilla su quella attiva,
@@ -2882,28 +3090,34 @@ class Tendina(object):
         top.geometry("+-9000+-9000")        # nasce fuori dallo schermo, niente lampo
         dentro = tk.Frame(top, bg=PANNELLO)
         dentro.pack(padx=1, pady=1)
-        larga = max([len(v[0]) for v in voci if v] + [18]) * 8 + 60
+        # un gruppo che scorre: (SCORRE, [voci], righe) - resta alto al piu'
+        # "righe" voci e il resto si vede con la rotella (i capitoli)
+        piatte = []
+        for v in voci:
+            if v and v[0] is SCORRE:
+                piatte += v[1]
+            else:
+                piatte.append(v)
+        larga = max([len(v[0]) for v in piatte if v] + [18]) * 8 + 60
         # misurata davvero col font: certe lingue (il russo) hanno lettere
         # piu' larghe della stima e il testo si tagliava
         try:
             f = tkfont.nametofont("TkDefaultFont")
             larga = max([larga] + [f.measure(v[0][3:] if v[0][:3] in ("*  ", "   ") else v[0]) + 70
-                                   for v in voci if v])
+                                   for v in piatte if v])
         except tk.TclError:
             pass
-        for voce in voci:
-            if voce is None:
-                tk.Frame(dentro, bg=SCELTO, height=1).pack(fill="x", padx=10, pady=4)
-                continue
+
+        def fai_riga(dove, voce):
             testo, cosa = voce
             spunta = testo.startswith("*  ")
             if testo[:3] in ("*  ", "   "):
                 testo = testo[3:]
-            riga = tk.Frame(dentro, bg=PANNELLO, height=self.ALTA, width=larga)
+            riga = tk.Frame(dove, bg=PANNELLO, height=self.ALTA, width=larga)
             riga.pack(fill="x")
             riga.pack_propagate(False)
             colore = TESTO if cosa else GRIGIO
-            segno = tk.Label(riga, text="\u2713" if spunta else "", bg=PANNELLO,
+            segno = tk.Label(riga, text="✓" if spunta else "", bg=PANNELLO,
                              fg=ACCENTO, width=2, anchor="center")
             segno.pack(side="left", padx=(8, 0))
             et = tk.Label(riga, text=testo, bg=PANNELLO, fg=colore, anchor="w")
@@ -2913,6 +3127,55 @@ class Tendina(object):
                     w.bind("<Enter>", lambda e, r=riga, a=segno, b=et: self.accendi(r, a, b, True))
                     w.bind("<Leave>", lambda e, r=riga, a=segno, b=et: self.accendi(r, a, b, False))
                     w.bind("<Button-1>", lambda e, c=cosa: self.scegli(c))
+            return (riga, segno, et), spunta
+
+        def fai_gruppo(lista, righe):
+            """Le voci in una finestrella alta 'righe' voci che scorre con
+            la rotella; una barretta a destra dice dove si e'. Si apre gia'
+            sulla voce spuntata."""
+            # su uno schermo basso il riquadro si stringe (almeno 3 voci)
+            # perche' la tendina intera ci stia
+            altre = sum(self.ALTA if v else 9 for v in voci if not (v and v[0] is SCORRE))
+            righe = max(3, min(righe, (top.winfo_screenheight() - 40 - altre) // self.ALTA))
+            tutta = len(lista) * self.ALTA
+            alta = min(len(lista), righe) * self.ALTA
+            vista = tk.Frame(dentro, bg=PANNELLO, width=larga, height=alta)
+            vista.pack(fill="x")
+            vista.pack_propagate(False)
+            lista_f = tk.Frame(vista, bg=PANNELLO)
+            lista_f.place(x=0, y=0, relwidth=1)
+            pezzi, spuntata = [vista, lista_f], None
+            for i, v in enumerate(lista):
+                ws, sp = fai_riga(lista_f, v)
+                pezzi += ws
+                if sp and spuntata is None:
+                    spuntata = i
+            if tutta <= alta:
+                return
+            barra = tk.Frame(vista, bg=GRIGIO, width=3)
+            stato = {"su": 0}
+
+            def vai(y):
+                y = max(0, min(tutta - alta, y))
+                stato["su"] = y
+                lista_f.place_configure(y=-y)
+                lunga = max(12, alta * alta // tutta)
+                barra.place(relx=1.0, x=-2, y=(alta - lunga) * y // (tutta - alta),
+                            height=lunga, anchor="ne")
+                barra.lift()
+            for p in pezzi:
+                p.bind("<Button-4>", lambda e: vai(stato["su"] - 3 * self.ALTA))
+                p.bind("<Button-5>", lambda e: vai(stato["su"] + 3 * self.ALTA))
+                p.bind("<MouseWheel>", lambda e: vai(stato["su"] + (-3 if e.delta > 0 else 3) * self.ALTA))
+            vai((spuntata - righe // 2) * self.ALTA if spuntata else 0)
+
+        for voce in voci:
+            if voce is None:
+                tk.Frame(dentro, bg=SCELTO, height=1).pack(fill="x", padx=10, pady=4)
+            elif voce[0] is SCORRE:
+                fai_gruppo(voce[1], voce[2])
+            else:
+                fai_riga(dentro, voce)
         top.update_idletasks()
         w, h = top.winfo_reqwidth(), top.winfo_reqheight()
         if sopra:
@@ -3046,6 +3309,7 @@ class Elenco(tk.Text):
                          insertwidth=0, padx=0, takefocus=1,
                          font=(CARATTERE, -NOME_PX), **kw)
         self.rientro = tk.PhotoImage(width=10, height=1)     # l'aria fra il bordo e il testo
+        self.rientro_zero = tk.PhotoImage(width=2, height=1)  # coi loghi: 2 px di aria
         self.stacco = tk.PhotoImage(width=1, height=3)       # 3 px di aria fra una voce e l'altra
         # i loghi e le copertine stanno in una colonna a parte, a sinistra,
         # fuori dalle righe (niente zebra ne' selezione sotto), alti quanto
@@ -3219,16 +3483,23 @@ class Elenco(tk.Text):
         # solo se il tag sta sul primo carattere, per questo anche le
         # immagini hanno i tag
         tk.Text.insert(self, "%d.0" % r, "\n", ("stacco",))
-        tk.Text.insert(self, "%d.0" % r, " " + (sotto or " ") + "\n", (tinta, "sotto") + zebra + extra)
-        tk.Text.insert(self, "%d.0" % r, " " + nome + "\n", (tinta, "nome") + zebra + extra)
+        if self.segno == "logo":
+            # coi loghi il testo parte attaccato alla colonna, senza spazi
+            nome, sotto = nome.lstrip(" "), sotto.lstrip(" ")
+            tk.Text.insert(self, "%d.0" % r, (sotto or " ") + "\n", (tinta, "sotto") + zebra + extra)
+            tk.Text.insert(self, "%d.0" % r, nome + "\n", (tinta, "nome") + zebra + extra)
+        else:
+            tk.Text.insert(self, "%d.0" % r, " " + (sotto or " ") + "\n", (tinta, "sotto") + zebra + extra)
+            tk.Text.insert(self, "%d.0" % r, " " + nome + "\n", (tinta, "nome") + zebra + extra)
         # davanti al nome: il pallino (coi pallini) o niente; i loghi stanno
         # nella colonna a parte
         if self.segno == "dot" and d.get("image") is not None:
             self.image_create("%d.0" % r, image=self.corto(d["image"]), align="bottom", padx=4)
             sotto_img = self.rientro_dot
         else:
-            self.image_create("%d.0" % r, image=self.rientro)
-            sotto_img = self.rientro
+            rientro = self.rientro_zero if self.segno == "logo" else self.rientro
+            self.image_create("%d.0" % r, image=rientro)
+            sotto_img = rientro
         self.tag_add(tinta, "%d.0" % r); self.tag_add("nome", "%d.0" % r)
         self.image_create("%d.0" % (r + 1), image=sotto_img)
         self.tag_add(tinta, "%d.0" % (r + 1)); self.tag_add("sotto", "%d.0" % (r + 1))
@@ -3266,10 +3537,14 @@ class Elenco(tk.Text):
             a, b = self.dlineinfo("%d.0" % r), self.dlineinfo("%d.0" % (r + 1))
             if a is None and b is None:
                 continue
-            y0 = a[1] if a else b[1] - 20
-            y1 = (b[1] + b[3]) if b else a[1] + a[3]
+            # -1: misurato, la colonna veniva un pixel sotto alle righe
+            y0 = (a[1] if a else b[1] - 20) - 1
+            y1 = ((b[1] + b[3]) if b else a[1] + a[3]) - 1
             d = self.dati[iid]
             img = d.get("logo") or (self.corto(d["image"]) if d.get("image") is not None else None)
+            # le voci con la riga grigia (zebra): anche dietro al logo
+            if self.posto.get(iid, 0) % 2:
+                c.create_rectangle(0, y0, COLONNA, y1, fill=ZEBRA, outline="")
             if img is not None:
                 c.create_image(COLONNA // 2, (y0 + y1) // 2, image=img)
 
@@ -3327,7 +3602,7 @@ class Finestrella(tk.Toplevel):
         if chiedi is not None:
             tk.Label(dentro, text=chiedi, bg=PANNELLO, fg=GRIGIO, anchor="w"
                      ).pack(fill="x", pady=(10, 4))
-            self.casella = tk.Entry(dentro, bg=TASTO, fg=TESTO, insertbackground=ACCENTO,
+            self.casella = tk.Entry(dentro, bg=CERCA, fg=TESTO, insertbackground=ACCENTO,
                                     relief="flat", bd=0, highlightthickness=1,
                                     highlightbackground=SCELTO, highlightcolor=ACCENTO,
                                     font=("TkDefaultFont", 10), width=max(30, larga // 9))
@@ -3340,8 +3615,8 @@ class Finestrella(tk.Toplevel):
         def bottone(testo, cosa, primario=False):
             b = tk.Button(bottoni, text=testo, command=cosa, relief="flat", bd=0,
                           highlightthickness=0, cursor="hand2", padx=16, pady=5,
-                          bg=ACCENTO if primario else TASTO,
-                          fg="#1a1a1a" if primario else TESTO,
+                          bg=IN_ONDA if primario else CERCA,
+                          fg=TESTO_ONDA if primario else TESTO,
                           activebackground=SCELTO, activeforeground="#ffffff")
             b.pack(side="right", padx=(8, 0))
             return b
@@ -3402,17 +3677,17 @@ def sfoglia(root, titolo, da, file_=True, tipi=None):
         testa = tk.Frame(dentro, bg=PANNELLO)
         testa.pack(fill="x", pady=(10, 4))
         su = tk.Button(testa, text="\u2191", relief="flat", bd=0, highlightthickness=0,
-                       cursor="hand2", padx=10, pady=3, bg=TASTO, fg=TESTO,
+                       cursor="hand2", padx=10, pady=3, bg=CERCA, fg=TESTO,
                        activebackground=SCELTO, activeforeground="#ffffff")
         su.pack(side="left", padx=(0, 6))
-        percorso = tk.Entry(testa, bg=TASTO, fg=TESTO, insertbackground=ACCENTO,
+        percorso = tk.Entry(testa, bg=CERCA, fg=TESTO, insertbackground=ACCENTO,
                             relief="flat", bd=0, highlightthickness=1,
                             highlightbackground=SCELTO, highlightcolor=ACCENTO,
                             font=("TkDefaultFont", 10))
         percorso.pack(side="left", fill="x", expand=True, ipady=5)
         # l'elenco e' un albero come quello dei canali, stesso stile, con
         # la cartellina disegnata davanti alle cartelle
-        riquadro = tk.Frame(dentro, bg=TASTO, width=520, height=PUNTO * 12 + 8)
+        riquadro = tk.Frame(dentro, bg=CERCA, width=520, height=PUNTO * 12 + 8)
         riquadro.pack(fill="both", expand=True, pady=(0, 2))
         riquadro.pack_propagate(False)
         elenco = ttk.Treeview(riquadro, show="tree", style="Canali.Treeview",
@@ -3592,7 +3867,7 @@ class TV(object):
         # --- a sinistra: i canali
         self.icone, self.icone_pil = {}, {}     # png come Tk e come PIL
         self.vestiti = {}                       # bottone -> immagine composta
-        for n in ("play", "pausa", "switch", "playlist", "favorite_on", "favorite_off",
+        for n in ("play", "pausa", "repeat", "repeat_one", "playlist", "favorite_on", "favorite_off",
                   "rec", "rec_stop",
                   "volume", "volume_high",
                   "volume_low", "volume_off", "muto", "pieno", "prima", "dopo",
@@ -3613,6 +3888,15 @@ class TV(object):
                             Image.open(p).convert("RGBA"))
                     except Exception:
                         pass
+        # play e pausa piu' grandi degli altri bottoni (1,4 volte)
+        if HA_PIL:
+            for n in ("play", "pausa"):
+                if n in self.icone_pil:
+                    im = self.icone_pil[n]
+                    lato = max(1, round(im.height * 1.4))
+                    im = im.resize((max(1, round(im.width * lato / im.height)), lato), Image.LANCZOS)
+                    self.icone_pil[n] = im
+                    self.icone[n] = ImageTk.PhotoImage(im)
         # EPG e' una scritta, non una png: la si disegna come icona, cosi'
         # sta sulla sfumatura senza fondo come le altre
         if "epg" not in self.icone:
@@ -3623,7 +3907,7 @@ class TV(object):
         self.icona_testo("+10", "+10")
         # quelle che mancano o non si aprono si dicono, cosi' si vede subito
         self.icone_mancanti = [n for n in (
-            "play", "pausa", "switch", "playlist", "favorite_on", "favorite_off",
+            "play", "pausa", "repeat", "repeat_one", "playlist", "favorite_on", "favorite_off",
             "rec", "rec_stop", "volume",
             "volume_high", "volume_low",
             "volume_off", "muto", "pieno", "prima", "dopo", "aperto", "chiuso",
@@ -3632,11 +3916,18 @@ class TV(object):
             sys.stderr.write("missing icons in %s: %s\n" % (
                 os.path.join(QUI, "icone"), ", ".join(self.icone_mancanti)))
 
-        # --- in alto: la barra dei menu, disegnata noi (quella di Tk su
-        # Linux prende il tema di sistema, non il nostro)
-        self.cima = tk.Frame(self.root, bg=BARRA, height=28)
-        self.cima.pack(side="top", fill="x")
-        self.cima.pack_propagate(False)
+        # --- in alto: la barra dei menu di Tk, attaccata alla finestra (la
+        # mette lui sopra a tutto), coi nostri colori. self.cima resta come
+        # cornice vuota: non si impacchetta piu'
+        self.cima = tk.Frame(self.root, bg=BARRA, height=0)
+        self.stile_menu = dict(bg=MENU, fg=TESTO, activebackground=IN_ONDA,
+                               activeforeground="#ffffff", disabledforeground=GRIGIO,
+                               selectcolor=ACCENTO, bd=1, relief="solid",
+                               activeborderwidth=0, font=("TkDefaultFont", 10))
+        self.barra_menu = tk.Menu(self.root, tearoff=0, bg=CIMA, fg="#ffffff", activebackground=MENU,
+                                  activeforeground="#ffffff", bd=0, relief="flat",
+                                  activeborderwidth=0, font=("TkDefaultFont", 10))
+        self.root.config(menu=self.barra_menu)
         self.menu_cima = {}
         self.tendina = Tendina(self.root)
         # prima quello che vale per ogni file (un player), poi l'IPTV
@@ -3667,7 +3958,7 @@ class TV(object):
             (("*  " if self.cfg.get("ripeti", "") == k else "   ") + _(n),
              lambda k=k: self.metti_ripeti(k))
             for k, n in (("", "No repeat"), ("uno", "Repeat one"), ("tutti", "Repeat all"))] + [
-            None] + [
+            None] + self.voci_capitoli() + [
             (("*  " if v == self.velocita else "   ") + _("Speed x%g") % v,
              lambda v=v: self.metti_velocita(v)) for v in sorted(VELOCITA)])
         self.menu("Video", lambda: [
@@ -3677,6 +3968,7 @@ class TV(object):
             (("*  " if self.cfg.get("riempi") else "   ") + _("Fill screen (crop)"), self.riempi),
             None,
             (("*  " if self.cfg.get("deinterlaccia") else "   ") + _("Deinterlace"), self.deinterlaccia),
+            (("*  " if self.cfg.get("hwdec", True) else "   ") + _("Hardware decoding"), self.decodifica_hw),
             None,
             (_("Brightness +"), lambda: self.regola("brightness", +10)),
             (_("Brightness -"), lambda: self.regola("brightness", -10)),
@@ -3756,7 +4048,7 @@ class TV(object):
                                  width=LARGA_BARRA)
         self.sinistra.pack(side="left", fill="y")
         self.sinistra.pack_propagate(False)
-        self.cerca = Ricerca(self.sinistra, self.filtra, vuota=_("Search channels"))
+        self.cerca = Ricerca(self.sinistra, self.filtra, vuota=_("Search"))
         self.cerca.pack(fill="x", padx=10, pady=10)
         st = ttk.Style(self.root)
         st.theme_use("clam")
@@ -3922,7 +4214,8 @@ class TV(object):
                 self.dot_rec.append(pallino(c, lato=16))
         self.fase_rec = 0
         self.barra = tk.Frame(self.root, bg=BARRA, height=40)
-        self.barra.pack(side="bottom", fill="x")
+        # non si impacchetta: sta sopra al video, in fondo (posa_barra). Col
+        # video a vista la si disegna con mpv, trasparente (disegna_ov)
         self.barra.pack_propagate(False)        # altezza fissa, comandi al centro
         # il pannello viola degli avvisi: compare sopra ai comandi, alto
         # come la riga del programma, e se ne va da solo o con un clic
@@ -3969,17 +4262,30 @@ class TV(object):
         self.root.after(60000, self.aggiorna_sottotitoli)
         self.root.after(8000, self.controlla_copertine)
         self.root.after(5000, self.guarda_dischi)
+        self.mpris, self.arte_mpris = None, {}
+        self.root.after(1500, self.avvia_mpris)
+        self.root.after(500, self.accetta_trascinati)
 
         # a sinistra, a gruppi: [sidebar]  [< -10 play +10 >  rec switch shuffle]
         self.b_sidebar = self.tasto("playlist", _("Playlists"), self.sidebar, 8)
-        self.tasto("prima", "<", lambda: self.salta(-1), 3, padx=(24, 2))
-        self.tasto("-10", "-10", lambda: self.avanza(-10), 4)
-        self.b_pausa = self.tasto("pausa", _("Pause"), self.pausa, 8)
-        self.tasto("stop", _("Stop"), self.ferma, 4)
-        self.tasto("+10", "+10", lambda: self.avanza(+10), 4)
-        self.tasto("dopo", ">", lambda: self.salta(+1), 3)
+        gruppo = [self.tasto("prima", "<", lambda: self.salta(-1), 3, padx=(24, 0)),
+                  self.tasto("-10", "-10", lambda: self.avanza(-10), 4, padx=0)]
+        # all'avvio non suona niente: il tasto e' play
+        self.b_pausa = self.tasto("play", _("Play"), self.pausa, 8, padx=0)
+        if self.b_pausa.icona:
+            self.b_pausa.config(height=36)
+            self.b_pausa.pack_configure(pady=3)
+        gruppo += [self.b_pausa,
+                   self.tasto("stop", _("Stop"), self.ferma, 4, padx=0),
+                   self.tasto("+10", "+10", lambda: self.avanza(+10), 4, padx=0),
+                   self.tasto("dopo", ">", lambda: self.salta(+1), 3, padx=0)]
+        # i bottoni del gruppo larghi esattamente quanto la loro icona
+        for b in gruppo:
+            if b.icona:
+                b.config(width=self.icone[b.icona].width())
         self.b_rec = self.tasto("rec", _("Record"), self.registra, padx=(24, 2))
-        self.tasto("switch", _("Switch"), self.switch, 6)
+        # ripeti: niente -> tutta la lista (repeat.png) -> il file (repeat_one.png)
+        self.b_ripeti = self.tasto("repeat", _("No repeat"), self.gira_ripeti, 6)
         self.b_shuffle = self.tasto("shuffle", _("Shuffle"), self.shuffle, 7)
         # a destra, da destra a sinistra: cuore, schermo intero, [EPG x1],
         # ingranaggio, volume col suo muto
@@ -3989,12 +4295,17 @@ class TV(object):
                                   lato="right")
         self.b_pref.pack_forget()           # il cuore c'e' solo quando serve
         self.tasto("pip", "PiP", self.pip_si_no, 4, lato="right")
-        self.tasto("epg", "EPG", self.apri_guida, 4, lato="right", padx=(2, 6))
+        # la guida si apre solo dal menu IPTV in alto
         self.b_velocita = self.tasto("x1", "x1", self.gira_velocita, 4, lato="right",
                                      padx=(6, 2))
+        self.b_velocita.pack_forget()       # la velocita' solo dal menu Playback
         # l'ingranaggio apre la tendina delle qualita' sopra di se'
         self.b_qualita = self.tasto("setting", _("quality"), self.apri_menu_qualita,
                                     lato="right")
+        self.b_qualita.pack_forget()        # c'e' solo se le qualita' sono piu' d'una
+        # il bottone delle sidebar: in fondo a destra, ultimo della barra
+        self.b_sidebar.pack_forget()
+        self.b_sidebar.pack(side="right", padx=2, pady=6, before=self.b_pieno)
         self.volume = Cursore(self.barra, self.alza_volume, larga=85)
         self.volume.pack(side="right", padx=0)
         self.b_muto = self.tasto("volume", _("Mute"), self.muto, lato="right")
@@ -4067,10 +4378,22 @@ class TV(object):
             def _doppio():
                 self.root.after(0, self.doppio_clic)
 
-            # clic singolo: serve solo al tasto del PiP disegnato da mpv
-            @self.mpv.on_key_press("MBTN_LEFT")
-            def _clic():
-                self.root.after(0, self.clic_video)
+            # mpv col tasto premuto e il mouse che si muove proverebbe a
+            # spostare la finestra (e il tasto risulterebbe rilasciato)
+            try:
+                self.mpv["window-dragging"] = "no"
+            except Exception:
+                pass
+            # clic singolo: comandi disegnati da mpv e tasto del PiP. Si
+            # sente anche il rilascio: tenendo premuto si trascinano volume
+            # e progress
+            @self.mpv.key_binding("MBTN_LEFT")
+            def _clic(stato, *_a):
+                if stato.startswith("d"):
+                    self.ov_premuto = True
+                    self.root.after(0, self.clic_video)
+                elif stato.startswith("u"):
+                    self.ov_premuto = False
         except Exception:
             pass
         for valore in ("embedded-first", "attachment"):
@@ -4134,13 +4457,21 @@ class TV(object):
         self.sotto.place(x=0, y=0)
         self.sfondo_file = os.path.join(QUI, "icone", "screen.png")
         self.sfondo_misura, self.sfondo_img, self.sfondo_su = None, None, False
-        self.video.bind("<Configure>", lambda e: self.rifai_sfondo())
+        # l'immagine di sfondo si rifa' quando il riquadro smette di cambiare
+        # misura (trascinando una sidebar arrivano tanti Configure di fila)
+        self.video.bind("<Configure>", lambda e: self.rifai_sfondo_poi())
         self.mostra_sfondo(True)
         self.mpv.observe_property("paused-for-cache", self._buffer)
         self.mpv.observe_property("time-pos", self._va)
 
         self.pieno, self.barra_visibile, self.timer_barra = False, True, None
         self.sorveglio, self.dove_era = False, (0, 0)
+        self.mai_partito = True             # non e' ancora partito niente: niente comandi
+        self.root.after(100, self.posa_barra)   # i comandi al loro posto
+        try:
+            self.mpv.overlay_ids.update((OV_SFONDO, OV_BARRA, OV_PIP, OV_MENU))
+        except Exception:
+            pass
         self.attesa_da, self.salti = 0.0, 0
         # mpv dice quando un file finisce male: canale morto, si salta
         try:
@@ -4161,6 +4492,7 @@ class TV(object):
 
         tasto("<space>", self.pausa)
         tasto("<m>", self.muto)
+        tasto("<BackSpace>", self.switch)      # IPTV: il canale di prima (e ritorno)
         # + e - spostano l'audio di 100 ms: + lo ritarda (audio in
         # anticipo sul video), - lo anticipa. Ricordato per canale
         tasto("<plus>", lambda: self.ritardo_audio(+0.1))
@@ -4248,7 +4580,8 @@ class TV(object):
         if icona in self.icone:
             # nella barra i bottoni sono solo l'icona, senza scatola:
             # il fondo e' quello del pannello e si accende solo al tocco
-            b.config(image=self.icone[icona], width=34, height=30, bg=BARRA)
+            b.config(image=self.icone[icona], width=34, height=30, bg=BARRA,
+                     activebackground=BARRA)       # niente grigio passandoci sopra
             b.icona = icona
         else:
             b.config(width=largo)
@@ -4757,6 +5090,10 @@ class TV(object):
         if self.registrando:
             self.ferma_registrazione()
         self.fermato = None                 # parte altro: lo stop di prima non conta piu'
+        self.faccia(self.b_pausa, "pausa", _("Pause"))   # sta partendo: il tasto e' pausa
+        if getattr(self, "mai_partito", False):
+            self.mai_partito = False        # la prima volta: ora i comandi servono
+            self.root.after_idle(self.posa_barra)
         if os.path.isabs(f) and not f.startswith(REGISTRAZIONI + os.sep):
             self.cfg["recenti"] = ([f] + [x for x in self.cfg.get("recenti", []) if x != f])[:12]
         self.file_in_onda = f
@@ -4769,6 +5106,7 @@ class TV(object):
         # quello che mpv dira' di stare suonando (per il riprendi)
         self.percorso_mpv = "dvd://" if dvd else "cdda://" if e_cd(f) else f
         self.varianti, self.quale = [], -1
+        self.mostra_ingranaggio()
         self.da_riallineare = False
         # sui DVD niente conto alla rovescia: il lettore puo' metterci un
         # po' a partire; se non va, lo dice mpv con un errore
@@ -5524,10 +5862,26 @@ class TV(object):
     # ------------------------------------------------------------ i canali
     def filtra(self):
         # il posto di ogni file nell'elenco intero (non filtrato), per il colore
-        self.posto_file = {u: i for i, (_n, u, _i) in enumerate(self.canali) if os.path.isabs(u)}
+        # anche gli indirizzi delle liste URL (radio, stream): un colore a
+        # testa in ordine, come i file, e non dal nome
+        in_url = bool(self.media_in_uso and self.media_in_uso[0] == "url")
+        self.posto_file = {u: i for i, (_n, u, _i) in enumerate(self.canali)
+                           if os.path.isabs(u) or in_url}
         q = self.cerca.get().lower()
         nomi = self.cfg.get("nomi_canali", {})
-        self.visti = [c for c in self.canali if q in c[0].lower() or q in nomi.get(c[1], "").lower()]
+        fonte = self.canali
+        if q and self.cerca_ovunque():
+            # non solo la lista aperta: tutti i file di Local, Imported e
+            # Recordings (l'indice si fa in un thread; intanto la lista)
+            self.prepara_indice()
+            gia = {c[1] for c in self.canali}
+            fonte = list(self.canali) + [c for c in getattr(self, "indice_ricerca", []) if c[1] not in gia]
+        if q:
+            self.visti = [c for c in fonte if q in self.testo_cercato(c, nomi)]
+        else:
+            self.visti = list(self.canali)
+            self.indice_fresco = False          # la prossima ricerca lo rifa'
+
         self.elenco.delete(*self.elenco.get_children())
         adesso = self.file_in_onda or self.cfg.get("canale")
         da_fare = []
@@ -5551,6 +5905,65 @@ class TV(object):
             i = next((k for k, c in enumerate(self.visti) if c[1] == self.fermato[2]), -1)
             if i >= 0 and self.elenco.exists(str(i)):
                 self.elenco.selection_set(str(i))
+
+    def cerca_ovunque(self):
+        """La ricerca va su tutti i file, tranne quando a sinistra ci sono
+        i canali di una playlist IPTV: li' cerca fra i canali."""
+        return not (self.canali and not self.media_in_uso and not self.reg_in_uso)
+
+    def prepara_indice(self):
+        """Tutti i file di Local (cartelle e sottocartelle), Imported e
+        Recordings, coi tag della musica (dalla cache; quelli mai letti si
+        leggono ora). In un thread, una volta per ricerca: cosi' cartelle e
+        file nuovi entrano, e intanto vale l'indice di prima."""
+        if getattr(self, "indice_in_corso", False) or getattr(self, "indice_fresco", False):
+            return
+        self.indice_in_corso = True
+        cartelle = list(self.cfg.get("cartelle", [])) + [REGISTRAZIONI]
+        importati = list(self.cfg.get("importati", []))
+
+        def lavora():
+            tutti, visti = [], set()
+            for c in cartelle:
+                for x in media_in(c):
+                    if x[1] not in visti:
+                        visti.add(x[1])
+                        tutti.append(x)
+            for f in importati:
+                if f not in visti and os.path.isfile(f):
+                    visti.add(f)
+                    tutti.append((os.path.splitext(os.path.basename(f))[0], f, None))
+            nuovi = False
+            for _n, f, _i in tutti:
+                if f not in self.tag_file and os.path.splitext(f)[1][1:].lower() in AUDIO:
+                    self.tag_file[f] = tag_di(f, self.tag_cache)
+                    nuovi = True
+            if nuovi:
+                try:
+                    scrivi_tag(self.tag_cache)
+                except Exception:
+                    pass
+            self.root.after(0, lambda: self.indice_pronto(tutti))
+        threading.Thread(target=lavora, daemon=True).start()
+
+    def indice_pronto(self, tutti):
+        self.indice_ricerca, self.indice_in_corso, self.indice_fresco = tutti, False, True
+        if self.cerca.get():
+            self.filtra()
+
+    def testo_cercato(self, c, nomi):
+        """Dove cerca la ricerca: il nome e quello dato dall'utente; per file,
+        dischi e URL anche quello che si legge nella riga (titolo di TMDB,
+        artista, album, anno)."""
+        nome, url, _ide = c
+        t = nome + "\n" + nomi.get(url, "")
+        if self.media_in_uso or self.reg_in_uso or os.path.isabs(url):
+            try:
+                titolo, sotto = self.righe_file(url, nome)
+                t += "\n" + titolo + "\n" + sotto
+            except Exception:
+                pass
+        return t.lower()
 
     def testo_riga(self, nome, url, ide):
         """Le due righe di un elemento a sinistra: il nome e, sotto, il
@@ -5659,7 +6072,7 @@ class TV(object):
         nell'elenco, sulla scala dei file."""
         if url.startswith(REGISTRAZIONI + os.sep):
             return colore_di(os.path.basename(os.path.dirname(url)))
-        if os.path.isabs(url) and url in self.posto_file:
+        if url in self.posto_file:
             return SCALA_FILE[self.posto_file[url] % len(SCALA_FILE)]
         return self.colori.get(url) or colore_di(nome)
 
@@ -5733,7 +6146,13 @@ class TV(object):
             f = os.path.join(CACHE_LOGHI, hashlib.md5(LOGHI[url].encode()).hexdigest())
         if not os.path.isfile(f) or os.path.getsize(f) == 0:
             return None
-        im = carica_logo(f, LOGO_L, LOGO_A)
+        # i loghi dei canali IPTV piu' piccoli (6 px di aria intorno, al massimo
+        # 44x32); copertine e poster no
+        iptv = f.startswith(CACHE_LOGHI + os.sep)
+        # i poster dei film e dei DVD quadrati (la musica no)
+        film = url.startswith("dvd://") or (os.path.isabs(url)
+                                             and os.path.splitext(url)[1][1:].lower() not in AUDIO)
+        im = carica_logo(f, LOGO_L, LOGO_A, margine=6 if iptv else 0, quadrata=film)
         if im is not None:
             self.loghi_img[url] = im
         return im
@@ -5924,6 +6343,10 @@ class TV(object):
 
     def apri(self, nome, url, ide=None):
         self.fermato = None                 # parte altro: lo stop di prima non conta piu'
+        self.faccia(self.b_pausa, "pausa", _("Pause"))   # sta partendo: il tasto e' pausa
+        if getattr(self, "mai_partito", False):
+            self.mai_partito = False        # la prima volta: ora i comandi servono
+            self.root.after_idle(self.posa_barra)
         # viene da una lista (Open URL lo rimette dopo); dalla lista degli
         # URL aperti resta roba al volo, senza cuore
         self.al_volo = url if (self.media_in_uso and self.media_in_uso[0] == "url") else None
@@ -5961,6 +6384,7 @@ class TV(object):
         except Exception:
             pass
         self.varianti = varianti(url)
+        self.root.after(0, self.mostra_ingranaggio)
         self.affanni, self.tranquillo_da = [], time.time()
         self.ultima_discesa = 0.0
         self.storia, self.in_calo = [], 0
@@ -6010,9 +6434,32 @@ class TV(object):
             self.suona(i)
         self.scrivi_riga()
 
+    def mostra_ingranaggio(self):
+        """L'ingranaggio solo quando c'e' da scegliere: due qualita' o piu'."""
+        b = self.b_qualita
+        if len(self.varianti or []) > 1:
+            if not b.winfo_ismapped():
+                b.pack(side="right", padx=2, pady=6, before=self.volume)
+                self.root.after_idle(lambda: self.vesti(b))
+        else:
+            if self.tendina.aperta() and self.tendina.chi is b:
+                self.tendina.chiudi()
+            if getattr(self, "ov_menu", None):
+                self.chiudi_menu_ov()
+            b.pack_forget()
+
     def apri_menu_qualita(self):
         """La tendina delle qualita' sopra all'ingranaggio, col bordo destro
-        sull'ingranaggio; la rotella fa mezzo giro e torna alla chiusura."""
+        sull'ingranaggio; la rotella fa mezzo giro e torna alla chiusura.
+        Con la barra di mpv anche il menu lo disegna mpv."""
+        if self.barra_in_overlay():
+            if getattr(self, "ov_menu", None):
+                self.chiudi_menu_ov()
+            else:
+                self.ov_menu, self.ov_menu_sopra = self.voci_qualita(), None
+                self.gira_ingranaggio(+1)
+                self.disegna_menu_ov()
+            return
         if self.tendina.aperta() and self.tendina.chi is self.b_qualita:
             self.tendina.chiudi()
             return
@@ -6035,6 +6482,8 @@ class TV(object):
                 return
             self.passo_ingranaggio = n
             self.b_qualita.config(image=self.giri_ingranaggio[n])
+            if self.barra_in_overlay():
+                self.disegna_ov()
             if self.colore_barra and HA_PIL and self.b_qualita.winfo_ismapped():
                 # sulla sfumatura: il fotogramma composto sulla fettina
                 b = self.b_qualita
@@ -6171,8 +6620,14 @@ class TV(object):
         if not icona:
             return
         pil = self.icone_pil.get(icona)
-        if not self.colore_barra or pil is None or not b.winfo_ismapped():
-            b.config(image=self.icone[icona], bg=BARRA)
+        if not self.colore_barra or pil is None:
+            b.config(image=self.icone[icona], bg=BARRA, activebackground=BARRA)
+            return
+        if not b.winfo_ismapped():
+            # la barra si sta ridisponendo: non si tocca niente (niente lampo
+            # col fondo pieno) e si riveste appena e' di nuovo a vista
+            self.root.after_idle(lambda: b.winfo_exists() and b.winfo_ismapped() and self.vesti(b))
+            self.root.after(60, lambda: b.winfo_exists() and b.winfo_ismapped() and self.vesti(b))
             return
         w, h = b.winfo_width(), b.winfo_height()
         y = b.winfo_y()
@@ -6181,7 +6636,8 @@ class TV(object):
             fondo.paste(self.tinta_barra(y + r), (0, r, w, r + 1))
         fondo.alpha_composite(pil, ((w - pil.width) // 2, (h - pil.height) // 2))
         self.vestiti[b] = ImageTk.PhotoImage(fondo)
-        b.config(image=self.vestiti[b], bg=self.tinta_barra(y + h // 2))
+        c = self.tinta_barra(y + h // 2)
+        b.config(image=self.vestiti[b], bg=c, activebackground=c)
 
     def ferma(self):
         """Stop: si ferma tutto e torna lo schermo di XVB. Play dopo lo
@@ -6206,7 +6662,23 @@ class TV(object):
         self.faccia(self.b_pausa, "play", _("Resume"))
         self.et_formato.config(text="")
         self.icona_preferito()              # fermo: il cuore sparisce
+        self.spegni_colori()
         self.scrivi(_("ready"))
+
+    def spegni_colori(self):
+        """Da fermi niente colore del canale: sfumatura, progress, riga di
+        stato e bottoni tornano come all'avvio."""
+        self.colore_barra = None
+        self.linea.itemconfig(self.pieno_linea, fill="#ffffff")
+        self.linea.coords(self.pieno_linea, 0, 0, 0, self.alta_linea)
+        for et in (self.et_titolo, self.et_orologio, self.et_formato):
+            et.config(fg=TESTO)
+        self.icona_shuffle()
+        self.icona_ripeti()
+        self.disegna_fondo_barra()
+        self.fondo_barra.delete("all")
+        self.disegna_fondo_linea()
+        self.vesti_tutti()
 
     def pausa(self):
         # dopo lo stop, play fa ripartire quello di prima
@@ -6220,6 +6692,8 @@ class TV(object):
             else:
                 self.apri(nome, dove, ide)
             return
+        if not (self.nome_in_onda or self.file_in_onda):
+            return                          # non c'e' niente da mettere in pausa
         try:
             self.mpv.pause = not self.mpv.pause
         except Exception:
@@ -6278,6 +6752,8 @@ class TV(object):
             return
         self.volume_largo = largo
         self.volume.config(width=largo)
+        if self.barra_in_overlay():
+            self.disegna_ov()
         if 0 < largo < self.volume.larga:
             self.root.after(15, lambda: self.anima_volume(verso))
 
@@ -6304,19 +6780,35 @@ class TV(object):
                 y = h // 2 + dy
                 m.create_oval(2, y - 2, 6, y + 2, fill=c, outline=c)
         m.bind("<Configure>", lambda e: puntini())
-        m.bind("<Enter>", lambda e: (m.config(bg=SCELTO), puntini(True)))
+        m.bind("<Enter>", lambda e: (m.config(bg=MENU), puntini(True)))
         m.bind("<Leave>", lambda e: (m.config(bg=PANNELLO), puntini()))
 
-        def trascina(ev):
+        # il mouse manda decine di movimenti al secondo e ognuno rifaceva
+        # tutta la finestra (video compreso): si tiene solo l'ultimo e si
+        # applica al massimo ogni 30 ms
+        attesa = {"x": None, "id": None}
+
+        def applica():
+            attesa["id"] = None
+            x = attesa["x"]
             if verso > 0:
-                larga = ev.x_root - pannello.winfo_rootx()
+                larga = x - pannello.winfo_rootx()
             else:
-                larga = pannello.winfo_rootx() + pannello.winfo_width() - ev.x_root
+                larga = pannello.winfo_rootx() + pannello.winfo_width() - x
             larga = max(140, min(int(self.root.winfo_width() * 0.6), larga))
-            pannello.config(width=larga)
+            if larga != pannello.winfo_width():
+                pannello.config(width=larga)
             self.cfg[chiave] = larga
 
+        def trascina(ev):
+            attesa["x"] = ev.x_root
+            if attesa["id"] is None:
+                attesa["id"] = self.root.after(30, applica)
+
         def fine(ev):
+            if attesa["id"] is not None:
+                self.root.after_cancel(attesa["id"])
+                applica()
             scrivi_config(self.cfg)
             self.disegna_fondo_barra()
         m.bind("<B1-Motion>", trascina)
@@ -6331,17 +6823,19 @@ class TV(object):
                   self.barra, self.avviso, self.video, self.maniglia_sx,
                   self.maniglia_dx):
             w.pack_forget()
+        # la barra dei menu: via a schermo intero e in PiP
+        self.root.config(menu="" if (pieno or getattr(self, "pip", False)) else self.barra_menu)
         if getattr(self, "pip", False):
             # immagine nell'immagine: solo il video, niente altro
+            self.barra.place_forget()
+            if hasattr(self, "mpv"):
+                self.togli_ov()
             self.video.pack(side="right", fill="both", expand=True)
             return
-        if not pieno:
-            self.cima.pack(side="top", fill="x")
         # comandi e riga di stato al piede, larghi quanto tutta la finestra
         # (prima delle barre laterali, che stanno sopra di loro)
         if not pieno:
             self.riga_stato.pack(side="bottom", fill="x")
-            self.barra.pack(side="bottom", fill="x")
         if avviso_aperto:
             self.avviso.pack(side="bottom", fill="x")
         # le barre laterali: aperte o chiuse, uguale a schermo intero e no
@@ -6362,7 +6856,10 @@ class TV(object):
         return next((w for w in self.root.pack_slaves() if w in pannelli), self.video)
 
     def doppio_clic(self):
-        """Doppio clic sul video: schermo intero; in PiP, torna normale."""
+        """Doppio clic sul video: schermo intero; in PiP, torna normale.
+        Sui comandi disegnati da mpv no: li' i clic sono dei bottoni."""
+        if self.ov_sotto_mouse():
+            return
         if self.pip:
             self.esci_pip()
         else:
@@ -6419,7 +6916,7 @@ class TV(object):
             dentro = False
         # con pip.png e un video sotto il tasto lo disegna mpv, trasparente;
         # sopra lo sfondo di XVB (che e' di Tk) resta il tasto di Tk
-        con_mpv = "pip" in self.icone_pil and not getattr(self, "sfondo_su", False)
+        con_mpv = "pip" in self.icone_pil
         self.pip_disegna(dentro and con_mpv)
         if con_mpv:
             dentro = False
@@ -6441,7 +6938,7 @@ class TV(object):
         if not si:
             if ov is not None:
                 try:
-                    self.mpv.remove_overlay(ov.overlay_id)
+                    self.mpv.overlay_remove(OV_PIP)
                 except Exception:
                     pass
                 self.pip_ov = self.pip_ov_misura = self.pip_ov_riquadro = None
@@ -6462,8 +6959,9 @@ class TV(object):
             im = self.icone_pil["pip"].copy()
             im.thumbnail((max(1, round(lato * k)), max(1, round(lato * k))), Image.LANCZOS)
             pos = (max(0, round((vw - bordo) * k) - im.width), round(bordo * k))
+            im = premoltiplica(im)
             if ov is None:
-                ov = self.mpv.create_image_overlay(im, pos=pos)
+                ov = mpv.ImageOverlay(self.mpv, OV_PIP, im, pos=pos)
             else:
                 ov.update(im, pos=pos)
         except Exception:
@@ -6474,8 +6972,11 @@ class TV(object):
                                 (pos[0] + im.width) / k, (pos[1] + im.height) / k)
 
     def clic_video(self):
-        """Un clic sul video (lo riceve mpv, non Tk): in PiP, se e' sul tasto
-        disegnato da mpv, si torna alla finestra normale."""
+        """Un clic sul video (lo riceve mpv, non Tk): sui comandi disegnati
+        da mpv fa quello del bottone; in PiP, se e' sul tasto disegnato da
+        mpv, si torna alla finestra normale."""
+        if self.clic_ov():
+            return
         r = getattr(self, "pip_ov_riquadro", None)
         if not (self.pip and getattr(self, "pip_ov", None) is not None and r):
             return
@@ -6501,7 +7002,7 @@ class TV(object):
         """Il mouse sta sopra al video, che e' la finestra di mpv: Tk il
         movimento non lo vede. Allora si guarda dov'e' il puntatore cinque
         volte al secondo, e se si e' spostato e' mosso."""
-        if not self.si_nasconde():
+        if not self.nasconde_barra():
             self.sorveglio = False
             return
         try:
@@ -6510,7 +7011,15 @@ class TV(object):
             adesso = self.dove_era
         if adesso != self.dove_era:
             self.dove_era = adesso
-            self.mosso()
+            # conta solo il mouse che si muove sopra alla finestra di XVB
+            try:
+                r = self.root
+                dentro = (r.winfo_rootx() <= adesso[0] < r.winfo_rootx() + r.winfo_width()
+                          and r.winfo_rooty() <= adesso[1] < r.winfo_rooty() + r.winfo_height())
+            except tk.TclError:
+                dentro = False
+            if dentro:
+                self.mosso()
         self.root.after(200, self.sorveglia_mouse)
 
     def mosso(self, ev=None):
@@ -6519,64 +7028,512 @@ class TV(object):
         if getattr(self, "pip", False):
             return                          # in PiP i comandi non ci sono
         if not self.barra_visibile:
-            self.barra.pack(side="bottom", fill="x", before=self.primo_pannello())
-            self.barra_visibile = True
+            self.mostra_barra(True)
         self.root.config(cursor="")
         if self.timer_barra:
             self.root.after_cancel(self.timer_barra)
             self.timer_barra = None
-        if self.si_nasconde():
+        if self.nasconde_barra():
             self.timer_barra = self.root.after(3000, self.nascondi_barra)
 
     def nascondi_barra(self):
         self.timer_barra = None
-        if self.si_nasconde() and self.barra_visibile:
-            self.barra.pack_forget()
-            self.barra_visibile = False
-            self.root.config(cursor="none")
+        if not (self.nasconde_barra() and self.barra_visibile):
+            return
+        if self.ov_sotto_mouse() or getattr(self, "ov_menu", None):
+            # col mouse sopra ai comandi (o col menu aperto) restano
+            self.timer_barra = self.root.after(3000, self.nascondi_barra)
+            return
+        self.mostra_barra(False)
+        self.root.config(cursor="none")
+
+    # --- la barra dei comandi: di Tk sopra allo sfondo, di mpv sopra al video
+    def barra_in_overlay(self):
+        """Col video a vista i comandi li disegna mpv sopra all'immagine,
+        trasparenti; con lo sfondo di XVB (che e' di Tk) restano di Tk."""
+        return HA_PIL and not getattr(self, "pip", False)
+
+    def nasconde_barra(self):
+        """Quando i comandi vanno via da soli: sopra al video sempre; sopra
+        allo sfondo solo col video da solo (sidebar chiuse)."""
+        if self.barra_in_overlay():
+            # col video e le sidebar chiuse si'; da fermi o con le sidebar aperte no
+            return not getattr(self, "sfondo_su", True) and self.si_nasconde()
+        return self.si_nasconde()
+
+    def mostra_barra(self, si):
+        if getattr(self, "mai_partito", False):
+            si = False                      # all'avvio, finche' non parte niente, niente comandi
+        self.barra_visibile = si
+        if getattr(self, "pip", False):
+            self.barra.place_forget()
+            self.togli_ov()
+            return
+        if self.barra_in_overlay():
+            self.barra.place_forget()
+            if si:
+                self.disegna_ov(forza=True)
+                if not getattr(self, "ov_giro", False):
+                    self.ov_giro = True
+                    self.root.after(250, self.giro_ov)
+            else:
+                self.togli_ov()
+        else:
+            self.togli_ov()
+            if si:
+                self.barra.place(in_=self.video, relx=0, rely=1, relwidth=1, anchor="sw")
+                self.barra.lift()
+                self.root.after_idle(self.disegna_fondo_barra)
+            else:
+                self.barra.place_forget()
+
+    def posa_barra(self):
+        """Il modo dei comandi e' cambiato (parte o si ferma il video, PiP):
+        li si rimette giusti e, se vanno e vengono, si guarda il mouse."""
+        self.mostra_barra(True)
+        self.mosso()
+        if self.nasconde_barra() and not self.sorveglio:
+            self.sorveglio = True
+            self.dove_era = self.root.winfo_pointerxy()
+            self.sorveglia_mouse()
+
+    # --- i comandi disegnati da mpv
+    OV_ALTA = 40                # come la barra originale: progress in cima, bottoni sotto
+    OV_RIGA = 38                # la riga dei bottoni, sotto la progress
+    OV_LINEA = 0                # la progress: sul bordo in alto
+
+    def elementi_barra(self):
+        """I bottoni della barra di Tk nell'ordine e col lato in cui stanno:
+        quelli nascosti (velocita', ingranaggio con una qualita') no."""
+        sx, dx = [], []
+        for w in self.barra.pack_slaves():
+            if not (isinstance(w, tk.Button) or w is self.volume):
+                continue
+            info = w.pack_info()
+            px = info.get("padx", 0)
+            if isinstance(px, str):
+                px = px.split()
+            if isinstance(px, (tuple, list)):
+                p0, p1 = int(px[0]), int(px[-1])
+            else:
+                try:
+                    p0 = p1 = int(px)
+                except (TypeError, ValueError):
+                    p0 = p1 = 2
+            if w is self.volume:
+                larga = int(getattr(self, "volume_largo", 0))
+            elif getattr(w, "icona", None):
+                larga = int(float(w.cget("width")))
+            else:
+                larga = w.winfo_reqwidth()
+            (dx if info.get("side") == "right" else sx).append((w, larga, p0, p1))
+        return sx, dx
+
+    def disegna_ov(self, forza=False):
+        """La barra come immagine trasparente data a mpv: sfumatura dal
+        trasparente al colore della barra, la progress, i bottoni con le
+        loro icone di adesso. Si rifa' solo se qualcosa e' cambiato."""
+        if not (self.barra_in_overlay() and self.barra_visibile):
+            return
+        try:
+            vw, vh = self.video.winfo_width(), self.video.winfo_height()
+            ow = int(self.mpv.osd_width or 0)
+            oh = int(self.mpv.osd_height or 0)
+        except Exception:
+            return
+        if vw < 50 or vh < 50 or ow <= 0 or oh <= 0:
+            return
+        k = ow / float(vw)
+        H, R, L = self.OV_ALTA, self.OV_RIGA, self.OV_LINEA
+        sx, dx = self.elementi_barra()
+        # dove stanno i bottoni (in pixel di Tk, dall'angolo dell'immagine)
+        posti, x = [], 0
+        for w, larga, p0, p1 in sx:
+            x += p0
+            posti.append((w, x, larga))
+            x += larga + p1
+        x = vw
+        for w, larga, p0, p1 in dx:
+            x -= p1 + larga
+            posti.append((w, x, larga))
+            x -= p0
+        colore = self.colore_barra
+        parte = getattr(self, "parte_linea", 0.0)
+        # il battito del rec: da 25% a 100% e ritorno in 1,4 secondi
+        battito = 1.0
+        if self.registrando:
+            battito = 0.25 + 0.75 * (0.5 + 0.5 * math.cos(2 * math.pi * time.time() / 1.4))
+        vol = self.volume.get()
+        chiave = (vw, vh, ow, oh, colore, int(parte * vw), vol, getattr(self, "ov_sopra", None),
+                  round(battito * 12), self.passo_ingranaggio,
+                  tuple((id(w), getattr(w, "icona", None), xx, ll) for w, xx, ll in posti))
+        if not forza and chiave == getattr(self, "ov_chiave", None) and getattr(self, "ov", None) is not None:
+            return
+        self.ov_chiave = chiave
+        from PIL import ImageDraw
+        im = Image.new("RGBA", (vw, H), (0, 0, 0, 0))
+        d = ImageDraw.Draw(im)
+        # la sfumatura: trasparente in alto, piena in fondo
+        base = BARRA
+        if colore:
+            try:
+                a_ = [int(colore[j:j + 2], 16) for j in (1, 3, 5)]
+                b_ = [int(BARRA[j:j + 2], 16) for j in (1, 3, 5)]
+                base = "#%02x%02x%02x" % tuple(int(y + (x_ - y) * 0.22) for x_, y in zip(a_, b_))
+            except ValueError:
+                pass
+        r0, g0, b0 = (int(base[j:j + 2], 16) for j in (1, 3, 5))
+        # il pannello: il colore del canale al 40%, uguale dappertutto (senza
+        # colore, il fondo della barra al 40%)
+        pc = colore or BARRA
+        try:
+            pr, pg, pb = (int(pc[j:j + 2], 16) for j in (1, 3, 5))
+        except ValueError:
+            pr, pg, pb = r0, g0, b0
+        d.rectangle([0, 0, vw, H], fill=(pr, pg, pb, 102))
+        # la progress: la traccia spenta come la selezione del menu qualita'
+        # (bianco al 16% sopra al pannello), poi la parte piena
+        luce = Image.new("RGBA", (vw, H), (0, 0, 0, 0))
+        ImageDraw.Draw(luce).rectangle([0, L, vw, L + 2], fill=(255, 255, 255, 40))
+        im.alpha_composite(luce)
+        if parte > 0:
+            d.rectangle([0, L, int(vw * parte), L + 2], fill=colore or "#ffffff")
+        # i bottoni
+        cy = H - R // 2
+        zone = [(0, 0, vw, L + 5, "linea", None)]
+        for w, x0, larga in posti:
+            zone.append((x0, H - R, x0 + larga, H, "bottone", w))
+            if w is self.volume:
+                if larga > 20:
+                    a, b = x0 + 10, x0 + larga - 10
+                    # la parte spenta come la selezione del menu qualita'
+                    luce = Image.new("RGBA", (vw, H), (0, 0, 0, 0))
+                    ImageDraw.Draw(luce).line([(a, cy), (b, cy)], fill=(255, 255, 255, 40), width=4)
+                    im.alpha_composite(luce)
+                    xv = a + (b - a) * vol / 100.0
+                    if xv > a:
+                        d.line([(a, cy), (xv, cy)], fill="#ffffff", width=4)
+                continue
+            icona = getattr(w, "icona", None) or ""
+            if w is self.b_qualita and self.passo_ingranaggio and "setting" in self.icone_pil:
+                pil = self.icone_pil["setting"].rotate(-self.passo_ingranaggio * 15,
+                                                       resample=Image.BICUBIC)
+            elif w is self.b_rec and self.registrando and "rec" in self.icone_pil:
+                # mentre registra: l'icona rec resta bianca e pulsa (fade)
+                pil = self.icone_pil["rec"].copy()
+                pil.putalpha(pil.getchannel("A").point(lambda v, f=battito: int(v * f)))
+            else:
+                pil = self.icone_pil.get(icona)
+            if pil is not None:
+                im.alpha_composite(pil, (int(x0 + (larga - pil.width) // 2),
+                                         int(cy - pil.height // 2)))
+            else:
+                t = w.cget("text")
+                try:
+                    tb = d.textbbox((0, 0), t)
+                    d.text((x0 + (larga - (tb[2] - tb[0])) // 2, cy - (tb[3] - tb[1]) // 2 - tb[1]),
+                           t, fill=TESTO)
+                except Exception:
+                    pass
+        self.ov_zone = zone
+        self.ov_cima = vh - H
+        self.ov_k = k
+        self.ov_posti = {w: (x0, larga) for w, x0, larga in posti}
+        if abs(k - 1.0) > 0.01:
+            im = im.resize((max(1, round(vw * k)), max(1, round(H * k))), Image.LANCZOS)
+        pos = (0, max(0, oh - im.height))
+        im = premoltiplica(im)
+        try:
+            if getattr(self, "ov", None) is None:
+                self.ov = mpv.ImageOverlay(self.mpv, OV_BARRA, im, pos=pos)
+            else:
+                self.ov.update(im, pos=pos)
+        except Exception:
+            self.ov = None
+
+    # --- il menu delle qualita' disegnato da mpv, nello stile della barra
+    OV_MENU_RIGA = 30
+
+    def disegna_menu_ov(self):
+        voci = getattr(self, "ov_menu", None)
+        if not voci or getattr(self, "ov", None) is None or self.b_qualita not in getattr(self, "ov_posti", {}):
+            self.togli_menu_ov()
+            return
+        from PIL import ImageDraw
+        R = self.OV_MENU_RIGA
+        d0 = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+        larghe = []
+        for t, _c in voci:
+            t = t[3:] if t[:3] in ("*  ", "   ") else t
+            try:
+                b = d0.textbbox((0, 0), t)
+                larghe.append(b[2] - b[0])
+            except Exception:
+                larghe.append(len(t) * 7)
+        mw = max(larghe + [60]) + 44
+        mh = len(voci) * R + 8
+        gx, gl = self.ov_posti[self.b_qualita]
+        x = max(0, min(gx + gl - mw, self.video.winfo_width() - mw))
+        y = max(0, self.ov_cima - mh - 6)
+        self.ov_menu_riquadro = (x, y, x + mw, y + mh)
+        im = Image.new("RGBA", (mw, mh), (0, 0, 0, 0))
+        d = ImageDraw.Draw(im)
+        # lo stesso fondo della barra: scuro, col colore del canale sopra
+        r0, g0, b0 = (int(BARRA[j:j + 2], 16) for j in (1, 3, 5))
+        d.rounded_rectangle([0, 0, mw - 1, mh - 1], radius=8, fill=(r0, g0, b0, 200))
+        colore = self.colore_barra or BARRA
+        try:
+            cr, cg, cb = (int(colore[j:j + 2], 16) for j in (1, 3, 5))
+        except ValueError:
+            cr, cg, cb = r0, g0, b0
+        velo = Image.new("RGBA", (mw, mh), (0, 0, 0, 0))
+        ImageDraw.Draw(velo).rounded_rectangle([0, 0, mw - 1, mh - 1], radius=8, fill=(cr, cg, cb, 70))
+        im.alpha_composite(velo)
+        for i, (t, cosa) in enumerate(voci):
+            yy = 4 + i * R
+            scelta = t.startswith("*  ")
+            t = t[3:] if t[:3] in ("*  ", "   ") else t
+            if i == getattr(self, "ov_menu_sopra", None) and cosa:
+                # sopra al fondo, non al posto suo (se no la riga resta bucata)
+                luce = Image.new("RGBA", (mw, mh), (0, 0, 0, 0))
+                ImageDraw.Draw(luce).rounded_rectangle([4, yy + 1, mw - 5, yy + R - 2], radius=6,
+                                                       fill=(255, 255, 255, 40))
+                im.alpha_composite(luce)
+            if scelta:
+                d.ellipse([14, yy + R // 2 - 3, 20, yy + R // 2 + 3], fill=colore if self.colore_barra else "#ffffff")
+            try:
+                b = d.textbbox((0, 0), t)
+                d.text((30, yy + (R - (b[3] - b[1])) // 2 - b[1]), t,
+                       fill=TESTO if cosa else GRIGIO)
+            except Exception:
+                pass
+        k = getattr(self, "ov_k", 1.0)
+        if abs(k - 1.0) > 0.01:
+            im = im.resize((max(1, round(mw * k)), max(1, round(mh * k))), Image.LANCZOS)
+        im = premoltiplica(im)
+        try:
+            self.ov_menu_img = mpv.ImageOverlay(self.mpv, OV_MENU, im, pos=(round(x * k), round(y * k)))
+        except Exception:
+            self.ov_menu_img = None
+
+    def togli_menu_ov(self):
+        if getattr(self, "ov_menu_img", None) is not None:
+            try:
+                self.mpv.overlay_remove(OV_MENU)
+            except Exception:
+                pass
+        self.ov_menu_img, self.ov_menu_riquadro = None, None
+
+    def chiudi_menu_ov(self):
+        self.ov_menu_fuori = None
+        if getattr(self, "ov_menu", None):
+            self.ov_menu = None
+            self.gira_ingranaggio(-1)
+        self.togli_menu_ov()
+
+    def riga_menu_ov(self):
+        """La voce del menu delle qualita' sotto al mouse (None se fuori)."""
+        r = getattr(self, "ov_menu_riquadro", None)
+        if not r:
+            return None
+        try:
+            x = self.root.winfo_pointerx() - self.video.winfo_rootx()
+            y = self.root.winfo_pointery() - self.video.winfo_rooty()
+        except tk.TclError:
+            return None
+        if not (r[0] <= x < r[2] and r[1] <= y < r[3]):
+            return None
+        i = int((y - r[1] - 4) // self.OV_MENU_RIGA)
+        return i if 0 <= i < len(self.ov_menu or []) else -1
+
+    def togli_ov(self):
+        self.chiudi_menu_ov()
+        ov = getattr(self, "ov", None)
+        if ov is not None:
+            try:
+                self.mpv.overlay_remove(OV_BARRA)
+            except Exception:
+                pass
+        self.ov, self.ov_chiave, self.ov_zone = None, None, []
+
+    def dove_ov(self):
+        """Il mouse in coordinate dell'immagine dei comandi; None se e' fuori."""
+        try:
+            x = self.root.winfo_pointerx() - self.video.winfo_rootx()
+            y = self.root.winfo_pointery() - self.video.winfo_rooty() - getattr(self, "ov_cima", 0)
+        except tk.TclError:
+            return None
+        if 0 <= x < self.video.winfo_width() and 0 <= y < self.OV_ALTA:
+            return x, y
+        return None
+
+    def ov_sotto_mouse(self):
+        return bool(getattr(self, "ov", None) is not None and self.dove_ov())
+
+    def zona_ov(self):
+        p = self.dove_ov()
+        if p is None:
+            return None
+        x, y = p
+        for z in getattr(self, "ov_zone", []):
+            if z[0] <= x < z[2] and z[1] <= y < z[3]:
+                return z, x
+        return None
+
+    def giro_ov(self):
+        """Mentre i comandi di mpv sono a vista: ogni 250 ms si ridisegnano
+        se e' cambiato qualcosa, e il volume si apre col mouse sopra."""
+        if not (self.barra_in_overlay() and self.barra_visibile):
+            self.ov_giro = False
+            if self.video.cget("cursor"):
+                self.video.config(cursor="")
+            return
+        z = self.zona_ov()
+        sopra = z[0][5] if z else None
+        if sopra in (self.b_muto, self.volume):
+            if getattr(self, "ov_sopra", None) not in (self.b_muto, self.volume):
+                self.apri_volume()
+        elif getattr(self, "ov_sopra", None) in (self.b_muto, self.volume):
+            self.chiudi_volume_tra_poco()
+        self.ov_sopra = sopra
+        # la manina sopra a quello che si clicca: la finestra di mpv, quando
+        # mostra il cursore, prende quello del riquadro di Tk che la contiene
+        su_qualcosa = bool(z) or (getattr(self, "ov_menu", None) and self.riga_menu_ov() is not None)
+        mano = "hand2" if su_qualcosa else ""
+        if self.video.cget("cursor") != mano:
+            self.video.config(cursor=mano)
+        if getattr(self, "ov_menu", None):
+            r = self.riga_menu_ov()
+            if r != getattr(self, "ov_menu_sopra", None):
+                self.ov_menu_sopra = r
+                self.disegna_menu_ov()
+            # col mouse fuori dal menu e dall'ingranaggio per 2 secondi si chiude
+            if r is None and sopra is not self.b_qualita:
+                if not getattr(self, "ov_menu_fuori", None):
+                    self.ov_menu_fuori = time.time()
+                elif time.time() - self.ov_menu_fuori > 2.0:
+                    self.chiudi_menu_ov()
+            else:
+                self.ov_menu_fuori = None
+        if self.sfondo_su:
+            self.rifai_sfondo()
+        # tenendo premuto su volume o progress: si segue il mouse
+        if getattr(self, "ov_premuto", False) and getattr(self, "ov_trascina", None):
+            self.trascina_ov()
+        elif not getattr(self, "ov_premuto", False):
+            self.ov_trascina = None
+        self.disegna_ov()
+        # col mouse sui comandi (o mentre registra) piu' spesso: hover,
+        # volume e battito del rec morbidi; se no ogni 200 ms
+        svelto = (self.dove_ov() is not None or getattr(self, "ov_menu", None)
+                  or getattr(self, "ov_trascina", None))
+        self.root.after(30 if svelto else (80 if self.registrando else 200), self.giro_ov)
+
+    def trascina_ov(self):
+        try:
+            x = self.root.winfo_pointerx() - self.video.winfo_rootx()
+        except tk.TclError:
+            return
+        if self.ov_trascina == "volume" and self.volume in getattr(self, "ov_posti", {}):
+            x0, larga = self.ov_posti[self.volume]
+            k = (x - x0 - 10) / float(max(1, larga - 20))
+            self.volume.set(int(round(max(0.0, min(1.0, k)) * 100)))
+        elif self.ov_trascina == "linea" and self.file_in_onda:
+            k = max(0.0, min(1.0, x / float(max(1, self.video.winfo_width()))))
+            if abs(k - getattr(self, "ov_ultimo_salto", -1)) > 0.002:
+                self.ov_ultimo_salto = k
+                self.parte_linea = k
+                try:
+                    self.mpv.command("seek", "%.2f" % (k * 100), "absolute-percent")
+                except Exception:
+                    pass
+
+    def clic_ov(self):
+        """Un clic sui comandi disegnati da mpv: True se l'ha preso lui."""
+        if not (self.barra_in_overlay() and self.barra_visibile and getattr(self, "ov", None) is not None):
+            return False
+        if getattr(self, "ov_menu", None):
+            i = self.riga_menu_ov()
+            if i is not None:
+                if i >= 0 and self.ov_menu[i][1]:
+                    cosa = self.ov_menu[i][1]
+                    self.chiudi_menu_ov()
+                    self.root.after(40, cosa)
+                return True
+            # fuori dal menu: si chiude; se era sull'ingranaggio basta cosi'
+            z = self.zona_ov()
+            self.chiudi_menu_ov()
+            if z and z[0][5] is self.b_qualita:
+                return True
+        z = self.zona_ov()
+        if z is None:
+            return self.dove_ov() is not None      # sulla sfumatura: niente, ma e' suo
+        (x0, y0, x1, y1, tipo, w), x = z
+        self.mosso()
+        self.ov_trascina = "linea" if tipo == "linea" else ("volume" if w is self.volume else None)
+        if tipo == "linea":
+            if self.file_in_onda:
+                k = max(0.0, min(1.0, x / float(max(1, self.video.winfo_width()))))
+                try:
+                    self.mpv.command("seek", "%.2f" % (k * 100), "absolute-percent")
+                except Exception:
+                    pass
+        elif w is self.volume:
+            larga = max(1, x1 - x0 - 20)
+            self.volume.set(int(round(max(0.0, min(1.0, (x - x0 - 10) / float(larga))) * 100)))
+        elif w is not None:
+            try:
+                w.invoke()
+            except tk.TclError:
+                pass
+        self.root.after(30, lambda: self.disegna_ov(forza=True))
+        return True
 
     # ------------------------------------------------- il caricamento
     # ------------------------------------------------------- i menu in alto
     def menu(self, titolo, voci):
-        """Una voce della barra in alto; voci e' una funzione che da' le
-        righe al momento, cosi' dicono la cosa giusta (Show/Hide...)."""
-        et = tk.Label(self.cima, text=_(titolo), bg=BARRA, fg=TESTO,
-                      padx=10, cursor="hand2")
-        et.pack(side="left", fill="y")
-        # passandoci sopra si apre, senza clic (ma non se si e' appena
-        # chiusa proprio questa: se no si apre e chiude di continuo)
-        def entra(e):
-            et.config(bg=SCELTO)
-            chi, quando = getattr(self.tendina, "chiusa", (None, 0))
-            if self.tendina.chi is et or (chi is et and time.time() - quando < 0.6):
-                return
-            self.apri_menu_cima(et, voci)
-        et.bind("<Enter>", entra)
-        et.bind("<Leave>", lambda e: self.tendina.chi is not et and et.config(bg=BARRA))
-        et.bind("<Button-1>", lambda e: self.apri_menu_cima(et, voci))
-        self.menu_cima[titolo] = (et, voci)
+        """Una voce della barra dei menu. voci e' una funzione che da' le
+        righe al momento: la tendina si riempie ogni volta che si apre,
+        cosi' dice la cosa giusta (spunte, Show/Hide, recenti...)."""
+        m = tk.Menu(self.barra_menu, tearoff=0, **self.stile_menu)
+        m.configure(postcommand=lambda: self.riempi_menu(m, voci))
+        self.barra_menu.add_cascade(label=_(titolo), menu=m)
+        self.menu_cima[titolo] = (self.barra_menu.index("end"), voci)
 
-    def apri_menu_cima(self, et, voci):
-        if self.tendina.aperta() and self.tendina.chi is et:
-            self.tendina.chiudi()
-            return
-        self.tendina.apri(et.winfo_rootx(), et.winfo_rooty() + et.winfo_height(), voci(),
-                          al_chiudere=lambda: et.config(bg=BARRA), chi=et,
-                          altrove=self.clic_altrove)
-        et.config(bg=SCELTO)
+    def riempi_menu(self, m, voci):
+        """(testo, cosa) = voce, cosa None = spenta; None = separatore;
+        '*  ' davanti = spuntata, '   ' = spuntabile e no; (SCORRE, voci, n)
+        = un sottomenu (i capitoli), a colonne se sono tanti."""
+        m.delete(0, "end")
+        for c in m.winfo_children():
+            c.destroy()
+        m.spunte = []                       # le variabili delle spunte, vive quanto la tendina
+        for v in voci():
+            if v is None:
+                m.add_separator()
+            elif v[0] is SCORRE:
+                sotto = tk.Menu(m, tearoff=0, **self.stile_menu)
+                for i, w in enumerate(v[1]):
+                    self.voce_menu(sotto, w, colonna=bool(i) and i % 25 == 0)
+                m.add_cascade(label=_("Chapters"), menu=sotto)
+            else:
+                self.voce_menu(m, v)
 
-    def clic_altrove(self, x, y, subito=False):
-        """Con una tendina aperta si e' cliccato fuori (o ci si e' passati
-        sopra, subito=True): se era su un'altra voce della barra in alto, si
-        apre la sua tendina. True se l'ha aperta."""
-        for titolo, (et, voci) in self.menu_cima.items():
-            if et is self.tendina.chi:
-                continue
-            x0, y0 = et.winfo_rootx(), et.winfo_rooty()
-            if x0 <= x < x0 + et.winfo_width() and y0 <= y < y0 + et.winfo_height():
-                self.root.after(10, lambda et=et, voci=voci: self.apri_menu_cima(et, voci))
-                return True
-        return False
+    def voce_menu(self, m, v, colonna=False):
+        testo, cosa = v
+        extra = {"state": "normal" if cosa else "disabled"}
+        if cosa:
+            extra["command"] = cosa
+        if colonna:
+            extra["columnbreak"] = 1
+        if testo[:3] in ("*  ", "   "):
+            var = tk.BooleanVar(m, value=testo.startswith("*  "))
+            if not hasattr(m, "spunte"):
+                m.spunte = []
+            m.spunte.append(var)
+            m.add_checkbutton(label=testo[3:], variable=var, **extra)
+        else:
+            m.add_command(label=testo, **extra)
 
     def cambia_lingua(self, codice):
         """La lingua nuova subito, senza riavviare: si riscrive quello che
@@ -6585,12 +7542,12 @@ class TV(object):
         LINGUA = codice
         self.cfg["lingua"] = codice
         scrivi_config(self.cfg)
-        for titolo, (et, _v) in self.menu_cima.items():
-            et.config(text=_(titolo))
+        for titolo, (i, _v) in self.menu_cima.items():
+            self.barra_menu.entryconfig(i, label=_(titolo))
         self.et_liste.config(text=_("Playlists"))
         self.rifai_albero()
         vecchio = self.cerca.vuota
-        self.cerca.vuota = _("Search channels")
+        self.cerca.vuota = _("Search")
         if self.cerca.testo.get() == vecchio:
             self.cerca.testo.set(self.cerca.vuota)
         try:
@@ -6668,6 +7625,14 @@ class TV(object):
         scrivi_config(self.cfg)
         self.applica_video()
 
+    def decodifica_hw(self):
+        """Decodifica con la scheda video (VA-API, NVDEC...): molta meno CPU
+        coi video grandi. auto-safe: mpv la usa solo dove e' sicura e se no
+        torna da solo al software. Accesa di serie."""
+        self.cfg["hwdec"] = not self.cfg.get("hwdec", True)
+        scrivi_config(self.cfg)
+        self.applica_video()
+
     def regola(self, cosa, di):
         """Luminosita', contrasto, saturazione: da -100 a 100, a passi."""
         v = max(-100, min(100, int(self.cfg.get(cosa, 0)) + di))
@@ -6695,6 +7660,14 @@ class TV(object):
             self.mpv.af = "lavfi=[dynaudnorm=f=150:g=15]" if self.cfg.get("normalizza") else ""
         except Exception:
             pass
+        # la decodifica si cambia solo se cambia: mpv rifa' il decoder
+        hw = "auto-safe" if self.cfg.get("hwdec", True) else "no"
+        if getattr(self, "hwdec_messo", "no") != hw:
+            try:
+                self.mpv.hwdec = hw
+                self.hwdec_messo = hw
+            except Exception:
+                pass
         self.alza_volume(self.volume.get())
 
     def istantanea(self):
@@ -6859,6 +7832,7 @@ class TV(object):
         chiuse = self.nascosti.get(self.sinistra) and self.nascosti.get(self.destra)
         if "playlist" not in self.icone_pil:
             return
+        self.root.update_idletasks()        # la barra di nuovo a vista: si veste subito
         if "playlist_chiuso" not in self.icone:
             im = self.icone_pil["playlist"].rotate(180)
             self.icone_pil["playlist_chiuso"] = im
@@ -6868,10 +7842,10 @@ class TV(object):
     def ridisponi(self):
         """Rifa' la disposizione com'e' adesso: i comandi a vista, e se c'e'
         solo il video parte la sorveglianza del mouse che li nasconde."""
-        self.disponi(self.pieno)            # in finestra impacchetta anche la barra
-        self.barra_visibile = not self.pieno
-        self.mosso()                        # a schermo intero la mette lui
-        if self.si_nasconde() and not self.sorveglio:
+        self.disponi(self.pieno)
+        self.barra_visibile = False
+        self.mosso()                        # mette la barra (di Tk o di mpv)
+        if self.nasconde_barra() and not self.sorveglio:
             self.sorveglio = True
             self.dove_era = self.root.winfo_pointerxy()
             self.sorveglia_mouse()
@@ -6976,6 +7950,155 @@ class TV(object):
             return None
         return self.programma_di(self.ide_in_onda, self.nome_in_onda)
 
+    def accetta_trascinati(self):
+        """Trascina e rilascia: file e cartelle portati sulla finestra si
+        aprono come da "Apri con XVB". Serve tkdnd (il pacchetto tkdnd);
+        senza, semplicemente non si puo'. tkdnd 2.6 consegna il rilascio al
+        widget sotto il mouse e non risale ai genitori: ogni widget della
+        finestra va registrato (e si ricontrolla ogni tanto per i nuovi)."""
+        if not hasattr(self, "dnd_fatti"):
+            try:
+                self.root.tk.call("package", "require", "tkdnd")
+            except tk.TclError:
+                return
+            self.dnd_fatti = set()
+            self.dnd_cmd = self.root.register(self.rilasciati)
+        da_fare = [self.root]
+        while da_fare:
+            w = da_fare.pop()
+            try:
+                # niente finestre a parte ne' menu: registrarli li fa comparire
+                da_fare.extend(c for c in w.winfo_children()
+                               if not isinstance(c, (tk.Toplevel, tk.Menu)))
+                p = str(w)
+                if p in self.dnd_fatti:
+                    continue
+                self.root.tk.call("tkdnd::drop_target", "register", p, "DND_Files")
+                self.root.tk.call("bind", p, "<<Drop:DND_Files>>", self.dnd_cmd + " %D")
+                self.dnd_fatti.add(p)
+            except tk.TclError:
+                pass
+        self.root.after(3000, self.accetta_trascinati)
+
+    def rilasciati(self, dati):
+        try:
+            voci = self.root.tk.splitlist(dati)
+        except tk.TclError:
+            voci = ()
+        dove = []
+        for d in voci:
+            if d.startswith("file://"):
+                from urllib.parse import unquote
+                d = unquote(urlparse(d).path)
+            if d and os.path.exists(d):
+                dove.append(d)
+        if dove:
+            self.root.after(0, lambda: self.apri_da_fuori(dove))
+        return "copy"
+
+    # --- MPRIS: tasti multimediali e pannello audio del desktop
+    def avvia_mpris(self):
+        self.mpris = avvia_mpris(self)
+        if self.mpris is not None:
+            self.giro_mpris()
+
+    def giro_mpris(self):
+        """Ogni secondo: quello che suona, per il pannello del desktop."""
+        try:
+            self.mpris.aggiorna(self.dati_mpris())
+        except Exception:
+            pass
+        self.root.after(1000, self.giro_mpris)
+
+    def dati_mpris(self):
+        u = self.file_in_onda or self.cfg.get("canale") or ""
+        fermo = bool(getattr(self, "fermato", None)) or not self.nome_in_onda or not u
+        try:
+            pausa = bool(self.mpv.pause)
+        except Exception:
+            pausa = False
+        try:
+            durata = float(self.mpv.duration or 0)
+        except Exception:
+            durata = 0
+        titolo = artista = album = arte = ""
+        if not fermo:
+            nome = self.nome_in_onda
+            if os.path.isabs(u) and os.path.splitext(u)[1][1:].lower() in AUDIO:
+                titolo, artista, album, _a = self.tag_file.get(u, ("", "", "", ""))
+                if not (titolo or artista or album):
+                    titolo, artista, album, _a = dal_percorso(u, self.cfg.get("cartelle", []))
+                album = album or self.info.get(u, {}).get("album", "")
+                titolo = titolo or nome
+                if u not in self.arte_mpris:
+                    try:
+                        self.arte_mpris[u] = anteprima_di(u) or ""
+                    except Exception:
+                        self.arte_mpris[u] = ""
+                arte = self.arte_mpris[u]
+            elif self.media_in_uso or self.reg_in_uso or os.path.isabs(u) \
+                    or u.startswith("dvd://") or e_cd(u):
+                titolo = self.righe_file(u, nome)[0]
+            else:
+                # un canale IPTV: il nome e, sotto, il programma in onda
+                titolo = self.cfg.get("nomi_canali", {}).get(u) or nome
+                ide = next((c[2] for c in self.canali if c[1] == u), None)
+                p = self.programma_di(ide, nome)
+                artista = p[2] if p else ""
+            if not arte and os.path.isabs(u):
+                arte = self.anteprime.get(u) or ""
+            if not arte and os.path.isfile(copertina_url(u)):
+                arte = copertina_url(u)
+            if not arte and u in LOGHI:
+                f = os.path.join(CACHE_LOGHI, hashlib.md5(LOGHI[u].encode()).hexdigest())
+                if os.path.isfile(f) and os.path.getsize(f):
+                    arte = f
+        if not arte and self.icona_file:
+            arte = self.icona_file
+        chiave = (u, titolo)
+        if chiave != getattr(self, "traccia_mpris", None):
+            self.traccia_mpris = chiave
+            self.num_mpris = getattr(self, "num_mpris", 0) + 1
+        return {
+            "stato": "Stopped" if fermo else ("Paused" if pausa else "Playing"),
+            "titolo": titolo, "artista": artista, "album": album,
+            "arte": os.path.abspath(arte) if arte else "",
+            "durata": durata if not fermo else 0,
+            "giro": self.num_mpris,
+            "giro_ripeti": {"uno": "Track", "tutti": "Playlist"}.get(self.cfg.get("ripeti", ""), "None"),
+            "shuffle": bool(self.cfg.get("shuffle")),
+            "volume": self.volume.get() / 100.0,
+        }
+
+    def mpris_comando(self, cosa):
+        fermo = bool(getattr(self, "fermato", None))
+        try:
+            in_pausa = bool(self.mpv.pause)
+        except Exception:
+            in_pausa = False
+        if (cosa == "playpause"
+                or (cosa == "play" and (fermo or in_pausa))
+                or (cosa == "pause" and not fermo and not in_pausa)):
+            self.pausa()
+
+    def mpris_posizione(self, secondi):
+        try:
+            self.mpv.time_pos = max(0.0, secondi)
+        except Exception:
+            pass
+
+    def mpris_shuffle(self, si):
+        if bool(self.cfg.get("shuffle")) != si:
+            self.shuffle()
+
+    def mpris_alza(self):
+        try:
+            self.root.deiconify()
+            self.root.lift()
+            self.root.focus_force()
+        except tk.TclError:
+            pass
+
     def programma_di(self, ide, nome):
         if not self.epg:
             return None
@@ -6998,6 +8121,7 @@ class TV(object):
         self.et_formato.config(fg=colore)
         self.colore_barra = colore
         self.icona_shuffle()
+        self.icona_ripeti()
         self.disegna_fondo_barra()
 
     def disegna_fondo_barra(self):
@@ -7038,9 +8162,11 @@ class TV(object):
         """Ogni mezzo secondo: la riga colorata e' quanto del programma in
         onda e' passato. Senza guida resta vuota."""
         parte = 0.0
+        senza_ora = False                   # True: c'e' una durata o la guida
         if self.file_in_onda:
             try:
                 pos, dur = float(self.mpv.time_pos or 0.0), float(self.mpv.duration or 0.0)
+                senza_ora = dur > 0
                 parte = max(0.0, min(1.0, pos / dur)) if dur > 0 else 0.0
                 if dur > 0:
                     self.et_ora.config(text="  -  %s / %s" % (ore_min_sec(pos), ore_min_sec(dur)))
@@ -7054,11 +8180,18 @@ class TV(object):
                 # con la guida: quanto del programma e' passato, vuota
                 # all'inizio, piena alla fine
                 inizio, fine, _t = p
+                senza_ora = True
                 parte = (time.time() - inizio) / max(1.0, fine - inizio)
                 parte = max(0.0, min(1.0, parte))
             if (self.stato.cget("text") == self.riga_mostrata[0] and
                     self.riga() != self.riga_mostrata):
                 self.scrivi_riga()          # e' cambiato programma
+        # niente durata e niente guida (radio, stream, canali senza EPG): la
+        # progress segue l'ora in corso, piena allo scoccare della prossima
+        if not senza_ora and self.nome_in_onda and not getattr(self, "fermato", None):
+            t = time.localtime()
+            parte = (t.tm_min * 60 + t.tm_sec) / 3600.0
+        self.parte_linea = parte
         w = self.linea.winfo_width()
         self.linea.coords(self.pieno_linea, 0, 0, int(w * parte), self.alta_linea)
         ora = time.strftime("%H:%M")
@@ -7079,20 +8212,21 @@ class TV(object):
     def mostra_sfondo(self, si):
         """L'immagine di sfondo del lettore: si vede finche' non parte un
         canale, e torna quando non c'e' piu' niente che va."""
+        cambia = getattr(self, "sfondo_su", None) != si
         self.sfondo_su = si
+        if cambia and hasattr(self, "timer_barra"):
+            self.root.after_idle(self.posa_barra)
         if si:
             giusto = self.sfondo_giusto()
             if giusto != self.sfondo_file:
                 self.sfondo_file, self.sfondo_misura = giusto, None
+            self.sfondo_misura = None
             self.rifai_sfondo()
-            self.sfondo.place(x=0, y=0, relwidth=1, relheight=1)
-            self.rialza_sfondo()
-            # la finestra di mpv (force-window) nasce per conto suo, anche
-            # dopo: si torna sopra un paio di volte per non finirci sotto
-            for t in (300, 1500, 4000):
-                self.root.after(t, lambda: self.sfondo_su and self.rialza_sfondo())
+            # mpv puo' non sapere ancora la sua misura: si riprova
+            for t in (300, 1500):
+                self.root.after(t, lambda: self.sfondo_su and self.rifai_sfondo())
         else:
-            self.sfondo.place_forget()
+            self.togli_sfondo()
 
     def rialza_sfondo(self):
         """Lo sfondo sopra a tutto nel riquadro del video, finestra di mpv
@@ -7104,26 +8238,48 @@ class TV(object):
         except tk.TclError:
             pass
 
+    def rifai_sfondo_poi(self):
+        if getattr(self, "sfondo_attesa", None):
+            self.root.after_cancel(self.sfondo_attesa)
+        self.sfondo_attesa = self.root.after(120, self._rifai_sfondo_ora)
+
+    def _rifai_sfondo_ora(self):
+        self.sfondo_attesa = None
+        self.rifai_sfondo()
+
     def rifai_sfondo(self):
-        """L'immagine adattata al riquadro del video, proporzioni tenute."""
-        if not self.sfondo_su or not os.path.isfile(self.sfondo_file):
+        """Lo sfondo (screen.png o la copertina scelta) disegnato da mpv,
+        adattato al riquadro e con le proporzioni tenute, sotto alla barra:
+        cosi' i comandi sono sempre quelli di mpv, anche da fermi."""
+        if not self.sfondo_su or not os.path.isfile(self.sfondo_file) or not HA_PIL:
             return
-        w, h = max(1, self.video.winfo_width()), max(1, self.video.winfo_height())
-        if (w, h) == self.sfondo_misura:
-            return
-        self.sfondo_misura = (w, h)
         try:
-            if HA_PIL:
-                im = Image.open(self.sfondo_file).convert("RGBA")
-                k = min(w / float(im.width), h / float(im.height))
-                im = im.resize((max(1, int(im.width * k)),
-                                max(1, int(im.height * k))), Image.LANCZOS)
-                self.sfondo_img = ImageTk.PhotoImage(im)
-            else:
-                self.sfondo_img = tk.PhotoImage(file=self.sfondo_file)
-            self.sfondo.config(image=self.sfondo_img)
+            ow, oh = int(self.mpv.osd_width or 0), int(self.mpv.osd_height or 0)
+        except Exception:
+            return
+        if ow < 2 or oh < 2:
+            return
+        if (ow, oh, self.sfondo_file) == self.sfondo_misura:
+            return
+        try:
+            im = Image.open(self.sfondo_file).convert("RGBA")
+            k = min(ow / float(im.width), oh / float(im.height))
+            im = im.resize((max(1, int(im.width * k)), max(1, int(im.height * k))), Image.LANCZOS)
+            tela = Image.new("RGBA", (ow, oh), (0, 0, 0, 255))
+            tela.alpha_composite(im, ((ow - im.width) // 2, (oh - im.height) // 2))
+            self.ov_sfondo = mpv.ImageOverlay(self.mpv, OV_SFONDO, tela, pos=(0, 0))
+            self.sfondo_misura = (ow, oh, self.sfondo_file)
         except Exception:
             pass
+
+    def togli_sfondo(self):
+        self.sfondo_misura = None
+        if getattr(self, "ov_sfondo", None) is not None:
+            try:
+                self.mpv.overlay_remove(OV_SFONDO)
+            except Exception:
+                pass
+            self.ov_sfondo = None
 
     def mostra_carico(self, si):
         self.root.after(0, self._mostra_carico, si)
@@ -7175,7 +8331,16 @@ class TV(object):
         c = self.linea
         c.delete("fondo")
         w, h = c.winfo_width(), c.winfo_height()
-        c.create_rectangle(0, 0, w, 2, fill="#3a3a3a", outline="", tags="fondo")
+        # la traccia spenta: il colore della parte accesa, al 35% sul fondo
+        traccia = CERCA                     # senza colore: come la ricerca
+        if self.colore_barra:
+            try:
+                a_ = [int(self.colore_barra[k:k + 2], 16) for k in (1, 3, 5)]
+                b_ = [int(BARRA[k:k + 2], 16) for k in (1, 3, 5)]
+                traccia = "#%02x%02x%02x" % tuple(int(y + (x - y) * 0.35) for x, y in zip(a_, b_))
+            except ValueError:
+                pass
+        c.create_rectangle(0, 0, w, 2, fill=traccia, outline="", tags="fondo")
         for y in range(2, h):
             c.create_line(0, y, w, y, tags="fondo",
                           fill=self.tinta_barra(y - 2) if self.colore_barra else BARRA)
@@ -7236,10 +8401,72 @@ class TV(object):
         elif ripeti == "tutti":
             self.vai_a_file(self.visti[0])          # finita la lista, si ricomincia
 
+    def voci_capitoli(self):
+        """Nel menu Playback, solo se quello che suona ha dei capitoli (DVD,
+        mkv, mp4...): precedente, successivo e (fino a 99) la
+        lista con l'ora d'inizio; quello in corso con l'asterisco."""
+        try:
+            capitoli = self.mpv.chapter_list or []
+            adesso = self.mpv.chapter
+        except Exception:
+            return []
+        if len(capitoli) < 2:
+            return []
+        voci = [(_("Previous chapter"), lambda: self.vai_capitolo(-1, relativo=True)),
+                (_("Next chapter"), lambda: self.vai_capitolo(+1, relativo=True))]
+        lista = []
+        if len(capitoli) <= 99:
+            for i, c in enumerate(capitoli):
+                titolo = (c.get("title") or "").strip()
+                if not titolo or titolo == "(unnamed)":
+                    titolo = _("Chapter %d") % (i + 1)
+                lista.append((("*  " if i == adesso else "   ") + titolo + "  \u00b7  "
+                              + ore_min_sec(c.get("time") or 0),
+                              lambda i=i: self.vai_capitolo(i)))
+        if lista:
+            # la lista in un riquadro di 8 voci che scorre, il resto fermo
+            voci += [None, (SCORRE, lista, 8)]
+        return voci + [None]
+
+    def vai_capitolo(self, n, relativo=False):
+        try:
+            if relativo:
+                self.mpv.command("add", "chapter", n)
+            else:
+                self.mpv.chapter = n
+        except Exception:
+            pass
+
     def metti_ripeti(self, k):
         """Dal menu Playback: niente, il file, o tutta la lista."""
         self.cfg["ripeti"] = k
         scrivi_config(self.cfg)
+        self.icona_ripeti()
+
+    def gira_ripeti(self):
+        """Il tasto della barra: niente -> tutta la lista -> il file -> niente."""
+        dopo = {"": "tutti", "tutti": "uno", "uno": ""}
+        self.metti_ripeti(dopo.get(self.cfg.get("ripeti", ""), ""))
+
+    def icona_ripeti(self):
+        """Spento: repeat.png bianca. Acceso, del colore del canale:
+        repeat.png per tutta la lista, repeat_one.png per il file."""
+        if not hasattr(self, "b_ripeti"):
+            return
+        k = self.cfg.get("ripeti", "")
+        testo = _({"": "No repeat", "tutti": "Repeat all", "uno": "Repeat one"}[k])
+        icona = "repeat_one" if (k == "uno" and "repeat_one" in self.icone_pil) else "repeat"
+        if k and HA_PIL and icona in self.icone_pil:
+            im = self.icone_pil[icona]
+            r, g, b = ((int(self.colore_barra[j:j + 2], 16) for j in (1, 3, 5))
+                       if self.colore_barra else (255, 255, 255))
+            tinta = Image.new("RGBA", im.size, (r, g, b, 255))
+            tinta.putalpha(im.getchannel("A"))
+            self.icone_pil["ripeti_on"] = tinta
+            self.icone["ripeti_on"] = ImageTk.PhotoImage(tinta)
+            self.faccia(self.b_ripeti, "ripeti_on", testo)
+        else:
+            self.faccia(self.b_ripeti, "repeat", testo)
 
     def vai_a_file(self, c):
         nome, url, ide = c
@@ -7519,7 +8746,7 @@ class TV(object):
             for k, n in (("radio", "Radio"), ("musica", "Music streams"),
                          ("film", "Film streams"), ("", "Temporary")):
                 tk.Radiobutton(dentro, text=_(n), variable=dove, value=k, anchor="w",
-                               bg=PANNELLO, fg=TESTO, selectcolor=TASTO, bd=0,
+                               bg=PANNELLO, fg=TESTO, selectcolor=CERCA, bd=0,
                                activebackground=PANNELLO, activeforeground="#ffffff",
                                highlightthickness=0, cursor="hand2").pack(fill="x")
         f = Finestrella(self.root, _("Open URL..."), corpo, chiedi=_("Name:"),

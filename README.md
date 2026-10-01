@@ -11,14 +11,17 @@ guide and recording.
 ## Features
 
 - Local videos and music, with resume, shuffle, repeat and seeking
-- Open files and folders from the file manager (Open with XVB), recent files
+- Open files and folders from the file manager (Open with XVB), by drag and drop, or from recent files
+- Search the list by name, title, artist, album or year
+- Media keys and the desktop sound panel (MPRIS): title, cover and controls
 - Radio, music and film streams by URL, saved with a name and a cover of your choice, or opened just once
 - Titles, covers and posters fetched automatically (TMDB, MusicBrainz), also for untagged music from folder and file names
 - Right-click: rename playlists, guides, streams and channels, set a cover or a channel logo
 - Audio CDs, video DVDs (not encrypted), data discs and ISO images, several at once; Blu-ray is not supported
 - IPTV: m3u playlists from file or URL, XMLTV guide
 - Recording of IPTV channels, radio and streams (also scheduled) and of unencrypted DVDs
-- Video and audio adjustments, tracks, external subtitles with delay and size, screenshots, picture in picture
+- Controls drawn over the video, semi-transparent, hiding by themselves when only the video is shown
+- Video and audio adjustments, hardware decoding (on by default), tracks, chapters, external subtitles with delay and size, screenshots, picture in picture
 - Dark interface in English, Italian, Spanish, French, German, Portuguese and Russian, following the system language
 
 ## Installation
@@ -56,6 +59,7 @@ python3 ~/xvb/xvb.py
 | Shift + ← → | Seek 10 seconds |
 | ↑ ↓ | Volume |
 | M | Mute |
+| Backspace | Previous channel (IPTV) |
 | F11 | Full screen |
 
 Settings are stored in `~/.config/xvb/`, recordings in `~/Videos/xvb/`.
@@ -90,14 +94,17 @@ TV e registrazione.
 ## Funzioni
 
 - Video e musica locali, con ripresa, riproduzione casuale, ripetizione e avanzamento
-- Apertura di file e cartelle dal file manager (Apri con XVB), file recenti
+- Apertura di file e cartelle dal file manager (Apri con XVB), trascinandoli sulla finestra o dai file recenti
+- Ricerca nella lista per nome, titolo, artista, album o anno
+- Tasti multimediali e pannello audio del desktop (MPRIS): titolo, copertina e comandi
 - Radio, stream musicali e di film da URL, salvati con un nome e una copertina a scelta, o aperti una volta sola
 - Titoli, copertine e poster scaricati in automatico (TMDB, MusicBrainz), anche per la musica senza tag a partire dai nomi di cartelle e file
 - Clic destro: rinomina playlist, guide, stream e canali, imposta una copertina o il logo di un canale
 - CD audio, DVD video (non cifrati), dischi di dati e immagini ISO, anche più insieme; Blu-ray non supportati
 - IPTV: playlist m3u da file o URL, guida XMLTV
 - Registrazione di canali IPTV, radio e stream (anche programmata) e dei DVD non cifrati
-- Regolazioni video e audio, tracce, sottotitoli esterni con ritardo e dimensione, istantanee, immagine nell'immagine (PiP)
+- Comandi disegnati sopra al video, semitrasparenti, che si nascondono da soli quando c'è solo il video
+- Regolazioni video e audio, decodifica hardware (attiva di serie), tracce, capitoli, sottotitoli esterni con ritardo e dimensione, istantanee, immagine nell'immagine (PiP)
 - Interfaccia scura in inglese, italiano, spagnolo, francese, tedesco, portoghese e russo, secondo la lingua del sistema
 
 ## Installazione
@@ -135,6 +142,7 @@ python3 ~/xvb/xvb.py
 | Shift + ← → | Avanti / indietro di 10 secondi |
 | ↑ ↓ | Volume |
 | M | Muto |
+| Backspace | Canale precedente (IPTV) |
 | F11 | Schermo intero |
 
 Le impostazioni sono in `~/.config/xvb/`, le registrazioni in `~/Videos/xvb/`.
