@@ -26,7 +26,7 @@ guide and recording.
 
 ## Installation
 
-Supported system: **Linux Mint 22+**.
+Supported systems: **Linux Mint 22+** and **Debian 13.7** (Note: On Debian 13.7, an **Xorg / X11** session is required; Wayland is not supported).
 
 Download the `.deb` from the [latest release](../../releases/latest) and run:
 
@@ -109,7 +109,7 @@ TV e registrazione.
 
 ## Installazione
 
-Sistema supportato: **Linux Mint 22+**.
+Sistemi supportati: **Linux Mint 22+** e **Debian 13.7** (Nota: Su Debian 13.7 è richiesta una sessione **Xorg / X11**; Wayland non è supportato).
 
 Scarica il `.deb` dall'[ultima release](../../releases/latest) ed esegui:
 
