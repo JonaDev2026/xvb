@@ -1,21 +1,5 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""XVB - lettore IPTV con l'adattamento della qualita' che a mpv manca.
 
-mpv sceglie una variante e ci resta: se la banda cala si ferma invece di
-scendere di qualita'. Qui l'adattamento glielo facciamo da fuori - si
-guarda quanto buffer ha davanti e si ricarica il canale sulla variante
-piu' leggera quando va in affanno, su quella piu' pesante quando sta
-tranquillo. E' quello che fa hls.js nel browser, scritto da noi.
-
-A sinistra i canali, ognuno col suo pallino colorato, a destra le liste,
-sotto i comandi e il nome del canale che sta andando. Le liste sono i
-file nella cartella playlists/ accanto all'app, qualunque nome abbiano.
-Il nome e' quello del file, l'immagine accanto e' icone/default.png. L'app si ricorda le liste,
-l'ultima usata, l'ultimo canale e il volume.
-
-Uso:  python3 xvb.py [lista.m3u]
-"""
 import gzip
 import hashlib
 import json
@@ -234,7 +218,7 @@ def avvia_mpris(app):
     threading.Thread(target=GLib.MainLoop().run, daemon=True).start()
     return m
 
-VERSIONE = "3.6"
+VERSIONE = "3.8"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"        # dove stanno le release, per l'avviso di aggiornamento
@@ -1490,7 +1474,7 @@ PROPORZIONI = (("Auto", "-1"), ("16:9", "16:9"), ("4:3", "4:3"), ("21:9", "21:9"
 # ma solo fino alla chiusura)
 LARGA_BARRA = 220
 RIDOTTE = 18       # le icone della barra di destra: lato in px (il riquadro resta 24)
-IN_RIPRODUZIONE = "#c0c7d0"   # il fondo fisso della riga in riproduzione (argento)
+IN_RIPRODUZIONE = "#323036"   # il fondo fisso della riga in riproduzione (argento)
 PREFERITI = "favorite"     # la cartella dei preferiti, in playlists/
 # i preferiti, per ora spenti: niente cuore e niente cartella nella barra
 # (i file in playlists/favorite/ restano dove sono). True per riaccenderli
@@ -1533,7 +1517,7 @@ ZEBRA = "#212024"          # una riga si' e una no, e le sottocategorie a destra
 TESTO = "#e0e0e0"          # bianco 87%: il testo
 GRIGIO = "#9e9e9e"         # bianco 60%: il testo secondario
 ACCENTO = "#bb86fc"        # il colore primario, per volume e caricamento
-IN_ONDA = "#3b2f4f"        # il primario in trasparenza: cio' che sta andando
+IN_ONDA = "#323036"        # il primario in trasparenza: cio' che sta andando
 TESTO_ONDA = "#e9ddff"     # il testo sopra al viola
 CERCA = "#252428"          # la pillola della ricerca
 CIMA = PANNELLO            # la barra dei menu in alto: come le sidebar
@@ -1664,7 +1648,7 @@ def leggi_lista(f, solo_cache=False):
         else:
             f = copia_lista_url(f)
     righe = open(f, encoding="utf-8", errors="ignore").read().splitlines()
-    fuori, nome, ide, logo = [], None, None, None
+    fuori, nome, ide, logo, lic = [], None, None, None, None
     for riga in righe:
         riga = riga.strip()
         if riga.startswith("#EXTINF"):
@@ -1673,15 +1657,79 @@ def leggi_lista(f, solo_cache=False):
             ide = m.group(1).strip() if m else None
             m = re.search(r'tvg-logo="([^"]+)"', riga)
             logo = m.group(1).strip() if m else None
+            m = re.search(r'license-type="([^"]*)"', riga)
+            d = re.search(r'license-details="([^"]*)"', riga)
+            lic = d.group(1).strip() if m and d and m.group(1).strip().lower() == "clearkey" else None
         elif riga and not riga.startswith("#"):
             fuori.append((nome or riga, riga, ide or None))
             if logo:
                 LOGHI[riga] = logo          # il logo del canale, per il colore
-            nome, ide, logo = None, None, None
+            if lic:
+                CHIAVI[riga] = lic          # la ClearKey del canale
+            nome, ide, logo, lic = None, None, None, None
     return fuori
 
 
 LOGHI = {}                      # indirizzo canale -> url del logo
+CHIAVI = {}                     # indirizzo canale -> license-details ClearKey (KID:CHIAVE)
+
+
+def chiave_clearkey(det):
+    """La chiave (32 cifre esadecimali) da 'KID:CHIAVE' (o solo la chiave);
+    None se non si legge."""
+    m = re.fullmatch(r"(?:[0-9a-fA-F]{32}:)?([0-9a-fA-F]{32})", (det or "").strip())
+    return m.group(1) if m else None
+def manifest_pulito(testo, url):
+    """Il manifest DASH senza le tracce dei sottotitoli (ffmpeg le riapre
+    all'infinito e il canale non parte) e coi percorsi resi assoluti."""
+    testo = re.sub(r'\s*<AdaptationSet\b[^>]*mimeType="(?:text/|application/ttml)[^"]*"[^>]*>.*?</AdaptationSet>',
+                   "", testo, flags=re.S)
+    if "<BaseURL" not in testo:
+        from xml.sax.saxutils import escape
+        base = escape(url.rsplit("/", 1)[0] + "/")
+        testo = testo.replace("<Period", "<BaseURL>%s</BaseURL>\n<Period" % base, 1)
+    return testo
+
+
+_SERVER_MPD = None
+
+
+def server_mpd():
+    """Un piccolo server solo su 127.0.0.1: a ogni richiesta riscarica il
+    manifest del canale (e' un live, mpv lo richiede ogni pochi secondi) e
+    lo da' ripulito. Serve solo i canali che hanno una ClearKey."""
+    global _SERVER_MPD
+    if _SERVER_MPD is not None:
+        return _SERVER_MPD
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    from urllib.parse import parse_qs, urlsplit
+
+    class Gestore(BaseHTTPRequestHandler):
+        def do_GET(self):
+            try:
+                url = parse_qs(urlsplit(self.path).query)["u"][0]
+                if url not in CHIAVI:
+                    raise ValueError("canale senza chiave")
+                testo = urlopen(Request(url, headers={"User-Agent": UA}),
+                                timeout=10).read().decode("utf-8", "ignore")
+                dati = manifest_pulito(testo, url).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/dash+xml")
+                self.send_header("Content-Length", str(len(dati)))
+                self.end_headers()
+                self.wfile.write(dati)
+            except Exception:
+                self.send_error(502)
+
+        def log_message(self, *a):
+            pass
+
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), Gestore)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    _SERVER_MPD = srv
+    return srv
+
+
 CACHE_LOGHI = os.path.join(CASA, ".cache", "xvb", "loghi")
 # le copertine scelte a mano per gli indirizzi (radio, stream): restano
 COPERTINE_URL = os.path.join(CASA, ".config", "xvb", "copertine")
@@ -2178,13 +2226,13 @@ def qualita(alta, banda):
     """Come chiamare una qualita' e di che colore scriverla: dall'altezza
     in pixel se c'e', se no dalla banda."""
     if alta >= 2160:
-        return "2160p 4K", "#bf5af2"
+        return "2160p", "#bf5af2"
     if alta >= 1080:
-        return "1080p Full HD", "#30d158"
+        return "1080p", "#30d158"
     if alta >= 720:
-        return "720p HD", "#0a84ff"
+        return "720p", "#0a84ff"
     if alta >= 480:
-        return "%dp SD" % alta, "#ff9f0a"
+        return "%dp" % alta, "#ff9f0a"
     if alta > 0:
         return "%dp" % alta, "#ff5257"
     return "%.0f kbit/s" % (banda / 1000.0), GRIGIO
@@ -2438,8 +2486,10 @@ def scrivi_preferiti(canali, tipo=PREF_IPTV):
     with open(f, "w", encoding="utf-8") as o:
         o.write("#EXTM3U\n")
         for nome, url, ide in canali:
+            lic = (' license-type="clearkey" license-details="%s"' % CHIAVI[url]
+                   if url in CHIAVI else "")
             o.write("#EXTINF:-1%s,%s\n%s\n" % (
-                ' tvg-id="%s"' % ide if ide else "", nome, url))
+                (' tvg-id="%s"' % ide if ide else "") + lic, nome, url))
 
 
 CACHE_EPG = os.path.join(CASA, ".cache", "xvb", "epg")
@@ -3310,7 +3360,7 @@ class Elenco(tk.Text):
                          font=(CARATTERE, -NOME_PX), **kw)
         self.rientro = tk.PhotoImage(width=10, height=1)     # l'aria fra il bordo e il testo
         self.rientro_zero = tk.PhotoImage(width=2, height=1)  # coi loghi: 2 px di aria
-        self.stacco = tk.PhotoImage(width=1, height=3)       # 3 px di aria fra una voce e l'altra
+        self.stacco = tk.PhotoImage(width=1, height=12)       # 3 px di aria fra una voce e l'altra
         # i loghi e le copertine stanno in una colonna a parte, a sinistra,
         # fuori dalle righe (niente zebra ne' selezione sotto), alti quanto
         # tutta la voce: un Canvas sopra al margine sinistro del testo, che
@@ -3318,6 +3368,8 @@ class Elenco(tk.Text):
         self.colonna = tk.Canvas(self, bg=PANNELLO, highlightthickness=0, bd=0,
                                  width=COLONNA, cursor="arrow")
         self.colonna_dopo = None
+        self.prog_di = None                 # iid -> (inizio, fine) del programma in onda, o None
+        self.barre = []                     # riserva di barre (pista, pieno), una per voce visibile
         self.config(yscrollcommand=lambda *a: self.ridisegna_colonna())
         self.bind("<Configure>", lambda e: self.ridisegna_colonna(), add="+")
         self.colonna.bind("<Button-1>", lambda e: self.clic_y(e.y))
@@ -3340,7 +3392,7 @@ class Elenco(tk.Text):
         # sotto e con l'aria in fondo
         self.tag_configure("nome", foreground="#ffffff", spacing1=6, spacing3=0,
                            font=(CARATTERE, -NOME_PX))
-        self.tag_configure("sotto", spacing1=0, spacing3=6, font=(CARATTERE, -SOTTO_PX))
+        self.tag_configure("sotto", spacing1=0, spacing3=10, font=(CARATTERE, -SOTTO_PX))
         self.tag_configure("onda")
         self.tag_raise("onda")
         self.tag_raise("scelto")
@@ -3417,6 +3469,7 @@ class Elenco(tk.Text):
         if self.scelta and vedi:
             self.tag_add("scelto", *self.spanne(self.scelta))
             self.tag_raise("scelto")
+        self.ridisegna_colonna()
         self.event_generate("<<TreeviewSelect>>")
 
     def selection_remove(self, iid):
@@ -3475,7 +3528,7 @@ class Elenco(tk.Text):
             else:
                 self.tag_configure(tinta, foreground=colore, lmargin1=0, lmargin2=0)
             self.tag_lower(tinta, "zebra")
-        zebra = ("zebra",) if self.posto[iid] % 2 else ()
+        zebra = ("zebra",)
         extra = tuple(d["tags"]) + (("scelto",) if self.scelta == iid else ())
         # tre righe: nome, sottotitolo, stacco. Il bordo colorato e' il
         # margine sinistro del tag colore, su tutte e due le righe; il
@@ -3515,6 +3568,50 @@ class Elenco(tk.Text):
             self.colonna_dopo = self.after_idle(self._colonna)
 
     def _colonna(self):
+        self._colonna_loghi()
+        self._barre()
+
+    def _nuova_barra(self):
+        pista = tk.Frame(self, bg=TASTO, height=2, bd=0, highlightthickness=0, cursor="arrow")
+        pieno = tk.Frame(pista, bd=0, highlightthickness=0, bg=GRIGIO)
+        for w in (pista, pieno):
+            w.bind("<Button-1>", lambda e, b=pista: self.clic_y(b.winfo_y() - 1))
+            w.bind("<Button-4>", lambda e: self.yview_scroll(-3, "units"))
+            w.bind("<Button-5>", lambda e: self.yview_scroll(3, "units"))
+            w.bind("<MouseWheel>", lambda e: self.yview_scroll(-3 if e.delta > 0 else 3, "units"))
+        return pista, pieno
+
+    def _barre(self):
+        """In fondo a ogni voce coi tempi del programma in onda: una riga
+        sottile, del colore della voce, lunga quanto ne e' passato."""
+        usate = 0
+        if self.prog_di is not None and self.voci:
+            try:
+                su = int(self.index("@0,0").split(".")[0])
+                giu = int(self.index("@0,%d" % self.winfo_height()).split(".")[0])
+            except (tk.TclError, ValueError):
+                su = giu = 0
+            adesso, larg = time.time(), self.winfo_width()
+            for i in range(max(0, (su - 1) // 3), min(len(self.voci), (giu - 1) // 3 + 1)):
+                iid = self.voci[i]
+                parte = self.prog_di(iid)
+                if parte is None:
+                    continue
+                riga = self.dlineinfo("%d.0" % (3 * i + 3))       # lo stacco sotto la voce
+                if riga is None:
+                    continue
+                if usate >= len(self.barre):
+                    self.barre.append(self._nuova_barra())
+                pista, pieno = self.barre[usate]
+                usate += 1
+                pieno.config(bg=self.dati[iid].get("colore") or GRIGIO)
+                x0 = COLONNA if self.segno == "logo" else 0
+                pista.place(x=x0, y=riga[1] - 7, width=larg - x0, height=2)
+                pieno.place(x=0, y=0, relwidth=parte, relheight=1)
+        for pista, _pieno in self.barre[usate:]:
+            pista.place_forget()
+
+    def _colonna_loghi(self):
         """I loghi delle voci che si vedono, ognuno centrato sull'altezza
         della sua voce (nome + sottotitolo); dove non c'e' logo, il pallino."""
         self.colonna_dopo = None
@@ -3543,8 +3640,13 @@ class Elenco(tk.Text):
             d = self.dati[iid]
             img = d.get("logo") or (self.corto(d["image"]) if d.get("image") is not None else None)
             # le voci con la riga grigia (zebra): anche dietro al logo
-            if self.posto.get(iid, 0) % 2:
-                c.create_rectangle(0, y0, COLONNA, y1, fill=ZEBRA, outline="")
+            nomi = self.tag_names("%d.0" % r)
+            fondo = ZEBRA
+            if "scelto" in nomi:
+                fondo = self.tag_cget("scelto", "background") or ZEBRA
+            elif "onda" in nomi:
+                fondo = self.tag_cget("onda", "background") or ZEBRA
+            c.create_rectangle(0, y0, COLONNA, y1, fill=fondo, outline="")
             if img is not None:
                 c.create_image(COLONNA // 2, (y0 + y1) // 2, image=img)
 
@@ -4068,6 +4170,7 @@ class TV(object):
                foreground=[("selected", "#ffffff")] + mappa("foreground"))
         self.elenco = Elenco(self.sinistra)
         self.elenco.segno = self.cfg.get("segno", "logo")
+        self.elenco.prog_di = self.progresso_di
         self.elenco.colonna.bind("<Double-Button-1>", lambda e: self.parti())
         self.elenco.tag_configure("onda", background=IN_ONDA,
                                   foreground=TESTO_ONDA)
@@ -5976,6 +6079,50 @@ class TV(object):
             nome = self.cfg.get("nomi_canali", {}).get(url) or nome   # rinominato
         return " " + nome + ("\n " + sotto if sotto else "")
 
+    def progresso_di(self, iid):
+        """Per la barra in fondo alla voce, quanto e' fatto (0-1): il
+        programma in onda dei canali, la posizione ricordata dei film
+        iniziati. None negli altri casi."""
+        try:
+            nome, url, ide = self.visti[int(iid)]
+        except (ValueError, IndexError):
+            return None
+        if self.media_in_uso or self.reg_in_uso or os.path.isabs(url):
+            if not os.path.isabs(url) or os.path.splitext(url)[1][1:].lower() in AUDIO:
+                return None
+            pos = self.cfg.get("posizioni", {}).get(url)
+            if not pos:
+                return None
+            dur = self.cfg.get("durate", {}).get(url)
+            if not dur:
+                self.cerca_durata(url)
+                return None
+            return max(0.0, min(1.0, pos / float(dur)))
+        if not self.epg:
+            return None
+        p = self.programma_di(ide, nome)
+        if not p or p[1] <= p[0]:
+            return None
+        return max(0.0, min(1.0, (time.time() - p[0]) / float(p[1] - p[0])))
+
+    def cerca_durata(self, f):
+        """In un thread: la durata dei film iniziati prima che la si
+        segnasse; poi le barre si ridisegnano."""
+        cercate = self.__dict__.setdefault("durate_cercate", set())
+        if f in cercate:
+            return
+        cercate.add(f)
+
+        def salva(d):
+            self.cfg.setdefault("durate", {})[f] = round(d, 1)
+            self.elenco.ridisegna_colonna()
+
+        def lavora():
+            d = durata_di(f)
+            if d:
+                self.root.after(0, lambda: salva(d))
+        threading.Thread(target=lavora, daemon=True).start()
+
     def righe_file(self, f, nome):
         """Titolo e sottotitolo di un file. Film: il titolo di TMDB e sotto
         '2023 · Drama · ★ 7.8' (senza info, l'anno dal nome). Musica: il
@@ -6029,6 +6176,7 @@ class TV(object):
                 t = self.testo_riga(nome, url, ide)
                 if self.elenco.item(str(i), "text") != t:
                     self.elenco.item(str(i), text=t)
+        self.elenco.ridisegna_colonna()
         self.root.after(60000, self.aggiorna_sottotitoli)
 
     def tagga(self, chiave):
@@ -6383,6 +6531,7 @@ class TV(object):
             self.mpv.audio_delay = float(self.cfg.get("ritardo", {}).get(url, 0.0))
         except Exception:
             pass
+        self.applica_chiave(url)
         self.varianti = varianti(url)
         self.root.after(0, self.mostra_ingranaggio)
         self.affanni, self.tranquillo_da = [], time.time()
@@ -6400,8 +6549,33 @@ class TV(object):
                 self.mpv["audio-files"] = []
             except Exception:
                 pass
-            self.mpv.play(url)
+            self.mpv.play(self.indirizzo_chiave(url))
         self.scrivi_riga()
+
+    def indirizzo_chiave(self, url):
+        """Un canale DASH con ClearKey si apre dal manifest ripulito dei
+        sottotitoli (server locale); gli altri com'e'."""
+        if chiave_clearkey(CHIAVI.get(url)) and url.split("?")[0].lower().endswith(".mpd"):
+            try:
+                return "http://127.0.0.1:%d/m.mpd?u=%s" % (
+                    server_mpd().server_address[1], quote(url, safe=""))
+            except Exception:
+                pass
+        return url
+
+    def applica_chiave(self, url):
+        """ClearKey del canale (license-type/license-details dell'M3U): la
+        chiave va al demuxer di ffmpeg insieme alla whitelist dei protocolli
+        (e' la stessa opzione di mpv, quindi si riscrivono insieme)."""
+        protocolli = "file,http,https,tcp,tls,crypto,data,httpproxy"
+        o = "protocol_whitelist=%%%d%%%s" % (len(protocolli), protocolli)
+        k = chiave_clearkey(CHIAVI.get(url))
+        if k:
+            o += ",cenc_decryption_key=" + k
+        try:
+            self.mpv["demuxer-lavf-o"] = o
+        except Exception:
+            pass
 
     def suona(self, i):
         """La variante scelta: a mpv si da' una master playlist locale con
@@ -7301,10 +7475,28 @@ class TV(object):
                 im.alpha_composite(luce)
             if scelta:
                 d.ellipse([14, yy + R // 2 - 3, 20, yy + R // 2 + 3], fill=colore if self.colore_barra else "#ffffff")
+            
             try:
-                b = d.textbbox((0, 0), t)
+                from PIL import ImageFont
+                import subprocess
+                import tkinter.font as tkfont
+
+                famiglia = tkfont.nametofont("TkDefaultFont").actual("family")
+                percorso = subprocess.check_output(
+                    ["fc-match", "-f", "%{file}", famiglia + ":style=regular"],
+                    text=True,
+                    stderr=subprocess.DEVNULL
+                ).strip()
+
+                font_usato = ImageFont.truetype(percorso, 12)
+            except Exception:
+                font_usato = ImageFont.load_default()
+
+
+            try:
+                b = d.textbbox((0, 0), t, font=font_usato)
                 d.text((30, yy + (R - (b[3] - b[1])) // 2 - b[1]), t,
-                       fill=TESTO if cosa else GRIGIO)
+                       fill=TESTO if cosa else GRIGIO, font=font_usato)
             except Exception:
                 pass
         k = getattr(self, "ov_k", 1.0)
@@ -8353,14 +8545,18 @@ class TV(object):
         f = self.file_in_onda
         if dur - pos < 20:
             p.pop(f, None)
+            self.cfg.get("durate", {}).pop(f, None)
         else:
             p[f] = round(pos, 1)
+            self.cfg.setdefault("durate", {})[f] = round(dur, 1)
         if len(p) > 300:                    # non cresce all'infinito
             for k in list(p)[:len(p) - 300]:
                 p.pop(k, None)
+                self.cfg.get("durate", {}).pop(k, None)
         adesso = time.time()
         if adesso - getattr(self, "posizione_scritta", 0.0) > 10:
             self.posizione_scritta = adesso
+            self.elenco.ridisegna_colonna()
             scrivi_config(self.cfg)
 
     def vai_a(self, ev):
