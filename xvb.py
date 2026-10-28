@@ -234,7 +234,7 @@ def avvia_mpris(app):
     threading.Thread(target=GLib.MainLoop().run, daemon=True).start()
     return m
 
-VERSIONE = "3.4"
+VERSIONE = "3.5"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"        # dove stanno le release, per l'avviso di aggiornamento
@@ -8198,7 +8198,6 @@ class TV(object):
         if self.et_orologio.cget("text") != ora:
             self.et_orologio.config(text=ora)
         self.root.after(500, self.aggiorna_linea)
-        self.root.after(1000, self.controlla_registrazione)
 
     def sfondo_giusto(self):
         """Mentre suona un indirizzo con la copertina scelta: quella; se no
