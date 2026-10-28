@@ -234,7 +234,7 @@ def avvia_mpris(app):
     threading.Thread(target=GLib.MainLoop().run, daemon=True).start()
     return m
 
-VERSIONE = "3.5"
+VERSIONE = "3.6"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"        # dove stanno le release, per l'avviso di aggiornamento
@@ -7098,8 +7098,8 @@ class TV(object):
             self.sorveglia_mouse()
 
     # --- i comandi disegnati da mpv
-    OV_ALTA = 40                # come la barra originale: progress in cima, bottoni sotto
-    OV_RIGA = 38                # la riga dei bottoni, sotto la progress
+    OV_ALTA = 60                # come la barra originale: progress in cima, bottoni sotto
+    OV_RIGA = 58                # la riga dei bottoni, sotto la progress
     OV_LINEA = 0                # la progress: sul bordo in alto
 
     def elementi_barra(self):
@@ -7190,7 +7190,7 @@ class TV(object):
             pr, pg, pb = (int(pc[j:j + 2], 16) for j in (1, 3, 5))
         except ValueError:
             pr, pg, pb = r0, g0, b0
-        d.rectangle([0, 0, vw, H], fill=(pr, pg, pb, 102))
+        d.rectangle([0, 0, vw, H], fill=(int(pr * 0.4), int(pg * 0.4), int(pb * 0.4), 200))
         # la progress: la traccia spenta come la selezione del menu qualita'
         # (bianco al 16% sopra al pannello), poi la parte piena
         luce = Image.new("RGBA", (vw, H), (0, 0, 0, 0))
