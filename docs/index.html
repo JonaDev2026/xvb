@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>XVB Player</title>
-<meta name="description" content="A media player for Linux Mint 22+: videos, music, discs and IPTV with TV guide and recording. Python + libmpv.">
+<meta name="description" content="A media player for Linux Mint 22+, Debian 13.7 (X11)+: videos, music, discs and IPTV with TV guide and recording. Python + libmpv.">
 <link rel="icon" href="https://raw.githubusercontent.com/JonaDev2026/xvb/main/icon.png">
 <style>
 :root{
@@ -74,6 +74,7 @@ html[lang=it] [data-lang=it]{display:revert}
   <a class="brand" href="./"><img src="https://raw.githubusercontent.com/JonaDev2026/xvb/main/icon.png" alt="">XVB</a>
   <nav>
     <a class="hide" href="#features"><span data-lang="en">Features</span><span data-lang="it">Funzioni</span></a>
+    <a class="hide" href="#deepdive"><span data-lang="en">Deep Dive</span><span data-lang="it">Approfondimento</span></a>
     <a class="hide" href="#install"><span data-lang="en">Installation</span><span data-lang="it">Installazione</span></a>
     <a href="https://github.com/JonaDev2026/xvb">GitHub</a>
     <div class="lang"><button id="en" class="on">EN</button><button id="it">IT</button></div>
@@ -82,8 +83,8 @@ html[lang=it] [data-lang=it]{display:revert}
 
 <div class="hero">
   <h1>XVB <span>Player</span></h1>
-  <p data-lang="en">A media player for Linux Mint 22+, built on libmpv. Videos, music, discs and IPTV in one app.</p>
-  <p data-lang="it">Lettore multimediale per Linux Mint 22+, basato su libmpv. Video, musica, dischi e IPTV in un'unica app.</p>
+  <p data-lang="en">A media player for Linux Mint 22+, Debian 13.7 (X11)+, built on libmpv. Videos, music, discs and IPTV in one app.</p>
+  <p data-lang="it">Lettore multimediale per Linux Mint 22+, Debian 13.7 (X11)+, basato su libmpv. Video, musica, dischi e IPTV in un'unica app.</p>
   <div class="btns">
     <a class="btn main" id="deb" href="https://github.com/JonaDev2026/xvb/releases/latest">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 21h16"/></svg>
@@ -127,10 +128,30 @@ html[lang=it] [data-lang=it]{display:revert}
       <p data-lang="it">Comandi sopra al video, regolazioni di immagine e suono, decodifica hardware, tracce, capitoli, sottotitoli esterni, istantanee, immagine nell'immagine.</p></div>
   </div>
 </section>
+
+<section id="deepdive">
+  <h2><span data-lang="en">Detailed Feature Breakdown</span><span data-lang="it">Approfondimento Funzionalità</span></h2>
+  <div class="card">
+    <p style="margin-bottom:14px;"><i class="dot" style="background:#14b8a6"></i> <span data-lang="en"><b>Local Files & Playback:</b> Full support for local video and music playback featuring automatic playback resume, random shuffling, loop repetition, sub-second precise seeking, and full search capabilities across lists by name, title, artist, album, or year[cite: 9]. Files and folders can be opened seamlessly via the system file manager ("Open with XVB"), through drag and drop actions, or directly from the recent files history[cite: 9]. Comprehensive media keys and desktop sound panel (MPRIS) integration allow controlling title, cover, and playback directly from system controls[cite: 9].</span><span data-lang="it"><b>File Locali e Riproduzione:</b> Gestione completa di video e musica locali con ripresa automatica della riproduzione (*resume*), riproduzione casuale, ripetizione, ricerca e avanzamento puntuale[cite: 9]. È possibile cercare elementi per nome, titolo, artista, album o anno[cite: 9]. Supporta l'apertura tramite file manager ("Apri con XVB"), trascinamento (*drag and drop*), file recenti, tasti multimediali e integrazione con il pannello audio del desktop (MPRIS)[cite: 9].</span></p>
+
+    <p style="margin-bottom:14px;"><i class="dot" style="background:#f59e0b"></i> <span data-lang="en"><b>Metadata, Artwork & Context Menus:</b> Automatic fetching of titles, high-resolution movie/series posters from TMDB, and album covers from MusicBrainz[cite: 9]. This intelligence extends seamlessly to untagged music files by accurately parsing folder and file names[cite: 9]. Right-click contextual actions enable renaming playlists, guides, custom streams, and channels, as well as manually assigning custom covers or channel logos[cite: 9].</span><span data-lang="it"><b>Metadati, Copertine e Menu Contestuali:</b> Recupero automatico di titoli, poster cinematografici e di serie TV da TMDB, oltre alle copertine degli album musicali da MusicBrainz[cite: 9]. Funziona in modo intelligente anche per la musica priva di tag analizzando i nomi di file e cartelle[cite: 9]. Tramite il tasto destro è possibile rinominare playlist, guide, stream e canali, oltre ad impostare copertine o loghi personalizzati[cite: 9].</span></p>
+
+    <p style="margin-bottom:14px;"><i class="dot" style="background:#a3a3b3"></i> <span data-lang="en"><b>Optical Discs & ISO Support:</b> Direct playback capabilities for Audio CDs, unencrypted video DVDs, data discs, and ISO images, with support for handling multiple discs simultaneously[cite: 9]. Note that Blu-ray discs are not supported by the player engine[cite: 9].</span><span data-lang="it"><b>Supporto Dischi e Immagini ISO:</b> Riproduzione diretta di CD audio, DVD video (purché non cifrati), dischi dati e file immagine ISO, anche multipli contemporaneamente[cite: 9]. I dischi Blu-ray non sono supportati[cite: 9].</span></p>
+
+    <p style="margin-bottom:14px;"><i class="dot" style="background:#3b82f6"></i> <span data-lang="en"><b>IPTV, Web Streams & RTSP Cameras:</b> Full IPTV management supporting m3u/m3u8 playlists from local files or remote URLs, coupled with built-in XMLTV electronic program guide (EPG) support[cite: 9]. Users can also add, organize, and stream web radio stations, music feeds, film streams, and advanced **RTSP/ONVIF security camera feeds** by URL, saving them with custom names and cover graphics[cite: 9].</span><span data-lang="it"><b>IPTV, Stream Web e Telecamere RTSP:</b> Gestione IPTV con playlist m3u da file o URL e supporto integrato per la guida TV XMLTV (EPG)[cite: 9]. Consente inoltre di riprodurre e salvare radio web, flussi musicali, film e **telecamere di videosorveglianza IP (RTSP/ONVIF)** tramite URL, associandoli a un nome e a una copertina personalizzata[cite: 9].</span></p>
+
+    <p style="margin-bottom:14px;"><i class="dot" style="background:var(--rec)"></i> <span data-lang="en"><b>Advanced PVR Recording Engine:</b> Built-in recording functionality capable of performing direct stream dumps for IPTV channels, live web radio, RTSP security feeds, and unencrypted DVD tracks[cite: 9]. Supports both instant immediate recording and scheduled recording timers[cite: 9].</span><span data-lang="it"><b>Motore di Registrazione PVR Avanzato:</b> Funzionalità di registrazione integrata per effettuare il dump diretto dei flussi di canali IPTV, radio, flussi RTSP e DVD non cifrati[cite: 9]. Supporta sia registrazioni immediate che timer di registrazione programmati[cite: 9].</span></p>
+
+    <p style="margin-bottom:14px;"><i class="dot" style="background:#06b6d4"></i> <span data-lang="en"><b>Video & Audio Adjustments:</b> Semi-transparent overlay playback controls designed to automatically hide when only the video view is active[cite: 9]. Advanced features include GPU hardware decoding (enabled by default), fine image and sound adjustments, audio tracks and DVD chapters selection, external subtitle support (SRT, ASS/SSA) with delay and size synchronization, instant screenshot capture, and Picture-in-Picture (PiP) mode[cite: 9].</span><span data-lang="it"><b>Regolazioni Video e Audio:</b> Comandi di riproduzione disegnati in sovraimpressione, semitrasparenti e a scomparsa automatica quando è visibile solo il video[cite: 9]. Include decodifica hardware della GPU (attiva di serie), regolazioni fini di immagine e audio, tracce audio, capitoli DVD, sottotitoli esterni (SRT, ASS/SSA) con sincronizzazione di ritardo e dimensione, istantanee e modalità Picture-in-Picture (PiP)[cite: 9].</span></p>
+
+    <p><i class="dot" style="background:#8b5cf6"></i> <span data-lang="en"><b>System Integration & Localization:</b> Clean dark interface designed to match operating system locales. Fully compatible and optimized for **Linux Mint 22+** and **Debian 13.7 (X11)** environments, with support for English, Italian, Spanish, French, German, Portuguese, and Russian[cite: 9].</span><span data-lang="it"><b>Integrazione e Localizzazione:</b> Interfaccia grafica scura che si adatta alla lingua di sistema. Pienamente compatibile e ottimizzata per ambienti **Linux Mint 22+** e **Debian 13.7 (X11)**, con supporto per inglese, italiano, spagnolo, francese, tedesco, portoghese e russo[cite: 9].</span></p>
+  </div>
+</section>
+
 <section id="install" class="steps">
   <h2><span data-lang="en">Installation</span><span data-lang="it">Installazione</span></h2>
-  <p data-lang="en">Supported systems: <b>Linux Mint 22+</b> and <b>Debian 13.7</b> (Note: On Debian 13.7, an <b>Xorg / X11</b> session is required; Wayland is not supported). Download the <code>.deb</code> from the latest release and run:</p>
-  <p data-lang="it">Sistemi supportati: <b>Linux Mint 22+</b> e <b>Debian 13.7</b> (Nota: Su Debian 13.7 è richiesta una sessione <b>Xorg / X11</b>; Wayland non è supportato). Scarica il <code>.deb</code> dall'ultima release ed esegui:</p>
+  <p data-lang="en">Supported systems: <b>Linux Mint 22+</b>, <b>Debian 13.7 (X11)</b> (recommended on X11 display servers). Download the <code>.deb</code> from the latest release and run:</p>
+  <p data-lang="it">Sistemi supportati: <b>Linux Mint 22+</b>, <b>Debian 13.7 (X11)</b> (consigliato su server grafico X11). Scarica il <code>.deb</code> dall'ultima release ed esegui:</p>
   <pre id="cmd">sudo apt install ./xvb_*_all.deb</pre>
   <p data-lang="en">XVB is then available in the applications menu, or as <code>xvb</code> from a terminal. It starts in the system language: English, Italian, Spanish, French, German, Portuguese or Russian.</p>
   <p data-lang="it">XVB si trova poi nel menu delle applicazioni, o come <code>xvb</code> da terminale. Parte nella lingua del sistema: inglese, italiano, spagnolo, francese, tedesco, portoghese o russo.</p>
@@ -157,7 +178,6 @@ html[lang=it] [data-lang=it]{display:revert}
 </div>
 <script>
 (function(){
-  // il carosello: una immagine alla volta, ogni 5 secondi, i punti sotto
   var g=document.getElementById('giostra'), fila=g.querySelector('.fila'),
       imgs=fila.querySelectorAll('img'), punti=document.getElementById('punti'), i=0, t;
   function vai(n){i=(n+imgs.length)%imgs.length;fila.style.transform='translateX('+(-100*i)+'%)';
