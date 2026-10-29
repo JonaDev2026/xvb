@@ -1,5 +1,13 @@
 # XVB Player
 
+🇮🇹 italian List m3u - free
+[italy.zip](https://github.com/user-attachments/files/34136301/italy.zip)
+
+🇮🇹 italian epg for this list
+https://epgshare01.online/epgshare01/epg_ripper_IT1.xml.gz
+
+⚠️ Requires an X11 session and is optimized for Debian 13.7 (Trixie)
+
 A media player for Linux Mint 22+, built on libmpv. It plays local
 videos and music, video DVDs, data discs and ISO images, IPTV playlists with a TV
 guide and recording, and RTSP network security cameras.
