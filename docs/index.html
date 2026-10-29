@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>XVB Player</title>
-<meta name="description" content="A media player for Linux Mint 22+, Debian 13.7 (X11)+: videos, music, discs and IPTV with TV guide and recording. Python + libmpv.">
+<meta name="description" content="A media player for Ubuntu 24.04 LTS, Linux Mint 22, and Debian 13 (X11): videos, music, discs and IPTV with TV guide and recording. Python + libmpv.">
 <link rel="icon" href="https://raw.githubusercontent.com/JonaDev2026/xvb/main/icon.png">
 <style>
 :root{
@@ -83,8 +83,8 @@ html[lang=it] [data-lang=it]{display:revert}
 
 <div class="hero">
   <h1>XVB <span>Player</span></h1>
-  <p data-lang="en">A media player for Linux Debian 13.7 (X11)+, built on libmpv. Videos, music, discs and IPTV in one app.</p>
-  <p data-lang="it">Lettore multimediale per Linux Debian 13.7 (X11)+, basato su libmpv. Video, musica, dischi e IPTV in un'unica app.</p>
+  <p data-lang="en">A media player for Ubuntu 24.04 LTS, Linux Mint 22, and Debian 13 (X11), built on libmpv. Videos, music, discs and IPTV in one app.</p>
+  <p data-lang="it">Lettore multimediale per Ubuntu 24.04 LTS, Linux Mint 22 e Debian 13 (X11), basato su libmpv. Video, musica, dischi e IPTV in un'unica app.</p>
   <div class="btns">
     <a class="btn main" id="deb" href="https://github.com/JonaDev2026/xvb/releases/latest">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 21h16"/></svg>
@@ -145,14 +145,14 @@ html[lang=it] [data-lang=it]{display:revert}
 
     <p style="margin-bottom:14px;"><i class="dot" style="background:#06b6d4"></i> <span data-lang="en"><b>Video & Audio Adjustments:</b> Semi-transparent overlay playback controls designed to automatically hide when only the video view is active. Advanced features include GPU hardware decoding (enabled by default), fine image and sound adjustments, audio tracks and DVD chapters selection, external subtitle support (SRT, ASS/SSA) with delay and size synchronization, instant screenshot capture, and Picture-in-Picture (PiP) mode.</span><span data-lang="it"><b>Regolazioni Video e Audio:</b> Comandi di riproduzione disegnati in sovraimpressione, semitrasparenti e a scomparsa automatica quando è visibile solo il video. Include decodifica hardware della GPU (attiva di serie), regolazioni fini di immagine e audio, tracce audio, capitoli DVD, sottotitoli esterni (SRT, ASS/SSA) con sincronizzazione di ritardo e dimensione, istantanee e modalità Picture-in-Picture (PiP).</span></p>
 
-    <p><i class="dot" style="background:#8b5cf6"></i> <span data-lang="en"><b>System Integration & Localization:</b> Clean dark interface designed to match operating system locales. Fully compatible and optimized for <b>Linux Mint 22+</b> and <b>Debian 13.7 (X11)</b> environments, with support for English, Italian, Spanish, French, German, Portuguese, and Russian.</span><span data-lang="it"><b>Integrazione e Localizzazione:</b> Interfaccia grafica scura che si adatta alla lingua di sistema. Pienamente compatibile e ottimizzata per ambienti <b>Linux Mint 22+</b> e <b>Debian 13.7 (X11)</b>, con supporto per inglese, italiano, spagnolo, francese, tedesco, portoghese e russo.</span></p>
+    <p><i class="dot" style="background:#8b5cf6"></i> <span data-lang="en"><b>System Integration & Localization:</b> Clean dark interface designed to match operating system locales. Fully compatible and 100% optimized for Ubuntu 24.04 LTS, Linux Mint 22, and Debian 13 X11 environments, with support for English, Italian, Spanish, French, German, Portuguese, and Russian.</span><span data-lang="it"><b>Integrazione e Localizzazione:</b> Interfaccia grafica scura che si adatta alla lingua di sistema. Pienamente compatibile e ottimizzata al 100% per ambienti Ubuntu 24.04 LTS, Linux Mint 22 e Debian 13 su X11, con supporto per inglese, italiano, spagnolo, francese, tedesco, portoghese e russo.</span></p>
   </div>
 </section>
 
 <section id="install" class="steps">
   <h2><span data-lang="en">Installation</span><span data-lang="it">Installazione</span></h2>
-  <p data-lang="en">Supported systems: <b>Linux Mint 22+</b>, <b>Debian 13.7 (X11)</b> (recommended on X11 display servers). Download the <code>.deb</code> from the latest release and run:</p>
-  <p data-lang="it">Sistemi supportati: <b>Linux Mint 22+</b>, <b>Debian 13.7 (X11)</b> (consigliato su server grafico X11). Scarica il <code>.deb</code> dall'ultima release ed esegui:</p>
+  <p data-lang="en">Supported systems (100% compatibility): <b>Ubuntu 24.04 LTS</b>, <b>Linux Mint 22</b>, <b>Debian 13</b> (X11 session required). Download the <code>.deb</code> from the latest release and run:</p>
+  <p data-lang="it">Sistemi supportati (compatibilità al 100%): <b>Ubuntu 24.04 LTS</b>, <b>Linux Mint 22</b>, <b>Debian 13</b> (richiesta sessione X11). Scarica il <code>.deb</code> dall'ultima release ed esegui:</p>
   <pre id="cmd">sudo apt install ./xvb_*_all.deb</pre>
   <p data-lang="en">XVB is then available in the applications menu, or as <code>xvb</code> from a terminal. It starts in the system language: English, Italian, Spanish, French, German, Portuguese or Russian.</p>
   <p data-lang="it">XVB si trova poi nel menu delle applicazioni, o come <code>xvb</code> da terminale. Parte nella lingua del sistema: inglese, italiano, spagnolo, francese, tedesco, portoghese o russo.</p>
@@ -190,7 +190,7 @@ html[lang=it] [data-lang=it]{display:revert}
 })();
 (function(){
   var html=document.documentElement;
-  function lang(l){html.lang=l;document.getElementById('en').className=l=='en'?'on':'';document.getElementById('it').className=l=='it'?'on':'';try{localStorage.setItem('xvb-lang',l)}catch(e){}}
+  function lang(l){html.lang=l;document.getElementById('en').className=l=='en'?'on':'';document.getElementById('it').className=l=='it'=='on'?'on':'';try{localStorage.setItem('xvb-lang',l)}catch(e){}}
   document.getElementById('en').onclick=function(){lang('en')};
   document.getElementById('it').onclick=function(){lang('it')};
   var saved=null;try{saved=localStorage.getItem('xvb-lang')}catch(e){}
