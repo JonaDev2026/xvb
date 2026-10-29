@@ -72,6 +72,26 @@ Once installed, XVB Player will be available in your applications menu or via te
 
 Configuration files and user settings are saved in `~/.config/xvb/`. PVR recordings are stored in `~/Videos/xvb/`.
 
+
+## Known issues
+
+### Wayland
+
+XVB is stable on X11. On Wayland sessions it runs through XWayland, because the video is embedded in the Tk window via an X11 window id (mpv `wid`), and Tk has no native Wayland backend. Native Wayland is not supported.
+
+Known limitations under XWayland:
+
+- **Menus and popups**: dropdown menus may not close properly, may lose focus, or may appear in the wrong position.
+- **Auto-hide of controls and cursor**: pointer position is only tracked while the pointer is over an X window, so the control bar and overlays may not hide or show correctly.
+- **Always on top / PiP**: the "always on top" option is ignored by the compositor, and the PiP window cannot be positioned or kept on top.
+- **Drag and drop**: dropping files from native Wayland apps may not work, even with tkdnd installed.
+- **Window icon**: the icon set by the app is ignored; the icon comes from the `.desktop` file.
+- **Screen blanking**: the screen may turn off during playback, because idle inhibit is not implemented.
+
+Workaround: run XVB in an X11 session.
+
+
+
 ## Legal
 
 XVB Player is a neutral media playback tool. It does not provide, host, or distribute channels, credentials, or copyrighted content. Use XVB only with streams and media you are legally authorized to access. Avoid piracy or circumventing digital protections.
