@@ -34,7 +34,7 @@ guide and recording, and RTSP network security cameras.
 
 ## Installation & System Requirements
 
-Supported system: **Debian 13.7 **.
+Supported system: **Linux Mint 22+ Debian 13+**.
 
 ⚠️ **Important Notice on Display Servers:** XVB Player is fully stable and optimized for **X11**. When running under Wayland, you may experience window management issues or interface glitches due to Tkinter limitations.
 
@@ -119,7 +119,7 @@ TV e registrazione, e telecamere di videosorveglianza in rete (RTSP).
 
 ## Installazione e Requisiti di Sistema
 
-Sistema supportato: **Linux Mint 22+**.
+Sistema supportato: **Linux Mint 22+ Debian 13+**.
 
 ⚠️ **Nota importante sul server grafico:** XVB Player è completamente stabile e ottimizzato per **X11**. L'avvio sotto ambiente Wayland potrebbe causare problemi nella gestione delle finestre o glitch dell'interfaccia grafica a causa delle limitazioni di Tkinter.
 
