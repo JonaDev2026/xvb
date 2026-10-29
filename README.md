@@ -42,16 +42,6 @@ sudo apt install ./xvb_*_all.deb
 
 Once installed, XVB Player will be available in your applications menu or via terminal by typing `xvb`.
 
-### Running from Source
-
-To install dependencies and run the player directly from source:
-
-```bash
-sudo apt install -y python3-tk python3-pil python3-pil.imagetk python3-mpv python3-mutagen ffmpeg libmpv2
-git clone https://github.com/JonaDev2026/xvb.git ~/xvb
-python3 ~/xvb/xvb.py
-```
-
 ## Usage
 
 - **Media** — Open a file, a folder containing videos/music, or a stream URL; access recent files.
