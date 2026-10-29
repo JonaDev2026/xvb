@@ -8,7 +8,7 @@ https://epgshare01.online/epgshare01/epg_ripper_IT1.xml.gz
 
 ⚠️ Requires an X11 session and is optimized for Debian 13.7 (Trixie)
 
-A media player for Linux Mint 22+, built on libmpv. It plays local
+A media player for Debian 13.7 , built on libmpv. It plays local
 videos and music, video DVDs, data discs and ISO images, IPTV playlists with a TV
 guide and recording, and RTSP network security cameras.
 
@@ -34,7 +34,7 @@ guide and recording, and RTSP network security cameras.
 
 ## Installation & System Requirements
 
-Supported system: **Linux Mint 22+**.
+Supported system: **Debian 13.7 **.
 
 ⚠️ **Important Notice on Display Servers:** XVB Player is fully stable and optimized for **X11**. When running under Wayland, you may experience window management issues or interface glitches due to Tkinter limitations.
 
