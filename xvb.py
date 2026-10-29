@@ -218,7 +218,7 @@ def avvia_mpris(app):
     threading.Thread(target=GLib.MainLoop().run, daemon=True).start()
     return m
 
-VERSIONE = "3.8"
+VERSIONE = "3.9"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"        # dove stanno le release, per l'avviso di aggiornamento
@@ -260,6 +260,9 @@ TESTI = {
         "Track %d": "Traccia %d",
         "Set logo...": "Imposta logo...",
         "Remove logo": "Togli logo",
+        "Set color...": "Imposta colore...",
+        "Remove color": "Togli colore",
+        "Choose a color": "Scegli un colore",
         "Discs": "Dischi",
         "This DVD is protected and can't be recorded": "Questo DVD è protetto e non si può registrare",
         "Set cover...": "Imposta copertina...",
@@ -1652,7 +1655,8 @@ def leggi_lista(f, solo_cache=False):
     for riga in righe:
         riga = riga.strip()
         if riga.startswith("#EXTINF"):
-            nome = riga.split(",", 1)[-1].strip() or _("unnamed")
+            m = re.match(r'#EXTINF:[^,"]*(?:"[^"]*"[^,"]*)*,(.*)$', riga)
+            nome = (m.group(1) if m else riga.split(",", 1)[-1]).strip() or _("unnamed")
             m = re.search(r'tvg-id="([^"]*)"', riga)
             ide = m.group(1).strip() if m else None
             m = re.search(r'tvg-logo="([^"]+)"', riga)
@@ -1674,11 +1678,32 @@ LOGHI = {}                      # indirizzo canale -> url del logo
 CHIAVI = {}                     # indirizzo canale -> license-details ClearKey (KID:CHIAVE)
 
 
+def chiavi_clearkey(det):
+    """Le coppie (kid, chiave) di license-details: 'KID:CHIAVE', solo la
+    chiave, anche tra virgolette, oppure il JSON {"KID":"CHIAVE",...}; anche
+    se codificato come url. Le chiavi a zeri sono segnaposto e non contano."""
+    from urllib.parse import unquote
+    t = unquote((det or "").strip()).strip().strip('"').strip()
+    coppie = []
+    if t.startswith("{"):
+        try:
+            coppie = [(str(k).strip().lower(), str(v).strip().lower())
+                      for k, v in json.loads(t).items()]
+        except (ValueError, AttributeError):
+            coppie = []
+    else:
+        m = re.fullmatch(r"(?:([0-9a-fA-F]{32}):)?([0-9a-fA-F]{32})", t)
+        if m:
+            coppie = [((m.group(1) or "").lower(), m.group(2).lower())]
+    return [(k, v) for k, v in coppie
+            if re.fullmatch(r"[0-9a-f]{32}", v) and int(v, 16) != 0]
+
+
 def chiave_clearkey(det):
-    """La chiave (32 cifre esadecimali) da 'KID:CHIAVE' (o solo la chiave);
-    None se non si legge."""
-    m = re.fullmatch(r"(?:[0-9a-fA-F]{32}:)?([0-9a-fA-F]{32})", (det or "").strip())
-    return m.group(1) if m else None
+    """La prima chiave vera (32 cifre esadecimali) di license-details; ffmpeg
+    ne accetta una sola per flusso. None se non si legge."""
+    c = chiavi_clearkey(det)
+    return c[0][1] if c else None
 def manifest_pulito(testo, url):
     """Il manifest DASH senza le tracce dei sottotitoli (ffmpeg le riapre
     all'infinito e il canale non parte) e coi percorsi resi assoluti."""
@@ -1733,7 +1758,7 @@ def server_mpd():
 CACHE_LOGHI = os.path.join(CASA, ".cache", "xvb", "loghi")
 # le copertine scelte a mano per gli indirizzi (radio, stream): restano
 COPERTINE_URL = os.path.join(CASA, ".config", "xvb", "copertine")
-IMMAGINI = ("jpg", "jpeg", "png", "webp", "bmp")
+IMMAGINI = ("jpg", "jpeg", "png", "webp", "bmp", "svg")
 
 
 def copertina_url(u):
@@ -2079,6 +2104,25 @@ def tag_di(f, cache):
     return titolo, artista, album, anno
 
 
+def svg_in_png(dati):
+    """Un logo SVG diventa PNG: con rsvg-convert, o con cairosvg se manca.
+    Se non si puo' i dati restano com'erano."""
+    if b"<svg" not in dati[:4096].lower():
+        return dati
+    try:
+        r = subprocess.run(["rsvg-convert", "-w", "256"], input=dati,
+                           capture_output=True, timeout=15)
+        if r.returncode == 0 and r.stdout:
+            return r.stdout
+    except Exception:
+        pass
+    try:
+        import cairosvg
+        return cairosvg.svg2png(bytestring=dati, output_width=256)
+    except Exception:
+        return dati
+
+
 def colore_dal_logo(url_logo):
     """Il colore dominante del logo di un canale, da usare per il pallino:
     si scarica il logo (in cache), si buttano i pixel trasparenti, bianchi,
@@ -2091,7 +2135,7 @@ def colore_dal_logo(url_logo):
     f = os.path.join(CACHE_LOGHI, hashlib.md5(url_logo.encode()).hexdigest())
     if not os.path.isfile(f) or os.path.getsize(f) == 0:
         r = Request(url_logo, headers={"User-Agent": UA})
-        dati = urlopen(r, timeout=10).read()   # prima si scarica tutto, poi si scrive
+        dati = svg_in_png(urlopen(r, timeout=10).read())   # prima si scarica tutto, poi si scrive
         with open(f, "wb") as o:
             o.write(dati)
     try:
@@ -3797,7 +3841,8 @@ def sfoglia(root, titolo, da, file_=True, tipi=None):
         elenco.pack(fill="both", expand=True, padx=4, pady=4)
         icone[0] = cartellina(GRIGIO, False) or tk.PhotoImage(width=PUNTO, height=PUNTO)
         icone[1] = tk.PhotoImage(width=PUNTO, height=PUNTO)
-
+        cache_anteprime = []
+        
         def riempi():
             del voci[:]
             sel[0] = None
@@ -3819,7 +3864,44 @@ def sfoglia(root, titolo, da, file_=True, tipi=None):
                     p = os.path.join(dove[0], n)
                     if os.path.isfile(p) and (
                             os.path.splitext(n)[1][1:].lower() in tipi if tipi else e_media(n)):
-                        elenco.insert("", "end", iid=str(len(voci)), text=" " + n, image=icone[1])
+                        
+                        # Tentativo di generazione anteprima immagine
+                        icona_corrente = icone[1]
+                        estensione = os.path.splitext(n)[1][1:].lower()
+                        
+                        # Controlla se PIL è disponibile e l'estensione è un'immagine supportata
+                        if 'Image' in globals() and 'ImageTk' in globals() and estensione in ("jpg", "jpeg", "png", "webp", "bmp", "svg"):
+                            try:
+                                if estensione == "svg":
+                                    import subprocess
+                                    import tempfile
+                                    
+                                    # Creiamo un file temporaneo per la conversione PNG tramite rsvg-convert (librsvg2-bin)
+                                    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+                                        tmp_name = tmp.name
+                                    
+                                    # Eseguiamo rsvg-convert ridimensionando l'immagine alla dimensione PUNTO
+                                    subprocess.run(
+                                        ["rsvg-convert", "-w", str(PUNTO), "-h", str(PUNTO), p, "-o", tmp_name],
+                                        check=True,
+                                        stdout=subprocess.DEVNULL,
+                                        stderr=subprocess.DEVNULL
+                                    )
+                                    
+                                    img = Image.open(tmp_name)
+                                    img.load() # Carica i dati in memoria
+                                    os.unlink(tmp_name) # Pulizia del file temporaneo
+                                else:
+                                    img = Image.open(p)
+                                    img.thumbnail((PUNTO, PUNTO))
+
+                                foto_min = ImageTk.PhotoImage(img)
+                                cache_anteprime.append(foto_min)
+                                icona_corrente = foto_min
+                            except Exception:
+                                pass
+                        
+                        elenco.insert("", "end", iid=str(len(voci)), text=" " + n, image=icona_corrente)
                         voci.append((p, False))
 
         def vai(p):
@@ -5665,9 +5747,22 @@ class TV(object):
         try:
             os.makedirs(os.path.dirname(fuori), exist_ok=True)
             if HA_PIL:
-                im = Image.open(img).convert("RGB")
-                im.thumbnail((800, 800))
-                im.save(fuori, "JPEG", quality=90)
+                import io  # <-- Metti l'import qui dentro se non vuoi cercarlo in cima al file
+                with open(img, "rb") as h:
+                    dati_file = h.read()
+                
+                dati_png = svg_in_png(dati_file)
+                im = Image.open(io.BytesIO(dati_png))
+                
+                trasp = im.mode in ("RGBA", "LA", "PA") or "transparency" in im.info
+                if trasp and not os.path.isabs(dove) and not dove.startswith("dvd://"):
+                    im = im.convert("RGBA")
+                    im.thumbnail((800, 800))
+                    im.save(fuori, "PNG")
+                else:
+                    im = im.convert("RGB")
+                    im.thumbnail((800, 800))
+                    im.save(fuori, "JPEG", quality=90)
             else:
                 import shutil
                 shutil.copyfile(img, fuori)
@@ -5675,6 +5770,25 @@ class TV(object):
             self.scrivi(_("cannot read %s: %s") % (os.path.basename(img), e), errore=True)
             return
         self.copertina_cambiata(dove)
+
+    def scegli_colore(self, nome, url):
+        """Un colore scelto a mano per un canale: vince su quello preso dal
+        suo logo (pallino, linea di avanzamento, comandi)."""
+        from tkinter import colorchooser
+        c = colorchooser.askcolor(color=self.colore_canale(nome, url),
+                                  parent=self.root, title=_("Choose a color"))[1]
+        if not c:
+            return
+        self.cfg.setdefault("colori_canali", {})[url] = c
+        self.colore_cambiato()
+
+    def togli_colore(self, url):
+        self.cfg.get("colori_canali", {}).pop(url, None)
+        self.colore_cambiato()
+
+    def colore_cambiato(self):
+        scrivi_config(self.cfg)
+        self.filtra()
 
     def togli_copertina(self, dove):
         try:
@@ -5727,6 +5841,9 @@ class TV(object):
                     (_("Set logo..."), lambda: self.metti_copertina(url))]
             if os.path.isfile(copertina_url(url)):
                 voci.append((_("Remove logo"), lambda: self.togli_copertina(url)))
+            voci.append((_("Set color..."), lambda: self.scegli_colore(nome, url)))
+            if url in self.cfg.get("colori_canali", {}):
+                voci.append((_("Remove color"), lambda: self.togli_colore(url)))
         else:
             voci = [(_("Set cover..."), lambda: self.metti_copertina(url))]
             if not os.path.isabs(url) and os.path.isfile(copertina_url(url)):
@@ -6222,7 +6339,8 @@ class TV(object):
             return colore_di(os.path.basename(os.path.dirname(url)))
         if url in self.posto_file:
             return SCALA_FILE[self.posto_file[url] % len(SCALA_FILE)]
-        return self.colori.get(url) or colore_di(nome)
+        return (self.cfg.get("colori_canali", {}).get(url) or self.colori.get(url)
+                or colore_di(nome))
 
     def pallino_di(self, nome, url):
         c = self.colore_canale(nome, url)

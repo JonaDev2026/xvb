@@ -95,7 +95,7 @@ Priority: optional
 Architecture: all
 Installed-Size: $INSTALLED_SIZE
 Homepage: https://github.com/JonaDev2026/xvb
-Depends: python3, python3-tk, python3-pil, python3-pil.imagetk, python3-mpv, python3-mutagen, libmpv2 | libmpv1
+Depends: python3, librsvg2-bin, python3-tk, python3-pil, python3-pil.imagetk, python3-mpv, python3-mutagen, libmpv2 | libmpv1
 Recommends: ffmpeg, tkdnd, python3-dbus, python3-gi
 Maintainer: Jona <jonalinux.uk@gmail.com>
 Description: Media player for videos, music, discs and IPTV
