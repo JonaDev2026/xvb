@@ -1,211 +1,104 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>XVB Player</title>
-<meta name="description" content="A media player for Ubuntu 24.04 LTS, Linux Mint 22, and Debian 13 (X11): videos, music, discs and IPTV with TV guide and recording. Python + libmpv.">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#101014">
+<title>XVB Player — Media, IPTV & Playback for Linux</title>
+<meta name="description" content="XVB is a Linux media player for video, music, optical discs and IPTV, with an XMLTV TV guide and recording. Built with Python and libmpv.">
 <link rel="icon" href="https://raw.githubusercontent.com/JonaDev2026/xvb/main/icon.png">
 <style>
-:root{
-  --bg:#141418;--bg2:#1c1c22;--panel:#23232b;--line:#2f2f3a;
-  --text:#e8e8ee;--dim:#9a9aa8;--accent:#8b5cf6;--accent2:#a78bfa;--rec:#e53935;
-}
-*{box-sizing:border-box}
-html,body{margin:0;padding:0}
-body{background:var(--bg);color:var(--text);font:16px/1.6 -apple-system,"Segoe UI",Ubuntu,"DejaVu Sans",sans-serif}
-a{color:var(--accent2);text-decoration:none}
-a:hover{text-decoration:underline}
-.wrap{max-width:980px;margin:0 auto;padding:0 20px}
-header{display:flex;align-items:center;justify-content:space-between;padding:18px 0}
-.brand{display:flex;align-items:center;gap:12px;font-weight:700;font-size:20px;color:var(--text)}
-.brand img{width:36px;height:36px;border-radius:9px}
-nav{display:flex;gap:18px;align-items:center;font-size:14px}
-nav a{color:var(--dim)}
-.lang{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
-.lang button{background:none;border:0;color:var(--dim);padding:4px 10px;cursor:pointer;font:inherit;font-size:13px}
-.lang button.on{background:var(--panel);color:var(--text)}
-.hero{padding:40px 0 20px;text-align:center}
-.hero h1{font-size:44px;line-height:1.15;margin:0 0 12px;letter-spacing:-.5px}
-.hero h1 span{background:linear-gradient(90deg,var(--accent),#ec4899);-webkit-background-clip:text;background-clip:text;color:transparent}
-.hero p{font-size:19px;color:var(--dim);max-width:640px;margin:0 auto 26px}
-.btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
-.btn{display:inline-flex;align-items:center;gap:8px;padding:12px 22px;border-radius:10px;font-weight:600;border:1px solid var(--line);color:var(--text);background:var(--panel)}
-.btn.main{background:linear-gradient(135deg,var(--accent),#7c3aed);border-color:transparent}
-.btn:hover{text-decoration:none;filter:brightness(1.1)}
-.ver{font-size:13px;color:var(--dim);margin-top:12px;min-height:20px}
-.shot{margin:34px auto 0;border-radius:14px;overflow:hidden;}
-.shot img{display:block;width:100%}
-.giostra{position:relative}
-.giostra .fila{display:flex;transition:transform .6s ease}
-.giostra .fila img{flex:0 0 100%;width:100%;display:block}
-.punti{display:flex;justify-content:center;gap:10px;margin-top:16px}
-.punti button{width:9px;height:9px;padding:0;border:0;border-radius:50%;background:var(--line);cursor:pointer;transition:background .3s,transform .3s}
-.punti button.on{background:var(--accent2);transform:scale(1.25)}
-section{padding:56px 0 0}
-h2{font-size:26px;margin:0 0 20px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
-.card{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:18px 20px}
-.card h3{margin:0 0 6px;font-size:16px;display:flex;align-items:center;gap:8px}
-.card p{margin:0;color:var(--dim);font-size:15px}
-.card p code{background:var(--panel);padding:0 5px;border-radius:4px;font-size:13px}
-.grid.two{grid-template-columns:repeat(auto-fit,minmax(min(380px,100%),1fr))}
-.keys{border-collapse:collapse;width:100%;font-size:15px;color:var(--dim)}
-.keys td{padding:4px 0;vertical-align:top}
-.keys td:first-child{width:120px;white-space:nowrap}
-kbd{background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:1px 7px;font:13px "DejaVu Sans Mono",Menlo,monospace;color:var(--text)}
-.dot{width:10px;height:10px;border-radius:50%;display:inline-block}
-pre{background:#0e0e12;border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow:auto;font:14px/1.5 "DejaVu Sans Mono",Menlo,Consolas,monospace;color:#d6d6e0}
-pre .c{color:#6b6b7a}
-code{font-family:"DejaVu Sans Mono",Menlo,Consolas,monospace}
-p code{background:var(--panel);padding:1px 6px;border-radius:5px;font-size:14px}
-.steps p{margin:12px 0 6px}
-footer{margin-top:70px;padding:26px 0 40px;border-top:1px solid var(--line);color:var(--dim);font-size:14px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
-[data-lang]{display:none}
-html[lang=en] [data-lang=en]{display:revert}
-html[lang=it] [data-lang=it]{display:revert}
-@media (max-width:600px){.hero h1{font-size:32px}.hero p{font-size:17px}nav a.hide{display:none}}
+:root{color-scheme:dark;--bg:#101014;--surface:#191920;--surface2:#20202a;--line:#30303b;--text:#f4f2fa;--muted:#aaa7b8;--accent:#a78bfa;--cyan:#67d5d0;--max:1120px}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:85px}body{margin:0;background:var(--bg);color:var(--text);font:16px/1.65 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Ubuntu,sans-serif}a{color:inherit;text-decoration:none}a:hover{color:#d6caff}.wrap{width:min(var(--max),calc(100% - 40px));margin:auto}
+header{height:76px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line)}.brand{display:flex;align-items:center;gap:11px;font-size:19px;font-weight:750}.brand img{width:38px;height:38px;border-radius:11px}nav,.navright{display:flex;align-items:center;gap:22px}nav{font-size:13px;color:var(--muted)}.navright{gap:18px}.lang{display:flex;padding:3px;border:1px solid var(--line);border-radius:9px}.lang button{border:0;background:transparent;color:var(--muted);padding:5px 9px;border-radius:6px;font-size:12px;cursor:pointer}.lang button.on{background:var(--surface2);color:var(--text)}
+.hero{text-align:center;padding:78px 0 48px}.eyebrow{display:inline-block;padding:6px 12px;border:1px solid #51416e;background:#201a2e;border-radius:99px;color:#d4c6ff;font-size:12px;font-weight:700;letter-spacing:.04em}h1{font-size:clamp(44px,7vw,72px);line-height:1.05;letter-spacing:-2.8px;margin:22px 0 16px}h1 span{background:linear-gradient(100deg,#c4b5fd,#a78bfa 55%,#67d5d0);background-clip:text;color:transparent}.intro{max-width:720px;margin:auto;color:var(--muted);font-size:clamp(17px,2vw,20px)}.actions{display:flex;justify-content:center;gap:12px;flex-wrap:wrap;margin:29px 0 10px}.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 19px;min-height:46px;border:1px solid var(--line);border-radius:11px;background:var(--surface2);font-size:14px;font-weight:700}.btn.primary{background:linear-gradient(135deg,#9b7cf0,#7650d7);border-color:transparent;color:white;box-shadow:0 8px 28px #704bd233}.btn:hover{transform:translateY(-2px);text-decoration:none}.version{font-size:12px;color:var(--muted);min-height:22px}.compat{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin:15px 0}.compat span,.pill{font-size:11px;color:#c9c4d5;background:var(--surface);border:1px solid var(--line);padding:5px 10px;border-radius:7px}
+.showcase{max-width:1000px;margin:42px auto 0;position:relative}.showcase:before{content:"";position:absolute;inset:15%;background:#8b5cf633;filter:blur(65px);z-index:-1}.carousel{overflow:hidden;border:1px solid #ffffff22;border-radius:17px;background:#08080c;box-shadow:0 28px 80px #0008}.track{display:flex;transition:transform .6s cubic-bezier(.2,.75,.25,1)}.track img{flex:0 0 100%;width:100%;display:block;height:auto}.dots{display:flex;justify-content:center;gap:9px;margin-top:16px}.dots button{width:7px;height:7px;border:0;border-radius:9px;background:#484653;padding:0;cursor:pointer}.dots button[aria-current=true]{width:23px;background:var(--accent)}
+section{padding:72px 0 0}.head{max-width:700px;margin-bottom:27px}.kicker{font-size:11px;text-transform:uppercase;letter-spacing:.16em;color:var(--accent);font-weight:750}h2{font-size:clamp(28px,4vw,37px);letter-spacing:-1px;line-height:1.2;margin:8px 0 10px}.lead{color:var(--muted);margin:0}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.card,.panel,.installbox,.legal{background:linear-gradient(155deg,var(--surface2),var(--surface));border:1px solid var(--line);border-radius:17px;padding:22px}.card{min-height:172px}.ico{width:37px;height:37px;display:grid;place-items:center;background:#a78bfa20;color:#cbbcff;border-radius:11px;margin-bottom:15px;font-size:19px}.card h3{font-size:16px;margin:0 0 7px}.card p,.panel p,.detail p,.installbox p{font-size:13px;color:var(--muted);margin:0;line-height:1.75}.split{display:grid;grid-template-columns:1fr 1fr;gap:15px}.panel h3{font-size:19px;margin:0 0 10px}.engine{display:flex;align-items:center;gap:14px;margin-top:18px;padding:15px;border-radius:12px;background:#a78bfa12;border:1px solid #a78bfa33}.engine b{display:block;font-size:14px}.engine small{color:var(--muted);font-size:12px}.mpv{width:43px;height:43px;display:grid;place-items:center;border-radius:11px;background:#302444;color:#e1d7ff;font-weight:800}.pills{display:flex;flex-wrap:wrap;gap:7px;margin-top:15px}.detailgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.detail{padding:18px;background:var(--surface);border:1px solid var(--line);border-radius:13px}.detail h3{font-size:14px;margin:0 0 5px}.installgrid{display:grid;grid-template-columns:1fr 1fr;gap:15px}.installbox h3{font-size:17px;margin:0 0 8px}.installbox p{margin-bottom:13px}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#0c0c10;border:1px solid var(--line);border-radius:9px;padding:13px;color:#ded9eb;font:13px/1.6 "DejaVu Sans Mono",monospace;margin:12px 0 0}.note{font-size:11px!important;margin-top:12px!important}.legal p{font-size:13px;color:var(--muted);margin:0}.support{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:24px 26px;border:1px solid #a78bfa44;border-radius:17px;background:linear-gradient(110deg,#8b5cf61c,#67d5d00a)}.support h3{margin:0 0 4px}.support p{margin:0;color:var(--muted);font-size:13px}footer{margin-top:78px;padding:25px 0 38px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;color:var(--muted);font-size:12px}.links{display:flex;gap:15px;flex-wrap:wrap}footer a{color:#c9c1da}[data-lang]{display:none}html[lang=en] [data-lang=en],html[lang=it] [data-lang=it]{display:revert}
+@media(max-width:850px){.grid{grid-template-columns:repeat(2,1fr)}.detailgrid{grid-template-columns:1fr}.installgrid{grid-template-columns:1fr}}
+@media(max-width:620px){.wrap{width:calc(100% - 28px)}header{height:66px}.brand{font-size:17px}.brand img{width:34px;height:34px}nav{gap:12px}nav .navlink{display:none}.navright{gap:10px}.hero{padding:58px 0 35px}h1{letter-spacing:-1.6px}.grid,.split{grid-template-columns:1fr}.card{min-height:0}section{padding-top:56px}.support{align-items:flex-start;flex-direction:column}footer{margin-top:58px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*:before,*:after{transition:none!important}}
 </style>
 </head>
-<body>
-<div class="wrap">
-
+<body><div class="wrap">
 <header>
-  <a class="brand" href="./"><img src="https://raw.githubusercontent.com/JonaDev2026/xvb/main/icon.png" alt="">XVB</a>
-  <nav>
-    <a class="hide" href="#features"><span data-lang="en">Features</span><span data-lang="it">Funzioni</span></a>
-    <a class="hide" href="#deepdive"><span data-lang="en">Deep Dive</span><span data-lang="it">Approfondimento</span></a>
-    <a class="hide" href="#install"><span data-lang="en">Installation</span><span data-lang="it">Installazione</span></a>
-    <a href="https://github.com/JonaDev2026/xvb">GitHub</a>
-    <div class="lang"><button id="en" class="on">EN</button><button id="it">IT</button></div>
-  </nav>
+<a class="brand" href="./"><img src="https://raw.githubusercontent.com/JonaDev2026/xvb/main/icon.png" alt="">XVB <span style="font-weight:450;color:var(--muted)">Player</span></a>
+<div class="navright"><nav aria-label="Main navigation">
+<a class="navlink" href="#features"><span data-lang="en">Features</span><span data-lang="it">Funzioni</span></a>
+<a class="navlink" href="#technology"><span data-lang="en">Technology</span><span data-lang="it">Tecnologia</span></a>
+<a class="navlink" href="#install"><span data-lang="en">Installation</span><span data-lang="it">Installazione</span></a>
+<a href="https://github.com/JonaDev2026/xvb">GitHub</a></nav>
+<div class="lang"><button id="en" type="button">EN</button><button id="it" type="button">IT</button></div></div>
 </header>
-
+<main>
 <div class="hero">
-  <h1>XVB <span>Player</span></h1>
-  <p data-lang="en">A media player for Ubuntu 24.04 LTS, Linux Mint 22, and Debian 13 (X11), built on libmpv. Videos, music, discs and IPTV in one app.</p>
-  <p data-lang="it">Lettore multimediale per Ubuntu 24.04 LTS, Linux Mint 22 e Debian 13 (X11), basato su libmpv. Video, musica, dischi e IPTV in un'unica app.</p>
-  <div class="btns">
-    <a class="btn main" id="deb" href="https://github.com/JonaDev2026/xvb/releases/latest">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 21h16"/></svg>
-      <span data-lang="en">Download .deb</span><span data-lang="it">Scarica .deb</span>
-    </a>
-    <a class="btn" href="https://github.com/JonaDev2026/xvb">GitHub</a>
-    <a class="btn" href="https://www.paypal.com/paypalme/Jonathanuk"><span style="color:#ec4899">&#9829;</span> <span data-lang="en">Donate</span><span data-lang="it">Dona</span></a>
-  </div>
-  <div class="ver" id="ver"></div>
-  <div class="shot giostra" id="giostra">
-    <div class="fila">
-      <img src="https://raw.githubusercontent.com/JonaDev2026/xvb/main/preview.png" alt="XVB">
-      <img src="https://raw.githubusercontent.com/JonaDev2026/xvb/main/preview2.png" alt="XVB">
-      <img src="https://raw.githubusercontent.com/JonaDev2026/xvb/main/preview3.png" alt="XVB">
-      <img src="https://raw.githubusercontent.com/JonaDev2026/xvb/main/preview4.png" alt="XVB">
-      <img src="https://raw.githubusercontent.com/JonaDev2026/xvb/main/preview5.png" alt="XVB">
-    </div>
-  </div>
-  <div class="punti" id="punti"></div>
+<div class="eyebrow"><span data-lang="en">A complete media experience for Linux</span><span data-lang="it">Un'esperienza multimediale completa per Linux</span></div>
+<h1>XVB <span>Player</span></h1>
+<p class="intro" data-lang="en">Your media, your way. Play videos, music, optical discs and IPTV with an integrated TV guide and recording — all in one desktop application.</p>
+<p class="intro" data-lang="it">I tuoi contenuti, a modo tuo. Guarda video, ascolta musica, riproduci dischi e IPTV con guida TV integrata e registrazione, tutto in un'unica applicazione desktop.</p>
+<div class="actions">
+<a class="btn primary" id="deb" href="https://github.com/JonaDev2026/xvb/releases/latest">↓ <span data-lang="en">Download for Linux</span><span data-lang="it">Scarica per Linux</span></a>
+<a class="btn" href="https://github.com/JonaDev2026/xvb"><span data-lang="en">Explore on GitHub</span><span data-lang="it">Scopri su GitHub</span></a>
+<a class="btn" href="https://www.paypal.com/paypalme/Jonathanuk">♡ <span data-lang="en">Support development</span><span data-lang="it">Sostieni lo sviluppo</span></a>
+</div><div class="version" id="ver" aria-live="polite"></div>
+<div class="compat"><span>Ubuntu 24.04 LTS</span><span>Linux Mint 22</span><span>Debian 13 · X11</span></div>
+<div class="showcase"><div class="carousel" id="carousel"><div class="track" id="track">
+<img src="https://raw.githubusercontent.com/JonaDev2026/xvb/main/preview.png" alt="XVB Player interface">
+<img src="https://raw.githubusercontent.com/JonaDev2026/xvb/main/preview2.png" alt="XVB media library">
+<img src="https://raw.githubusercontent.com/JonaDev2026/xvb/main/preview3.png" alt="XVB playback interface">
+<img src="https://raw.githubusercontent.com/JonaDev2026/xvb/main/preview4.png" alt="XVB IPTV interface">
+<img src="https://raw.githubusercontent.com/JonaDev2026/xvb/main/preview5.png" alt="XVB application view">
+</div></div><div class="dots" id="dots" aria-label="Screenshots"></div></div>
 </div>
 
-<section id="features">
-  <h2><span data-lang="en">Features</span><span data-lang="it">Funzioni</span></h2>
-  <div class="grid">
-    <div class="card"><h3><i class="dot" style="background:#14b8a6"></i><span data-lang="en">Videos and music</span><span data-lang="it">Video e musica</span></h3>
-      <p data-lang="en">Local files with resume, shuffle, repeat, seeking and search. Started videos show a progress bar with where you left off. Open with XVB or drag and drop, recent files, media keys.</p>
-      <p data-lang="it">File locali con ripresa, riproduzione casuale, ripetizione, avanzamento e ricerca. I video iniziati mostrano una barra con il punto in cui sei arrivato. Apri con XVB o trascina e rilascia, file recenti, tasti multimediali.</p></div>
-    <div class="card"><h3><i class="dot" style="background:#f59e0b"></i><span data-lang="en">Covers and posters</span><span data-lang="it">Copertine e poster</span></h3>
-      <p data-lang="en">Titles and artwork fetched automatically from TMDB and MusicBrainz, also for untagged music.</p>
-      <p data-lang="it">Titoli e immagini scaricati in automatico da TMDB e MusicBrainz, anche per la musica senza tag.</p></div>
-    <div class="card"><h3><i class="dot" style="background:#a3a3b3"></i><span data-lang="en">Discs</span><span data-lang="it">Dischi</span></h3>
-      <p data-lang="en">Audio CDs, video DVDs (not encrypted), data discs and ISO images, several at once. Blu-ray is not supported.</p>
-      <p data-lang="it">CD audio, DVD video (non cifrati), dischi di dati e immagini ISO, anche più insieme. Blu-ray non supportati.</p></div>
-    <div class="card"><h3><i class="dot" style="background:#3b82f6"></i><span data-lang="en">IPTV</span><span data-lang="it">IPTV</span></h3>
-      <p data-lang="en">m3u playlists from file or URL, with an XMLTV guide and a progress bar under each channel showing how far the current program has aired. ClearKey is supported for DASH channels, using the key you put in your own playlist. Radio, music and film streams can be saved by URL with a name and a cover.</p>
-      <p data-lang="it">Playlist m3u da file o URL, con guida XMLTV e una barra sotto ogni canale che mostra a che punto è il programma in onda. Supporta ClearKey per i canali DASH, con la chiave che inserisci nella tua playlist. Radio, stream musicali e di film si salvano da URL con un nome e una copertina.</p></div>
-    <div class="card"><h3><i class="dot" style="background:var(--rec)"></i><span data-lang="en">Recording</span><span data-lang="it">Registrazione</span></h3>
-      <p data-lang="en">Record IPTV channels, radio and streams, now or scheduled, and unencrypted DVDs.</p>
-      <p data-lang="it">Registra canali IPTV, radio e stream, subito o programmati, e i DVD non cifrati.</p></div>
-    <div class="card"><h3><i class="dot" style="background:#06b6d4"></i><span data-lang="en">Video and audio</span><span data-lang="it">Video e audio</span></h3>
-      <p data-lang="en">Controls over the video, picture and sound adjustments, hardware decoding, tracks, chapters, external subtitles, screenshots, picture in picture.</p>
-      <p data-lang="it">Comandi sopra al video, regolazioni di immagine e suono, decodifica hardware, tracce, capitoli, sottotitoli esterni, istantanee, immagine nell'immagine.</p></div>
-  </div>
-</section>
+<section id="features"><div class="head"><div class="kicker"><span data-lang="en">One application, many possibilities</span><span data-lang="it">Un'unica applicazione, tante possibilità</span></div>
+<h2><span data-lang="en">Everything you need to enjoy your media</span><span data-lang="it">Tutto quello che serve per i tuoi contenuti</span></h2>
+<p class="lead" data-lang="en">A versatile desktop player that brings your local library, live streams and optical media together.</p><p class="lead" data-lang="it">Un lettore desktop versatile che riunisce libreria locale, flussi in diretta e supporti ottici.</p></div>
+<div class="grid">
+<article class="card"><div class="ico">▶</div><h3><span data-lang="en">Video & music library</span><span data-lang="it">Libreria video e musica</span></h3><p data-lang="en">Play local files with resume, shuffle, repeat, search, recent items and drag-and-drop support.</p><p data-lang="it">Riproduci file locali con ripresa, casuale, ripetizione, ricerca, elementi recenti e trascinamento.</p></article>
+<article class="card"><div class="ico">▧</div><h3><span data-lang="en">Posters & metadata</span><span data-lang="it">Poster e metadati</span></h3><p data-lang="en">Automatically retrieve movie artwork and music album covers from TMDB and MusicBrainz, including untagged music.</p><p data-lang="it">Recupera automaticamente poster e copertine musicali da TMDB e MusicBrainz, anche per musica senza tag.</p></article>
+<article class="card"><div class="ico">◉</div><h3><span data-lang="en">Optical media</span><span data-lang="it">Supporti ottici</span></h3><p data-lang="en">Play audio CDs, unencrypted video DVDs, data discs and ISO images. Blu-ray is not supported.</p><p data-lang="it">Riproduci CD audio, DVD video non cifrati, dischi dati e immagini ISO. I Blu-ray non sono supportati.</p></article>
+<article class="card"><div class="ico">▤</div><h3>IPTV & <span data-lang="en">TV Guide</span><span data-lang="it">Guida TV</span></h3><p data-lang="en">Load M3U playlists from files or URLs, browse XMLTV schedules and follow the progress of the programme currently on air.</p><p data-lang="it">Carica playlist M3U da file o URL, consulta la programmazione XMLTV e segui l'avanzamento del programma in onda.</p></article>
+<article class="card"><div class="ico">◷</div><h3><span data-lang="en">Recording & PVR</span><span data-lang="it">Registrazione e PVR</span></h3><p data-lang="en">Record supported IPTV channels, radio and streams immediately or with scheduled timers.</p><p data-lang="it">Registra canali IPTV supportati, radio e flussi, subito oppure tramite programmazione.</p></article>
+<article class="card"><div class="ico">⌗</div><h3><span data-lang="en">Advanced playback</span><span data-lang="it">Riproduzione avanzata</span></h3><p data-lang="en">Hardware decoding, picture and audio controls, tracks, chapters, subtitles, screenshots and Picture-in-Picture.</p><p data-lang="it">Decodifica hardware, regolazioni audio e video, tracce, capitoli, sottotitoli, istantanee e Picture-in-Picture.</p></article>
+</div></section>
 
-<section id="deepdive">
-  <h2><span data-lang="en">Detailed Feature Breakdown</span><span data-lang="it">Approfondimento Funzionalità</span></h2>
-  <div class="card">
-    <p style="margin-bottom:14px;"><i class="dot" style="background:#14b8a6"></i> <span data-lang="en"><b>Local Files & Playback:</b> Full support for local video and music playback featuring automatic playback resume, random shuffling, loop repetition, sub-second precise seeking, and full search capabilities across lists by name, title, artist, album, or year. Files and folders can be opened seamlessly via the system file manager ("Open with XVB"), through drag and drop actions, or directly from the recent files history. Comprehensive media keys and desktop sound panel (MPRIS) integration allow controlling title, cover, and playback directly from system controls. Videos you have started show a progress bar in the list with the point where you left off.</span><span data-lang="it"><b>File Locali e Riproduzione:</b> Gestione completa di video e musica locali con ripresa automatica della riproduzione, riproduzione casuale, ripetizione, ricerca e avanzamento puntuale. È possibile cercare elementi per nome, titolo, artista, album o anno. Supporta l'apertura tramite file manager ("Apri con XVB"), trascinamento, file recenti, tasti multimediali e integrazione con il pannello audio del desktop (MPRIS). I video iniziati mostrano nella lista una barra con il punto in cui sei arrivato.</span></p>
+<section id="technology"><div class="head"><div class="kicker"><span data-lang="en">Under the hood</span><span data-lang="it">Sotto il cofano</span></div><h2><span data-lang="en">Built around a powerful playback engine</span><span data-lang="it">Un motore di riproduzione potente</span></h2><p class="lead" data-lang="en">XVB combines established multimedia technology with an application and workflow designed specifically for desktop media management.</p><p class="lead" data-lang="it">XVB combina una tecnologia multimediale consolidata con un'applicazione e flussi di lavoro progettati specificamente per la gestione multimediale desktop.</p></div>
+<div class="split"><div class="panel"><h3><span data-lang="en">A dedicated XVB experience</span><span data-lang="it">Un'esperienza progettata per XVB</span></h3><p data-lang="en">The interface, media library, playlist management, IPTV/EPG workflow and recording tools are integrated into XVB as one application.</p><p data-lang="it">Interfaccia, libreria multimediale, gestione playlist, funzioni IPTV/EPG e strumenti di registrazione sono integrati in XVB come un'unica applicazione.</p><div class="engine"><div class="mpv">mpv</div><div><b>Powered by libmpv</b><small><span data-lang="en">Multimedia playback engine</span><span data-lang="it">Motore di riproduzione multimediale</span></small></div></div></div>
+<div class="panel"><h3><span data-lang="en">Designed for Linux desktops</span><span data-lang="it">Progettato per i desktop Linux</span></h3><p data-lang="en">XVB is developed with Python and libmpv, with support focused on the following systems and desktop environments.</p><p data-lang="it">XVB è sviluppato con Python e libmpv, con supporto concentrato sui seguenti sistemi e ambienti desktop.</p><div class="pills"><span class="pill">Ubuntu 24.04 LTS</span><span class="pill">Linux Mint 22</span><span class="pill">Debian 13</span><span class="pill">X11</span><span class="pill">Python</span><span class="pill">libmpv</span></div></div></div></section>
 
-    <p style="margin-bottom:14px;"><i class="dot" style="background:#f59e0b"></i> <span data-lang="en"><b>Metadata, Artwork & Context Menus:</b> Automatic fetching of titles, high-resolution movie/series posters from TMDB, and album covers from MusicBrainz. This intelligence extends seamlessly to untagged music files by accurately parsing folder and file names. Right-click contextual actions enable renaming playlists, guides, custom streams, and channels, as well as manually assigning custom covers or channel logos.</span><span data-lang="it"><b>Metadati, Copertine e Menu Contestuali:</b> Recupero automatico di titoli, poster cinematografici e di serie TV da TMDB, oltre alle copertine degli album musicali da MusicBrainz. Funziona in modo intelligente anche per la musica priva di tag analizzando i nomi di file e cartelle. Tramite il tasto destro è possibile rinominare playlist, guide, stream e canali, oltre ad impostare copertine o loghi personalizzati.</span></p>
+<section id="details"><div class="head"><div class="kicker"><span data-lang="en">More control</span><span data-lang="it">Più controllo</span></div><h2><span data-lang="en">The details that make the difference</span><span data-lang="it">I dettagli che fanno la differenza</span></h2></div>
+<div class="detailgrid">
+<div class="detail"><h3><span data-lang="en">Smart library management</span><span data-lang="it">Gestione intelligente della libreria</span></h3><p data-lang="en">Search by filename, title, artist, album or year. Resume video playback, manage recent files and use contextual actions for playlists, channels and custom artwork.</p><p data-lang="it">Cerca per nome file, titolo, artista, album o anno. Riprendi i video, gestisci i file recenti e usa le azioni contestuali per playlist, canali e copertine personalizzate.</p></div>
+<div class="detail"><h3><span data-lang="en">Web streams & cameras</span><span data-lang="it">Stream web e telecamere</span></h3><p data-lang="en">Save radio, music, film streams and supported RTSP/ONVIF camera feeds by URL, with a custom name and artwork.</p><p data-lang="it">Salva radio, flussi musicali e video e flussi di telecamere RTSP/ONVIF supportati tramite URL, con nome e copertina personalizzati.</p></div>
+<div class="detail"><h3><span data-lang="en">Subtitle & track controls</span><span data-lang="it">Controllo tracce e sottotitoli</span></h3><p data-lang="en">Select audio tracks, DVD chapters and external SRT or ASS/SSA subtitles, with subtitle timing and size adjustments.</p><p data-lang="it">Seleziona tracce audio, capitoli DVD e sottotitoli esterni SRT o ASS/SSA, regolando sincronizzazione e dimensioni.</p></div>
+<div class="detail"><h3><span data-lang="en">ClearKey for DASH</span><span data-lang="it">ClearKey per DASH</span></h3><p data-lang="en">For supported DASH streams, XVB can use ClearKey details supplied by the user in their own playlist. XVB does not distribute keys or media.</p><p data-lang="it">Per i flussi DASH supportati, XVB può utilizzare i dati ClearKey inseriti dall'utente nella propria playlist. XVB non distribuisce chiavi né contenuti.</p></div>
+</div></section>
 
-    <p style="margin-bottom:14px;"><i class="dot" style="background:#a3a3b3"></i> <span data-lang="en"><b>Optical Discs & ISO Support:</b> Direct playback capabilities for Audio CDs, unencrypted video DVDs, data discs, and ISO images, with support for handling multiple discs simultaneously. Note that Blu-ray discs are not supported by the player engine.</span><span data-lang="it"><b>Supporto Dischi e Immagini ISO:</b> Riproduzione diretta di CD audio, DVD video (purché non cifrati), dischi dati e file immagine ISO, anche multipli contemporaneamente. I dischi Blu-ray non sono supportati.</span></p>
+<section id="install"><div class="head"><div class="kicker"><span data-lang="en">Get started</span><span data-lang="it">Per iniziare</span></div><h2><span data-lang="en">Installation</span><span data-lang="it">Installazione</span></h2><p class="lead" data-lang="en">Download the latest Debian package from GitHub Releases and install it with APT.</p><p class="lead" data-lang="it">Scarica l'ultimo pacchetto Debian da GitHub Releases e installalo con APT.</p></div>
+<div class="installgrid"><div class="installbox"><h3><span data-lang="en">1. Download the package</span><span data-lang="it">1. Scarica il pacchetto</span></h3><p data-lang="en">Use the download button above to get the latest available .deb release.</p><p data-lang="it">Usa il pulsante di download qui sopra per scaricare l'ultima versione disponibile del pacchetto .deb.</p><a class="btn primary" href="https://github.com/JonaDev2026/xvb/releases/latest"><span data-lang="en">Open latest release</span><span data-lang="it">Apri l'ultima release</span> ↗</a></div>
+<div class="installbox"><h3><span data-lang="en">2. Install with APT</span><span data-lang="it">2. Installa con APT</span></h3><p data-lang="en">From the directory containing the downloaded package:</p><p data-lang="it">Dalla cartella che contiene il pacchetto scaricato:</p><pre id="cmd">sudo apt install ./xvb_package.deb</pre><p class="note" data-lang="en">A graphical X11 session is required. Check release notes for package-specific requirements.</p><p class="note" data-lang="it">È richiesta una sessione grafica X11. Consulta le note della release per eventuali requisiti specifici.</p></div></div></section>
 
-    <p style="margin-bottom:14px;"><i class="dot" style="background:#3b82f6"></i> <span data-lang="en"><b>IPTV, Web Streams & RTSP Cameras:</b> Full IPTV management supporting m3u/m3u8 playlists from local files or remote URLs, coupled with built-in XMLTV electronic program guide (EPG) support. Users can also add, organize, and stream web radio stations, music feeds, film streams, and advanced <b>RTSP/ONVIF security camera feeds</b> by URL, saving them with custom names and cover graphics. Each IPTV channel shows a progress bar for the program on air, and ClearKey is supported for DASH channels: XVB applies the key you put in your own playlist (<code>license-type</code> and <code>license-details</code>) and provides no keys or content.</span><span data-lang="it"><b>IPTV, Stream Web e Telecamere RTSP:</b> Gestione IPTV con playlist m3u da file o URL e supporto integrato per la guida TV XMLTV (EPG). Consente inoltre di riprodurre e salvare radio web, flussi musicali, film e <b>telecamere di videosorveglianza IP (RTSP/ONVIF)</b> tramite URL, associandoli a un nome e a una copertina personalizzata. Ogni canale IPTV mostra una barra di avanzamento per il programma in onda, e ClearKey è supportato per i canali DASH: XVB applica la chiave che inserisci nella tua playlist (<code>license-type</code> e <code>license-details</code>) e non fornisce chiavi né contenuti.</span></p>
+<section id="legal"><div class="head"><div class="kicker"><span data-lang="en">Transparency</span><span data-lang="it">Trasparenza</span></div><h2><span data-lang="en">Credits & legal</span><span data-lang="it">Crediti e note legali</span></h2></div><div class="legal"><p data-lang="en">XVB is a neutral media playback application. It does not provide channels, playlists, credentials, encryption keys or copyrighted content. Users are responsible for accessing and recording only content they are authorized to use. This product uses the TMDB API but is not endorsed or certified by TMDB. Music artwork is sourced from MusicBrainz and the Cover Art Archive.</p><p data-lang="it">XVB è un'applicazione neutrale per la riproduzione multimediale. Non fornisce canali, playlist, credenziali, chiavi di cifratura o contenuti protetti da copyright. Gli utenti sono responsabili dell'accesso e della registrazione esclusivamente di contenuti che sono autorizzati a utilizzare. Questo prodotto utilizza le API di TMDB, ma non è approvato né certificato da TMDB. Le copertine musicali provengono da MusicBrainz e Cover Art Archive.</p></div></section>
 
-    <p style="margin-bottom:14px;"><i class="dot" style="background:var(--rec)"></i> <span data-lang="en"><b>Advanced PVR Recording Engine:</b> Built-in recording functionality capable of performing direct stream dumps for IPTV channels, live web radio, RTSP security feeds, and unencrypted DVD tracks. Supports both instant immediate recording and scheduled recording timers.</span><span data-lang="it"><b>Motore di Registrazione PVR Avanzato:</b> Funzionalità di registrazione integrata per effettuare il dump diretto dei flussi di canali IPTV, radio, flussi RTSP e DVD non cifrati. Supporta sia registrazioni immediate che timer di registrazione programmati.</span></p>
-
-    <p style="margin-bottom:14px;"><i class="dot" style="background:#06b6d4"></i> <span data-lang="en"><b>Video & Audio Adjustments:</b> Semi-transparent overlay playback controls designed to automatically hide when only the video view is active. Advanced features include GPU hardware decoding (enabled by default), fine image and sound adjustments, audio tracks and DVD chapters selection, external subtitle support (SRT, ASS/SSA) with delay and size synchronization, instant screenshot capture, and Picture-in-Picture (PiP) mode.</span><span data-lang="it"><b>Regolazioni Video e Audio:</b> Comandi di riproduzione disegnati in sovraimpressione, semitrasparenti e a scomparsa automatica quando è visibile solo il video. Include decodifica hardware della GPU (attiva di serie), regolazioni fini di immagine e audio, tracce audio, capitoli DVD, sottotitoli esterni (SRT, ASS/SSA) con sincronizzazione di ritardo e dimensione, istantanee e modalità Picture-in-Picture (PiP).</span></p>
-
-    <p><i class="dot" style="background:#8b5cf6"></i> <span data-lang="en"><b>System Integration & Localization:</b> Clean dark interface designed to match operating system locales. Fully compatible and 100% optimized for Ubuntu 24.04 LTS, Linux Mint 22, and Debian 13 X11 environments, with support for English, Italian, Spanish, French, German, Portuguese, and Russian.</span><span data-lang="it"><b>Integrazione e Localizzazione:</b> Interfaccia grafica scura che si adatta alla lingua di sistema. Pienamente compatibile e ottimizzata al 100% per ambienti Ubuntu 24.04 LTS, Linux Mint 22 e Debian 13 su X11, con supporto per inglese, italiano, spagnolo, francese, tedesco, portoghese e russo.</span></p>
-  </div>
-</section>
-
-<section id="install" class="steps">
-  <h2><span data-lang="en">Installation</span><span data-lang="it">Installazione</span></h2>
-  <p data-lang="en">Supported systems (100% compatibility): <b>Ubuntu 24.04 LTS</b>, <b>Linux Mint 22</b>, <b>Debian 13</b> (X11 session required). Download the <code>.deb</code> from the latest release and run:</p>
-  <p data-lang="it">Sistemi supportati (compatibilità al 100%): <b>Ubuntu 24.04 LTS</b>, <b>Linux Mint 22</b>, <b>Debian 13</b> (richiesta sessione X11). Scarica il <code>.deb</code> dall'ultima release ed esegui:</p>
-  <pre id="cmd">sudo apt install ./xvb_*_all.deb</pre>
-  <p data-lang="en">XVB is then available in the applications menu, or as <code>xvb</code> from a terminal. It starts in the system language: English, Italian, Spanish, French, German, Portuguese or Russian.</p>
-  <p data-lang="it">XVB si trova poi nel menu delle applicazioni, o come <code>xvb</code> da terminale. Parte nella lingua del sistema: inglese, italiano, spagnolo, francese, tedesco, portoghese o russo.</p>
-</section>
-
-<section id="legal">
-  <h2><span data-lang="en">Legal</span><span data-lang="it">Note legali</span></h2>
-  <p data-lang="en">XVB is a neutral playback tool: it does not provide channels, credentials, or content. Use XVB only with streams you are authorized to access. Avoid piracy or any method to bypass copyright protections.</p>
-  <p data-lang="it">XVB è uno strumento di riproduzione neutro: non fornisce canali, credenziali o contenuti. Usa XVB solo con flussi a cui sei autorizzato ad accedere. Niente pirateria né metodi per aggirare le protezioni del copyright.</p>
-</section>
-
-<section id="support">
-  <h2><span data-lang="en">Support</span><span data-lang="it">Supporto</span></h2>
-  <p data-lang="en">XVB is free. If you find it useful, you can support its development.</p>
-  <p data-lang="it">XVB è gratuito. Se ti è utile, puoi sostenerne lo sviluppo.</p>
-  <a class="btn" href="https://www.paypal.com/paypalme/Jonathanuk"><span style="color:#ec4899">&#9829;</span> PayPal</a>
-</section>
-
-<footer>
-  <div>XVB Player — MIT licence — © 2026 Jonathan Sanfilippo<br><span style="font-size:12px">This product uses the TMDB API but is not endorsed or certified by TMDB. Album covers from MusicBrainz and the Cover Art Archive.</span></div>
-  <div><a href="https://www.paypal.com/paypalme/Jonathanuk"><span data-lang="en">Support</span><span data-lang="it">Supporto</span></a> · <a href="https://github.com/JonaDev2026/xvb/issues"><span data-lang="en">Report a problem</span><span data-lang="it">Segnala un problema</span></a> · <a href="https://github.com/JonaDev2026/xvb/releases"><span data-lang="en">All releases</span><span data-lang="it">Tutte le release</span></a></div>
-</footer>
-
+<section id="support"><div class="support"><div><h3><span data-lang="en">Support independent development</span><span data-lang="it">Sostieni lo sviluppo indipendente</span></h3><p data-lang="en">XVB is free to use. If it is useful to you, a contribution helps support its continued development.</p><p data-lang="it">XVB è gratuito. Se lo trovi utile, una donazione aiuta a sostenere il suo sviluppo.</p></div><a class="btn" href="https://www.paypal.com/paypalme/Jonathanuk">♡ PayPal</a></div></section>
+</main>
+<footer><div>XVB Player · MIT License · © 2026 Jonathan Sanfilippo<br><span data-lang="en">Made for Linux desktop users.</span><span data-lang="it">Realizzato per gli utenti desktop Linux.</span></div><div class="links"><a href="https://github.com/JonaDev2026/xvb"><span data-lang="en">Source code</span><span data-lang="it">Codice sorgente</span></a><a href="https://github.com/JonaDev2026/xvb/issues"><span data-lang="en">Report an issue</span><span data-lang="it">Segnala un problema</span></a><a href="https://github.com/JonaDev2026/xvb/releases"><span data-lang="en">All releases</span><span data-lang="it">Tutte le versioni</span></a></div></footer>
 </div>
 <script>
 (function(){
-  var g=document.getElementById('giostra'), fila=g.querySelector('.fila'),
-      imgs=fila.querySelectorAll('img'), punti=document.getElementById('punti'), i=0, t;
-  function vai(n){i=(n+imgs.length)%imgs.length;fila.style.transform='translateX('+(-100*i)+'%)';
-    [].forEach.call(punti.children,function(p,k){p.className=k==i?'on':''});}
-  function parti(){clearInterval(t);t=setInterval(function(){vai(i+1)},5000);}
-  [].forEach.call(imgs,function(_,k){var b=document.createElement('button');
-    b.setAttribute('aria-label','Slide '+(k+1));b.onclick=function(){vai(k);parti();};punti.appendChild(b);});
-  vai(0);parti();
+"use strict";
+var root=document.documentElement,en=document.getElementById("en"),it=document.getElementById("it"),release=null;
+function updateVersion(){if(!release)return;var locale=root.lang==="it"?"it-IT":"en-GB",date=release.date?new Date(release.date).toLocaleDateString(locale):"";document.getElementById("ver").textContent=(root.lang==="it"?"Ultima versione ":"Latest version ")+release.version+(date?" · "+date:"");}
+function setLang(lang){root.lang=lang;en.classList.toggle("on",lang==="en");it.classList.toggle("on",lang==="it");en.setAttribute("aria-pressed",String(lang==="en"));it.setAttribute("aria-pressed",String(lang==="it"));try{localStorage.setItem("xvb-lang",lang)}catch(e){}updateVersion();}
+en.addEventListener("click",function(){setLang("en")});it.addEventListener("click",function(){setLang("it")});
+var saved=null;try{saved=localStorage.getItem("xvb-lang")}catch(e){}setLang(saved||((navigator.language||"").slice(0,2).toLowerCase()==="it"?"it":"en"));
+fetch("https://api.github.com/repos/JonaDev2026/xvb/releases/latest").then(function(r){if(!r.ok)throw Error("Release unavailable");return r.json()}).then(function(d){if(!d||!d.tag_name)return;release={version:d.tag_name.replace(/^v/i,""),date:d.published_at||""};var deb=(d.assets||[]).find(function(a){return /\.deb$/i.test(a.name)});if(deb){document.getElementById("deb").href=deb.browser_download_url;document.getElementById("cmd").textContent="sudo apt install ./"+deb.name;}updateVersion()}).catch(function(){});
 })();
 (function(){
-  var html=document.documentElement;
-  function lang(l){html.lang=l;document.getElementById('en').className=l=='en'?'on':'';document.getElementById('it').className=l=='it'=='on'?'on':'';try{localStorage.setItem('xvb-lang',l)}catch(e){}}
-  document.getElementById('en').onclick=function(){lang('en')};
-  document.getElementById('it').onclick=function(){lang('it')};
-  var saved=null;try{saved=localStorage.getItem('xvb-lang')}catch(e){}
-  lang(saved||((navigator.language||'').slice(0,2)=='it'?'it':'en'));
-
-  fetch('https://api.github.com/repos/JonaDev2026/xvb/releases/latest').then(function(r){return r.json()}).then(function(d){
-    if(!d||!d.tag_name)return;
-    var v=d.tag_name.replace(/^v/,'');
-    var deb=(d.assets||[]).filter(function(a){return /\.deb$/.test(a.name)})[0];
-    var when=d.published_at?new Date(d.published_at).toLocaleDateString(html.lang=='it'?'it-IT':'en-GB'):'';
-    document.getElementById('ver').textContent=(html.lang=='it'?'Ultima versione ':'Latest version ')+v+(when?' · '+when:'');
-    if(deb){document.getElementById('deb').href=deb.browser_download_url;
-      document.getElementById('cmd').textContent='sudo apt install ./'+deb.name;}
-  }).catch(function(){});
+var track=document.getElementById("track"),dots=document.getElementById("dots"),carousel=document.getElementById("carousel"),imgs=track.querySelectorAll("img"),index=0,timer=null,reduced=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+function show(n){index=(n+imgs.length)%imgs.length;track.style.transform="translateX(-"+index*100+"%)";Array.prototype.forEach.call(dots.children,function(b,k){b.setAttribute("aria-current",String(k===index))})}
+function restart(){if(timer)clearInterval(timer);if(!reduced)timer=setInterval(function(){show(index+1)},6000)}
+Array.prototype.forEach.call(imgs,function(_,n){var b=document.createElement("button");b.type="button";b.setAttribute("aria-label","Show screenshot "+(n+1));b.setAttribute("aria-current",String(n===0));b.addEventListener("click",function(){show(n);restart()});dots.appendChild(b)});
+carousel.addEventListener("mouseenter",function(){if(timer)clearInterval(timer)});carousel.addEventListener("mouseleave",restart);carousel.addEventListener("focusin",function(){if(timer)clearInterval(timer)});carousel.addEventListener("focusout",restart);show(0);restart();
 })();
 </script>
-</body>
-</html>
+</body></html>
