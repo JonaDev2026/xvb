@@ -12,12 +12,38 @@ import subprocess
 import sys
 import threading
 import time
+# Carica i font privati dell'app prima che Tkinter inizializzi Fontconfig.
+# I file restano nella cartella fonts/static accanto a xvb2.py.
+_FONT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
+_FONT_STATIC_DIR = os.path.join(_FONT_DIR, "static")
+_FONTCONFIG_FILE = os.path.join(_FONT_DIR, "xvb-fonts.conf")
+if os.path.isdir(_FONT_STATIC_DIR):
+    try:
+        import xml.sax.saxutils as _xml_escape
+        _fc_xml = (
+            '<?xml version="1.0"?>\n'
+            '<!DOCTYPE fontconfig SYSTEM "fonts.dtd">\n'
+            '<fontconfig>\n'
+            '  <include>/etc/fonts/fonts.conf</include>\n'
+            '  <dir>' + _xml_escape.escape(_FONT_STATIC_DIR) + '</dir>\n'
+            '</fontconfig>\n'
+        )
+        with open(_FONTCONFIG_FILE, "w", encoding="utf-8") as _fc_file:
+            _fc_file.write(_fc_xml)
+        os.environ["FONTCONFIG_FILE"] = _FONTCONFIG_FILE
+        subprocess.run(["fc-cache", "-f", _FONT_STATIC_DIR],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                       timeout=10, check=False)
+    except Exception:
+        pass
+
 import tkinter as tk
 from tkinter import filedialog, ttk
 import tkinter.font as tkfont
 import xml.etree.ElementTree as ET
 from urllib.parse import quote, urljoin, urlparse
 from urllib.request import Request, urlopen
+import tkinter.font as tkfont
 
 import mpv
 
@@ -45,8 +71,7 @@ MPRIS_PLAYER = "org.mpris.MediaPlayer2.Player"
 MPRIS_PROP = "org.freedesktop.DBus.Properties"
 
 
-OV_SFONDO, OV_BARRA, OV_PIP, OV_MENU = 60, 61, 62, 63    # in ordine: sotto lo sfondo, poi
-                                                        # barra, PiP e il menu qualita'
+OV_SFONDO, OV_BARRA, OV_PIP, OV_MENU, OV_EPG = 60, 61, 62, 63, 64  # overlay player
 
 
 
@@ -218,7 +243,7 @@ def avvia_mpris(app):
     threading.Thread(target=GLib.MainLoop().run, daemon=True).start()
     return m
 
-VERSIONE = "3.9"
+VERSIONE = "4.0"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"        # dove stanno le release, per l'avviso di aggiornamento
@@ -261,6 +286,8 @@ TESTI = {
         "Set logo...": "Imposta logo...",
         "Remove logo": "Togli logo",
         "Set color...": "Imposta colore...",
+        "Show EPG posters": "Mostra poster guida",
+        "Hide EPG posters": "Nascondi poster guida",
         "Remove color": "Togli colore",
         "Choose a color": "Scegli un colore",
         "Discs": "Dischi",
@@ -1765,8 +1792,8 @@ def copertina_url(u):
     return os.path.join(COPERTINE_URL, hashlib.md5(u.encode("utf-8")).hexdigest() + ".jpg")
 FILE_COLORI = os.path.join(CASA, ".cache", "xvb", "colori.json")
 FILE_TAG = os.path.join(CASA, ".cache", "xvb", "tag.json")
-RIGA_ELENCO = 44                # due righe: nome e, sotto, programma o tag
-LOGO_L, LOGO_A = 56, 44         # logo / copertina nella colonna a sinistra dell'elenco
+RIGA_ELENCO = 64                # due righe: nome e, sotto, programma o tag
+LOGO_L, LOGO_A = 72, 56        # logo / copertina nella colonna a sinistra dell'elenco
 COLONNA = LOGO_L                # la colonna dei loghi: fuori dalle righe, alta quanto la voce
 CACHE_ANTEPRIME = os.path.join(CASA, ".cache", "xvb", "anteprime")
 
@@ -2055,10 +2082,78 @@ def anteprima_di(f):
     except Exception:
         pass
     return None
-CARATTERE = "DejaVu Sans"       # il carattere dell'elenco, deciso qui e non dal sistema
-NOME_PX = 13                    # il nome del canale / il titolo, in pixel
-SOTTO_PX = 12                   # il sottotitolo (programma o artista), in pixel
+CARATTERE = None              # famiglia del font configurato nel desktop
+STILE_CARATTERE = "normal"    # stile del font configurato nel desktop
+NOME_PX = 17
+SOTTO_PX = 15
 
+def font_desktop_sistema():
+    """Restituisce famiglia, stile e dimensione del font desktop Linux."""
+    import shlex
+    comandi = (
+        ["gsettings", "get", "org.gnome.desktop.interface", "font-name"],
+        ["gsettings", "get", "org.cinnamon.desktop.interface", "font-name"],
+        ["xfconf-query", "-c", "xsettings", "-p", "/Gtk/FontName"],
+    )
+    for cmd in comandi:
+        try:
+            valore = subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL,
+                                             timeout=2).strip()
+            parti = shlex.split(valore)
+            if not parti:
+                continue
+            # Il numero finale è la dimensione. Le parole di stile finali
+            # non fanno parte del nome della famiglia (es. FreeSerif Italic 11).
+            if parti and re.fullmatch(r"\d+(?:\.\d+)?", parti[-1]):
+                parti.pop()
+            stili = []
+            while parti and parti[-1].lower() in ("italic", "oblique", "bold", "regular", "book", "light", "medium"):
+                stili.insert(0, parti.pop().lower())
+            if parti:
+                famiglia = " ".join(parti).strip()
+                stile = "italic" if any(x in ("italic", "oblique") for x in stili) else "normal"
+                peso = "bold" if "bold" in stili else "normal"
+                return famiglia, stile, peso
+        except Exception:
+            continue
+    # KDE: General/font contiene tipicamente famiglia,stile,dimensione,...
+    try:
+        from pathlib import Path
+        import configparser
+        cfg = configparser.ConfigParser()
+        cfg.read(str(Path.home() / ".config" / "kdeglobals"), encoding="utf-8")
+        parti = cfg.get("General", "font", fallback="").split(",")
+        if parti and parti[0].strip():
+            stile_txt = parti[1].lower() if len(parti) > 1 else ""
+            return parti[0].strip(), ("italic" if "italic" in stile_txt or "oblique" in stile_txt else "normal"), ("bold" if "bold" in stile_txt else "normal")
+    except Exception:
+        pass
+    return None, "normal", "normal"
+
+def imposta_font_globale(root):
+    """Imposta Google Sans incorporato nell'app su tutti i font Tk."""
+    global CARATTERE, STILE_CARATTERE
+    CARATTERE = "Google Sans"
+    STILE_CARATTERE = "normal"
+    for nome in ("TkDefaultFont", "TkTextFont", "TkMenuFont", "TkHeadingFont",
+                 "TkCaptionFont", "TkSmallCaptionFont", "TkIconFont", "TkTooltipFont"):
+        try:
+            tkfont.nametofont(nome, root=root).configure(
+                family=CARATTERE, slant="roman", weight="normal")
+        except tk.TclError:
+            pass
+
+def percorso_google_sans(peso="Regular", corsivo=False):
+    """Percorso del file Google Sans statico incluso in fonts/static."""
+    suffisso = "Italic" if corsivo else ""
+    nome = "GoogleSans-" + peso + suffisso + ".ttf"
+    percorso = os.path.join(_FONT_STATIC_DIR, nome)
+    if os.path.isfile(percorso):
+        return percorso
+    # Compatibilità con eventuali file statici nominati con prefisso 17pt.
+    nome = "GoogleSans_17pt-" + peso + suffisso + ".ttf"
+    percorso = os.path.join(_FONT_STATIC_DIR, nome)
+    return percorso if os.path.isfile(percorso) else None
 
 def leggi_tag():
     try:
@@ -2763,6 +2858,11 @@ def nome_piatto(nome):
     return re.sub(r"(fhd|uhd|hd|4k|sd)$", "", n)
 
 
+POSTER_H = 64                   # altezza del poster sopra a ogni canale, in pixel
+CACHE_POSTER = os.path.join(CASA, ".cache", "xvb", "poster")
+EPG_ICONE = {}                  # (id canale, inizio) -> indirizzo dell'immagine del programma
+
+
 def leggi_epg(f):
     """La guida XMLTV, anche compressa (gz): torna (nomi, programmi).
     nomi: nome mostrato (minuscolo) -> id del canale.
@@ -2788,6 +2888,9 @@ def leggi_epg(f):
                     titolo = (t.text or "").strip() if t is not None else ""
                     programmi.setdefault(el.get("channel") or "", []).append(
                         (inizio, fine, titolo))
+                    ic = el.find("icon")
+                    if ic is not None and ic.get("src"):
+                        EPG_ICONE[(el.get("channel") or "", inizio)] = ic.get("src")
                 el.clear()
     for lista in programmi.values():
         lista.sort()
@@ -2872,7 +2975,7 @@ class Ricerca(tk.Canvas):
         self.casella = tk.Entry(self, textvariable=self.testo, bg=CERCA,
                                 fg=TESTO, insertbackground=ACCENTO,
                                 relief="flat", bd=0, highlightthickness=0,
-                                font=("TkDefaultFont", 10))
+                                font=(CARATTERE, 10, STILE_CARATTERE))
         self.casella.bind("<KeyRelease>", lambda e: self.cambia())
         self.casella.bind("<FocusIn>", self.dentro)
         self.casella.bind("<FocusOut>", self.fuori)
@@ -3402,8 +3505,9 @@ class Elenco(tk.Text):
                          cursor="arrow", wrap="none", spacing1=0, spacing3=0,
                          insertwidth=0, padx=0, takefocus=1,
                          font=(CARATTERE, -NOME_PX), **kw)
+                         
         self.rientro = tk.PhotoImage(width=10, height=1)     # l'aria fra il bordo e il testo
-        self.rientro_zero = tk.PhotoImage(width=2, height=1)  # coi loghi: 2 px di aria
+        self.rientro_zero = tk.PhotoImage(width=8, height=1)  # coi loghi: 2 px di aria
         self.stacco = tk.PhotoImage(width=1, height=12)       # 3 px di aria fra una voce e l'altra
         # i loghi e le copertine stanno in una colonna a parte, a sinistra,
         # fuori dalle righe (niente zebra ne' selezione sotto), alti quanto
@@ -3414,6 +3518,10 @@ class Elenco(tk.Text):
         self.colonna_dopo = None
         self.prog_di = None                 # iid -> (inizio, fine) del programma in onda, o None
         self.barre = []                     # riserva di barre (pista, pieno), una per voce visibile
+        self.poster_h = 0                   # px riservati sopra a ogni voce per il poster (0 = niente)
+        self.poster_di = None               # (iid, larghezza, altezza) -> (immagine Tk o None, titolo)
+        self.poster_lbl = []                # riserva di riquadri, uno per voce visibile
+        self.doppio = None                  # doppio clic su un poster
         self.config(yscrollcommand=lambda *a: self.ridisegna_colonna())
         self.bind("<Configure>", lambda e: self.ridisegna_colonna(), add="+")
         self.colonna.bind("<Button-1>", lambda e: self.clic_y(e.y))
@@ -3434,9 +3542,10 @@ class Elenco(tk.Text):
         self.tag_lower("zebra")
         # il nome bianco con un po' d'aria sopra, il sottotitolo attaccato
         # sotto e con l'aria in fondo
-        self.tag_configure("nome", foreground="#ffffff", spacing1=6, spacing3=0,
-                           font=(CARATTERE, -NOME_PX))
-        self.tag_configure("sotto", spacing1=0, spacing3=10, font=(CARATTERE, -SOTTO_PX))
+        self.nome_sopra = 18               # l'aria sopra al nome (col poster, sotto al poster)
+        self.tag_configure("nome", foreground="#ffffff", spacing1=self.nome_sopra, spacing3=4,
+                           font=(CARATTERE, -NOME_PX, "bold"))
+        self.tag_configure("sotto", spacing1=0, spacing3=24, font=(CARATTERE, -SOTTO_PX))
         self.tag_configure("onda")
         self.tag_raise("onda")
         self.tag_raise("scelto")
@@ -3614,9 +3723,60 @@ class Elenco(tk.Text):
     def _colonna(self):
         self._colonna_loghi()
         self._barre()
+        self._poster()
+
+    def metti_poster(self, h):
+        """Lo spazio sopra al nome di ogni voce per il poster (0 = nessuno)."""
+        if h == self.poster_h:
+            return
+        self.poster_h = h
+        self.tag_configure("nome", spacing1=self.nome_sopra + (h + 3 if h else 0))
+        self.ridisegna_colonna()
+
+    def _nuovo_poster(self):
+        e = tk.Label(self, bd=0, highlightthickness=0, bg=PANNELLO, fg=GRIGIO,
+                     cursor="arrow", font=(CARATTERE, -SOTTO_PX), padx=6)
+        e.image = None
+        e.bind("<Button-1>", lambda ev, w=e: self.clic_y(w.winfo_y() + w.winfo_height() + 6))
+        e.bind("<Double-Button-1>", lambda ev: self.doppio() if self.doppio else None)
+        e.bind("<Button-4>", lambda ev: self.yview_scroll(-3, "units"))
+        e.bind("<Button-5>", lambda ev: self.yview_scroll(3, "units"))
+        e.bind("<MouseWheel>", lambda ev: self.yview_scroll(-3 if ev.delta > 0 else 3, "units"))
+        return e
+
+    def _poster(self):
+        """Sopra al nome di ogni voce che si vede, l'immagine del programma
+        in onda (o, se manca, il suo titolo), nello spazio lasciato apposta."""
+        usati, h = 0, self.poster_h
+        if h and self.poster_di is not None and self.voci:
+            try:
+                su = int(self.index("@0,0").split(".")[0])
+                giu = int(self.index("@0,%d" % self.winfo_height()).split(".")[0])
+            except (tk.TclError, ValueError):
+                su = giu = 0
+            larg = self.winfo_width()
+            for i in range(max(0, (su - 1) // 3), min(len(self.voci), (giu - 1) // 3 + 1)):
+                img, titolo = self.poster_di(self.voci[i], larg - 8, h)
+                if img is None and not titolo:
+                    continue
+                riga = self.dlineinfo("%d.0" % (3 * i + 1))       # il nome: sopra c'e' lo spazio
+                if riga is None:
+                    continue
+                if usati >= len(self.poster_lbl):
+                    self.poster_lbl.append(self._nuovo_poster())
+                e = self.poster_lbl[usati]
+                usati += 1
+                if img is not None:
+                    e.config(image=img, text="")
+                else:
+                    e.config(image="", text=titolo)
+                e.image = img
+                e.place(x=4, y=riga[1] + 3, width=larg - 8, height=h)
+        for e in self.poster_lbl[usati:]:
+            e.place_forget()
 
     def _nuova_barra(self):
-        pista = tk.Frame(self, bg=TASTO, height=2, bd=0, highlightthickness=0, cursor="arrow")
+        pista = tk.Frame(self, bg="#444444", height=2, bd=0, highlightthickness=0, cursor="arrow")
         pieno = tk.Frame(pista, bd=0, highlightthickness=0, bg=GRIGIO)
         for w in (pista, pieno):
             w.bind("<Button-1>", lambda e, b=pista: self.clic_y(b.winfo_y() - 1))
@@ -3649,8 +3809,8 @@ class Elenco(tk.Text):
                 pista, pieno = self.barre[usate]
                 usate += 1
                 pieno.config(bg=self.dati[iid].get("colore") or GRIGIO)
-                x0 = COLONNA if self.segno == "logo" else 0
-                pista.place(x=x0, y=riga[1] - 7, width=larg - x0, height=2)
+                x0 = (COLONNA if self.segno == "logo" else 0) + 8
+                pista.place(x=x0, y=riga[1] - 16, width=larg - x0, height=3)
                 pieno.place(x=0, y=0, relwidth=parte, relheight=1)
         for pista, _pieno in self.barre[usate:]:
             pista.place_forget()
@@ -3679,7 +3839,7 @@ class Elenco(tk.Text):
             if a is None and b is None:
                 continue
             # -1: misurato, la colonna veniva un pixel sotto alle righe
-            y0 = (a[1] if a else b[1] - 20) - 1
+            y0 = (a[1] + (self.poster_h + 3 if self.poster_h else 0) if a else b[1] - 20) - 1
             y1 = ((b[1] + b[3]) if b else a[1] + a[3]) - 1
             d = self.dati[iid]
             img = d.get("logo") or (self.corto(d["image"]) if d.get("image") is not None else None)
@@ -3751,7 +3911,7 @@ class Finestrella(tk.Toplevel):
             self.casella = tk.Entry(dentro, bg=CERCA, fg=TESTO, insertbackground=ACCENTO,
                                     relief="flat", bd=0, highlightthickness=1,
                                     highlightbackground=SCELTO, highlightcolor=ACCENTO,
-                                    font=("TkDefaultFont", 10), width=max(30, larga // 9))
+                                    font=(CARATTERE, 10, STILE_CARATTERE), width=max(30, larga // 9))
             self.casella.pack(fill="x", ipady=6)
             self.casella.insert(0, valore)
             self.casella.select_range(0, "end")
@@ -3819,7 +3979,7 @@ def sfoglia(root, titolo, da, file_=True, tipi=None):
     def corpo(dentro):
         tk.Label(dentro, text=_("Choose a file") if file_ else _("Choose a folder"),
                  bg=PANNELLO, fg=TESTO, anchor="w",
-                 font=("TkDefaultFont", 11, "bold")).pack(fill="x")
+                 font=(CARATTERE, 11, "bold", STILE_CARATTERE)).pack(fill="x")
         testa = tk.Frame(dentro, bg=PANNELLO)
         testa.pack(fill="x", pady=(10, 4))
         su = tk.Button(testa, text="\u2191", relief="flat", bd=0, highlightthickness=0,
@@ -3829,7 +3989,7 @@ def sfoglia(root, titolo, da, file_=True, tipi=None):
         percorso = tk.Entry(testa, bg=CERCA, fg=TESTO, insertbackground=ACCENTO,
                             relief="flat", bd=0, highlightthickness=1,
                             highlightbackground=SCELTO, highlightcolor=ACCENTO,
-                            font=("TkDefaultFont", 10))
+                            font=(CARATTERE, 10, STILE_CARATTERE))
         percorso.pack(side="left", fill="x", expand=True, ipady=5)
         # l'elenco e' un albero come quello dei canali, stesso stile, con
         # la cartellina disegnata davanti alle cartelle
@@ -4014,6 +4174,7 @@ class TV(object):
         self.affanni = []
 
         self.root = tk.Tk(className="xvb")
+        imposta_font_globale(self.root)
         self.root.title("XVB v" + VERSIONE)
         # l'icona del programma sulla barra della finestra: icon.png
         # accanto all'app, o quella messa dal pacchetto
@@ -4107,10 +4268,10 @@ class TV(object):
         self.stile_menu = dict(bg=MENU, fg=TESTO, activebackground=IN_ONDA,
                                activeforeground="#ffffff", disabledforeground=GRIGIO,
                                selectcolor=ACCENTO, bd=1, relief="solid",
-                               activeborderwidth=0, font=("TkDefaultFont", 10))
+                               activeborderwidth=0, font=(CARATTERE, 10, STILE_CARATTERE))
         self.barra_menu = tk.Menu(self.root, tearoff=0, bg=CIMA, fg="#ffffff", activebackground=MENU,
                                   activeforeground="#ffffff", bd=0, relief="flat",
-                                  activeborderwidth=0, font=("TkDefaultFont", 10))
+                                  activeborderwidth=0, font=(CARATTERE, 10, STILE_CARATTERE))
         self.root.config(menu=self.barra_menu)
         self.menu_cima = {}
         self.tendina = Tendina(self.root)
@@ -4196,6 +4357,8 @@ class TV(object):
             (_("Programme guide"), self.apri_guida),
             (_("Add guide URL"), self.chiedi_epg),
             (_("Reload guide"), self.ricarica_epg if self.cfg.get("epg") else None),
+            (_("Hide EPG posters") if self.cfg.get("poster_epg", False) else _("Show EPG posters"),
+             self.poster_si_no),
             None,
             (_("Recording"), None),
             (_("Stop recording") if self.registrando else _("Record now"), self.registra),
@@ -4211,10 +4374,7 @@ class TV(object):
              lambda: self.nascondi(self.sinistra)),
             (_("Show sidebar") if self.nascosti.get(self.destra) else _("Hide sidebar"),
              lambda: self.nascondi(self.destra)),
-            None] + [
-            (("*  " if self.cfg.get("segno", "logo") == k else "   ") + _(n),
-             lambda k=k: self.metti_segno(k))
-            for k, n in (("logo", "Logos"), ("dot", "Dots"), ("bordo", "Border"))] + [
+           
             None,
             (_("Language"), None)] + [
             (("*  " if codice == LINGUA else "   ") + nome,
@@ -4251,8 +4411,13 @@ class TV(object):
                background=[("selected", SCELTO)] + mappa("background"),
                foreground=[("selected", "#ffffff")] + mappa("foreground"))
         self.elenco = Elenco(self.sinistra)
-        self.elenco.segno = self.cfg.get("segno", "logo")
+        self.cfg["segno"] = "logo"
+        self.elenco.segno = "logo"
+        scrivi_config(self.cfg)
         self.elenco.prog_di = self.progresso_di
+        self.elenco.poster_di = self.poster_di
+        self.elenco.doppio = self.parti
+        self.poster_tk, self.poster_pil = {}, {}
         self.elenco.colonna.bind("<Double-Button-1>", lambda e: self.parti())
         self.elenco.tag_configure("onda", background=IN_ONDA,
                                   foreground=TESTO_ONDA)
@@ -4356,12 +4521,19 @@ class TV(object):
 
         # --- sotto: stato e comandi
         self.riga_stato = tk.Frame(self.root, bg=STATO, height=28)
+        DIMENSIONE_TESTO_STATO = 12
         self.riga_stato.pack(side="bottom", fill="x")
         self.riga_stato.pack_propagate(False)
-        # l'ora, a sinistra di tutto, del colore del canale
-        self.et_orologio = tk.Label(self.riga_stato, text=time.strftime("%H:%M"),
-                                    bg=STATO, fg=TESTO)
-        self.et_orologio.pack(side="left", padx=(10, 0), fill="y")
+        self.et_orologio = tk.Label(
+            self.riga_stato,
+            text=time.strftime("%a %d %b  %H:%M"),
+            bg=STATO,
+            fg=TESTO
+        )
+        self.et_orologio.pack(side="right", padx=(0, 10), fill="y")       
+        
+         
+        
         self.icona_errore = None
         f_err = os.path.join(QUI, "icone", "error.png")
         if os.path.isfile(f_err):
@@ -4376,11 +4548,17 @@ class TV(object):
         self.stato = tk.Label(self.riga_stato, text=_("ready"), anchor="w",
                               bg=STATO, fg="#ffffff")
         self.stato.pack(side="left", padx=(8, 0), fill="y")
-        # il titolo del programma, del colore del canale, e il suo orario
+        # EPG ripristinato nella barra di stato: nome canale, programma e orario.
+        self.et_canale = self.stato
         self.et_titolo = tk.Label(self.riga_stato, text="", bg=STATO, fg=TESTO)
         self.et_titolo.pack(side="left", fill="y")
         self.et_ora = tk.Label(self.riga_stato, text="", bg=STATO, fg="#ffffff")
         self.et_ora.pack(side="left", fill="y")
+        # Etichetta "A seguire" neutra; solo il titolo successivo usa il colore del canale.
+        self.et_seguente = tk.Label(self.riga_stato, text="", bg=STATO, fg=TESTO)
+        self.et_seguente.pack(side="left", fill="y")
+        self.et_titolo_seguente = tk.Label(self.riga_stato, text="", bg=STATO, fg=TESTO)
+        self.et_titolo_seguente.pack(side="left", fill="y")
         # il formato del file (mp3, mkv...), del colore del canale
         self.et_formato = tk.Label(self.riga_stato, text="", bg=STATO, fg=TESTO)
         self.et_formato.pack(side="left", fill="y")
@@ -4389,7 +4567,17 @@ class TV(object):
         self.et_recdot.pack(side="left", fill="y", padx=(10, 0))
         self.et_rec = tk.Label(self.riga_stato, text="", bg=STATO, fg="#ff453a")
         self.et_rec.pack(side="left", fill="y")
-        self.dot_rec = []                   # i fotogrammi del pallino, dal pieno allo spento
+        
+
+        font_stato = tkfont.Font(root=self.root, font="TkDefaultFont")
+        font_stato.configure(size=DIMENSIONE_TESTO_STATO)
+
+        for widget in self.riga_stato.winfo_children():
+            if isinstance(widget, tk.Label):
+                widget.configure(font=font_stato)
+
+        self.dot_rec = []
+        
         if HA_PIL:
             r0, g0, b0 = (int(STATO[k:k + 2], 16) for k in (1, 3, 5))
             for i in range(12):
@@ -4398,7 +4586,7 @@ class TV(object):
                                        int(b0 + (0x3a - b0) * t))
                 self.dot_rec.append(pallino(c, lato=16))
         self.fase_rec = 0
-        self.barra = tk.Frame(self.root, bg=BARRA, height=40)
+        self.barra = tk.Frame(self.root, bg=BARRA, height=96)
         # non si impacchetta: sta sopra al video, in fondo (posa_barra). Col
         # video a vista la si disegna con mpv, trasparente (disegna_ov)
         self.barra.pack_propagate(False)        # altezza fissa, comandi al centro
@@ -4407,7 +4595,7 @@ class TV(object):
         self.avviso = tk.Frame(self.root, bg=IN_ONDA, height=42)
         self.avviso.pack_propagate(False)
         self.et_xvb = tk.Label(self.avviso, text="xvb", bg=IN_ONDA, fg=ACCENTO,
-                               font=("TkDefaultFont", 11, "bold"))
+                               font=(CARATTERE, 11, "bold", STILE_CARATTERE))
         self.et_xvb.pack(side="left", padx=(12, 10), fill="y")
         self.et_avviso = tk.Label(self.avviso, text="", bg=IN_ONDA, fg=TESTO_ONDA,
                                   anchor="w")
@@ -4429,7 +4617,7 @@ class TV(object):
         self.linea = tk.Canvas(self.barra, height=10, bg=BARRA,
                                highlightthickness=0, bd=0)
         # sovrapposto alla barra, cosi' non le ruba spazio
-        self.linea.place(x=0, y=0, relwidth=1, height=10)
+        self.linea.place(x=0, y=30, relwidth=1, height=10)
         self.pieno_linea = self.linea.create_rectangle(0, 0, 0, 2,
                                                        fill="#ffffff", outline="")
         self.linea.bind("<Configure>", lambda e: self.disegna_fondo_linea())
@@ -4441,7 +4629,7 @@ class TV(object):
             cursor="hand2" if self.file_in_onda else ""))
         self.linea.bind("<Button-1>", self.vai_a)
         self.linea.bind("<B1-Motion>", self.vai_a)
-        self.barra.bind("<Button-1>", lambda e: e.y < 10 and self.vai_a(e))
+        self.barra.bind("<Button-1>", lambda e: 30 <= e.y < 40 and self.vai_a(e))
         self.root.after(500, self.aggiorna_linea)
         self.root.after(1000, self.controlla_registrazione)
         self.root.after(60000, self.aggiorna_sottotitoli)
@@ -4527,26 +4715,23 @@ class TV(object):
         self.mpv = mpv.MPV(
             wid=str(self.video.winfo_id()),
             cache="yes",
-            demuxer_max_bytes="256MiB",
-            demuxer_max_back_bytes="64MiB",
-            demuxer_readahead_secs=20,
-            cache_pause_wait=5,
-            network_timeout=30,
+            demuxer_max_bytes="512MiB",
+            demuxer_max_back_bytes="128MiB",
+            demuxer_readahead_secs=30,
+            cache_pause_wait=15,       # <--- Aumenta il tempo di attesa al caricamento iniziale
+            network_timeout=60,        # <--- Aumenta il timeout di rete
             ytdl=False,
-            hwdec="no",
-            # la finestra video resta viva anche a lettore fermo: quando
-            # mpv la smonta (a fine file) rimette il gestore errori X di
-            # default al posto di quello di Tk, e da li' in poi il primo
-            # errore X innocuo (BadWindow) chiude tutta l'app
+            hwdec="auto-safe",         # <--- Consigliato per evitare blocchi grafici (MESA warning)
             force_window="yes",
-            volume_max=150,                 # per il boost
+            volume_max=150,
             screenshot_directory=os.path.join(CASA, "Pictures", "xvb"),
             screenshot_template="xvb-%tY-%tm-%td_%tH-%tM-%tS",
             user_agent=UA,
-            cursor_autohide=3000,           # sul video il cursore lo nasconde mpv
+            cursor_autohide=3000,
             stream_lavf_o=("reconnect=1,reconnect_streamed=1,"
                            "reconnect_on_network_error=1,"
-                           "reconnect_delay_max=5"),
+                           "reconnect_delay_max=10"),
+                           
         )
         # la master playlist locale rimanda a indirizzi http: ffmpeg da un
         # file non li aprirebbe, se non glielo si permette. Il valore ha
@@ -4633,7 +4818,7 @@ class TV(object):
         if "pip" in self.icone:
             self.b_pip_esci.config(image=self.icone["pip"])
         else:
-            self.b_pip_esci.config(text="\u2922", font=("TkDefaultFont", 14))
+            self.b_pip_esci.config(text="\u2922", font=(CARATTERE, 14, STILE_CARATTERE))
         self.b_pip_esci.bind("<Button-1>", lambda e: self.esci_pip())
         # un fratello di un pixel: serve solo per poter rialzare lo sfondo
         # sopra la finestra di mpv (Tk non manda l'ordine a X se crede di
@@ -4654,7 +4839,7 @@ class TV(object):
         self.mai_partito = True             # non e' ancora partito niente: niente comandi
         self.root.after(100, self.posa_barra)   # i comandi al loro posto
         try:
-            self.mpv.overlay_ids.update((OV_SFONDO, OV_BARRA, OV_PIP, OV_MENU))
+            self.mpv.overlay_ids.update((OV_SFONDO, OV_BARRA, OV_PIP, OV_MENU, OV_EPG))
         except Exception:
             pass
         self.attesa_da, self.salti = 0.0, 0
@@ -4744,13 +4929,17 @@ class TV(object):
         try:
             from PIL import ImageDraw, ImageFont
             try:
-                font = ImageFont.truetype("DejaVuSans-Bold.ttf", 11)
+                percorso_font = percorso_google_sans("Bold")
+                if not percorso_font:
+                    raise FileNotFoundError("Manca fonts/static/GoogleSans-Bold.ttf")
+                font = ImageFont.truetype(percorso_font, 15 if chiave in ("-10", "+10") else 11)
             except Exception:
                 font = ImageFont.load_default()
-            im = Image.new("RGBA", (34, 24), (0, 0, 0, 0))
+            larghezza, altezza = (48, 34) if chiave in ("-10", "+10") else (34, 24)
+            im = Image.new("RGBA", (larghezza, altezza), (0, 0, 0, 0))
             d = ImageDraw.Draw(im)
             x0, y0, x1, y1 = d.textbbox((0, 0), testo, font=font)
-            d.text(((34 - (x1 - x0)) // 2 - x0, (24 - (y1 - y0)) // 2 - y0), testo,
+            d.text(((larghezza - (x1 - x0)) // 2 - x0, (altezza - (y1 - y0)) // 2 - y0), testo,
                    fill="#e8e8ef", font=font)
             self.icone_pil[chiave] = im
             self.icone[chiave] = ImageTk.PhotoImage(im)
@@ -4765,7 +4954,8 @@ class TV(object):
         if icona in self.icone:
             # nella barra i bottoni sono solo l'icona, senza scatola:
             # il fondo e' quello del pannello e si accende solo al tocco
-            b.config(image=self.icone[icona], width=34, height=30, bg=BARRA,
+            dimensioni = (48, 40) if icona in ("-10", "+10") else (34, 30)
+            b.config(image=self.icone[icona], width=dimensioni[0], height=dimensioni[1], bg=BARRA,
                      activebackground=BARRA)       # niente grigio passandoci sopra
             b.icona = icona
         else:
@@ -5946,7 +6136,7 @@ class TV(object):
         """Una domanda con Delete e Cancel: True se si e' detto Delete."""
         def corpo(dentro):
             tk.Label(dentro, text=titolo, bg=PANNELLO, fg=TESTO, anchor="w",
-                     font=("TkDefaultFont", 11, "bold")).pack(fill="x")
+                     font=(CARATTERE, 11, "bold", STILE_CARATTERE)).pack(fill="x")
             tk.Label(dentro, text=testo, bg=PANNELLO, fg=GRIGIO, anchor="w",
                      justify="left", wraplength=380).pack(fill="x", pady=(8, 0))
         f = Finestrella(self.root, titolo, corpo, ok=ok or _("Delete"), annulla=_("Cancel"),
@@ -6103,6 +6293,7 @@ class TV(object):
             self.indice_fresco = False          # la prossima ricerca lo rifa'
 
         self.elenco.delete(*self.elenco.get_children())
+        self.applica_poster()
         adesso = self.file_in_onda or self.cfg.get("canale")
         da_fare = []
         for i, (nome, url, ide) in enumerate(self.visti[:3000]):
@@ -6195,6 +6386,94 @@ class TV(object):
             sotto = p[2] if p else ""
             nome = self.cfg.get("nomi_canali", {}).get(url) or nome   # rinominato
         return " " + nome + ("\n " + sotto if sotto else "")
+
+    def poster_attivo(self):
+        return bool(self.cfg.get("poster_epg", False) and self.epg
+                    and not self.media_in_uso and not self.reg_in_uso)
+
+    def applica_poster(self):
+        self.elenco.metti_poster(POSTER_H if self.poster_attivo() else 0)
+
+    def poster_si_no(self):
+        self.cfg["poster_epg"] = not self.cfg.get("poster_epg", False)
+        scrivi_config(self.cfg)
+        self.applica_poster()
+
+    def poster_di(self, iid, w, h):
+        """Per il riquadro sopra la voce: (immagine Tk o None, titolo del
+        programma in onda). Solo per i canali con la guida."""
+        try:
+            nome, url, ide = self.visti[int(iid)]
+        except (ValueError, IndexError):
+            return None, ""
+        if os.path.isabs(url) or not self.epg:
+            return None, ""
+        if not ide or ide not in self.epg:
+            ide = self.epg_nomi.get(nome_piatto(nome))
+        p = self.programma_di(ide, nome)
+        if not p:
+            return None, ""
+        src = EPG_ICONE.get((ide or "", p[0]))
+        return (self.poster_pronto(src, w, h) if src else None), p[2]
+
+    def poster_pronto(self, src, w, h):
+        """L'immagine del programma, ritagliata a riempire il riquadro; se non
+        e' ancora sul disco la si scarica (un thread) e intanto None."""
+        if not HA_PIL or w < 10:
+            return None
+        chiave = (src, w, h)
+        img = self.poster_tk.get(chiave)
+        if img is not None:
+            return img
+        pil = self.poster_pil.get(src)
+        if pil is None:
+            f = os.path.join(CACHE_POSTER, hashlib.md5(src.encode("utf-8")).hexdigest() + ".jpg")
+            if not os.path.isfile(f):
+                self.scarica_poster(src, f)
+                return None
+            try:
+                pil = Image.open(f).convert("RGB")
+            except Exception:
+                return None
+            self.poster_pil[src] = pil
+        k = max(w / float(pil.width), h / float(pil.height))
+        im = pil.resize((max(w, int(round(pil.width * k))),
+                         max(h, int(round(pil.height * k)))), Image.LANCZOS)
+        # un poster alto e stretto: si tiene la parte alta (titolo e volti)
+        x0, y0 = (im.width - w) // 2, int((im.height - h) * 0.3)
+        if len(self.poster_tk) > 300:
+            self.poster_tk.clear()
+        img = ImageTk.PhotoImage(im.crop((x0, y0, x0 + w, y0 + h)))
+        self.poster_tk[chiave] = img
+        return img
+
+    def scarica_poster(self, src, f):
+        coda = self.__dict__.setdefault("poster_coda", [])
+        gia = self.__dict__.setdefault("poster_gia", set())
+        if src in gia:
+            return
+        gia.add(src)
+        coda.append((src, f))
+        if not self.__dict__.get("poster_thread"):
+            self.poster_thread = True
+            threading.Thread(target=self.lavora_poster, daemon=True).start()
+
+    def lavora_poster(self):
+        """In un thread: le immagini in coda, una alla volta, in ~/.cache/xvb/poster."""
+        import io
+        while self.poster_coda:
+            src, f = self.poster_coda.pop(0)
+            try:
+                dati = urlopen(Request(src, headers={"User-Agent": UA}),
+                               timeout=10).read(4 * 1024 * 1024)
+                im = Image.open(io.BytesIO(dati)).convert("RGB")
+                im.thumbnail((600, 600))
+                os.makedirs(CACHE_POSTER, exist_ok=True)
+                im.save(f, "JPEG", quality=85)
+                self.root.after(0, self.elenco.ridisegna_colonna)
+            except Exception:
+                pass
+        self.poster_thread = False
 
     def progresso_di(self, iid):
         """Per la barra in fondo alla voce, quanto e' fatto (0-1): il
@@ -6820,9 +7099,21 @@ class TV(object):
             return (self.nome_canale(), "", _("not in the guide") if self.epg and self.nome
                     else "")
         inizio, fine, titolo = p
-        return (self.nome_canale(), titolo or "?", "%s - %s" % (
+        mancanti = max(0, int((fine - time.time()) / 60))
+        # La dicitura segue la lingua selezionata nell'applicazione.
+        restano = {
+            "it": "mancano %d min",
+            "en": "%d min remaining",
+            "es": "quedan %d min",
+            "fr": "encore %d min",
+            "de": "noch %d Min.",
+            "pt": "faltam %d min",
+            "ru": "осталось %d мин.",
+        }.get(LINGUA, "%d min remaining") % mancanti
+        fascia = "%s/%s - %s" % (
             time.strftime("%H:%M", time.localtime(inizio)),
-            time.strftime("%H:%M", time.localtime(fine))))
+            time.strftime("%H:%M", time.localtime(fine)), restano)
+        return (self.nome_canale(), titolo or "?", fascia)
 
     def cambia(self, dove):
         n = max(0, min(len(self.varianti) - 1, self.quale + dove))
@@ -7390,9 +7681,9 @@ class TV(object):
             self.sorveglia_mouse()
 
     # --- i comandi disegnati da mpv
-    OV_ALTA = 60                # come la barra originale: progress in cima, bottoni sotto
+    OV_ALTA = 96                # riga EPG, progress e bottoni sotto
     OV_RIGA = 58                # la riga dei bottoni, sotto la progress
-    OV_LINEA = 0                # la progress: sul bordo in alto
+    OV_LINEA = 30               # la progress sotto l’intestazione
 
     def elementi_barra(self):
         """I bottoni della barra di Tk nell'ordine e col lato in cui stanno:
@@ -7456,12 +7747,19 @@ class TV(object):
         if self.registrando:
             battito = 0.25 + 0.75 * (0.5 + 0.5 * math.cos(2 * math.pi * time.time() / 1.4))
         vol = self.volume.get()
-        chiave = (vw, vh, ow, oh, colore, int(parte * vw), vol, getattr(self, "ov_sopra", None),
+        nome_canale = self.et_canale.cget("text")
+        titolo_epg = self.et_titolo.cget("text")
+        ora_epg = self.et_ora.cget("text")
+        colore_titolo = self.et_titolo.cget("fg")
+        chiave = (vw, vh, ow, oh, colore, int(parte * vw), vol, nome_canale,
+                  titolo_epg, ora_epg, colore_titolo, getattr(self, "ov_sopra", None),
                   round(battito * 12), self.passo_ingranaggio,
                   tuple((id(w), getattr(w, "icona", None), xx, ll) for w, xx, ll in posti))
-        if not forza and chiave == getattr(self, "ov_chiave", None) and getattr(self, "ov", None) is not None:
+        if (not forza and chiave == getattr(self, "ov_chiave", None)
+                and getattr(self, "ov", None) is not None
+                and (not (nome_canale or titolo_epg or ora_epg)
+                     or getattr(self, "ov_epg", None) is not None)):
             return
-        self.ov_chiave = chiave
         from PIL import ImageDraw
         im = Image.new("RGBA", (vw, H), (0, 0, 0, 0))
         d = ImageDraw.Draw(im)
@@ -7482,7 +7780,7 @@ class TV(object):
             pr, pg, pb = (int(pc[j:j + 2], 16) for j in (1, 3, 5))
         except ValueError:
             pr, pg, pb = r0, g0, b0
-        d.rectangle([0, 0, vw, H], fill=(int(pr * 0.4), int(pg * 0.4), int(pb * 0.4), 200))
+        d.rectangle([0, L + 5, vw, H], fill=(int(pr * 0.4), int(pg * 0.4), int(pb * 0.4), 200))
         # la progress: la traccia spenta come la selezione del menu qualita'
         # (bianco al 16% sopra al pannello), poi la parte piena
         luce = Image.new("RGBA", (vw, H), (0, 0, 0, 0))
@@ -7490,6 +7788,13 @@ class TV(object):
         im.alpha_composite(luce)
         if parte > 0:
             d.rectangle([0, L, int(vw * parte), L + 2], fill=colore or "#ffffff")
+        # Le informazioni EPG sono nella riga di stato Tk, non nell'overlay video.
+        if getattr(self, "ov_epg", None) is not None:
+            try:
+                self.mpv.overlay_remove(OV_EPG)
+            except Exception:
+                pass
+            self.ov_epg = None
         # i bottoni
         cy = H - R // 2
         zone = [(0, 0, vw, L + 5, "linea", None)]
@@ -7542,6 +7847,7 @@ class TV(object):
                 self.ov.update(im, pos=pos)
         except Exception:
             self.ov = None
+        self.ov_chiave = chiave
 
     # --- il menu delle qualita' disegnato da mpv, nello stile della barra
     OV_MENU_RIGA = 30
@@ -7599,13 +7905,9 @@ class TV(object):
                 import subprocess
                 import tkinter.font as tkfont
 
-                famiglia = tkfont.nametofont("TkDefaultFont").actual("family")
-                percorso = subprocess.check_output(
-                    ["fc-match", "-f", "%{file}", famiglia + ":style=regular"],
-                    text=True,
-                    stderr=subprocess.DEVNULL
-                ).strip()
-
+                percorso = percorso_google_sans("Regular")
+                if not percorso:
+                    raise FileNotFoundError("Manca fonts/static/GoogleSans-Regular.ttf")
                 font_usato = ImageFont.truetype(percorso, 12)
             except Exception:
                 font_usato = ImageFont.load_default()
@@ -7664,6 +7966,12 @@ class TV(object):
                 self.mpv.overlay_remove(OV_BARRA)
             except Exception:
                 pass
+        if getattr(self, "ov_epg", None) is not None:
+            try:
+                self.mpv.overlay_remove(OV_EPG)
+            except Exception:
+                pass
+        self.ov_epg = None
         self.ov, self.ov_chiave, self.ov_zone = None, None, []
 
     def dove_ov(self):
@@ -8054,7 +8362,7 @@ class TV(object):
         se annulla."""
         def corpo(dentro):
             tk.Label(dentro, text=titolo, bg=PANNELLO, fg=TESTO, anchor="w",
-                     font=("TkDefaultFont", 11, "bold")).pack(fill="x")
+                     font=(CARATTERE, 11, "bold", STILE_CARATTERE)).pack(fill="x")
         f = Finestrella(self.root, titolo, corpo, chiedi=domanda, valore=valore)
         self.root.wait_window(f)
         return f.risposta
@@ -8074,7 +8382,7 @@ class TV(object):
             testi = tk.Frame(riga, bg=PANNELLO)
             testi.pack(side="left", fill="x")
             tk.Label(testi, text="XVB", bg=PANNELLO, fg=TESTO, anchor="w",
-                     font=("TkDefaultFont", 16, "bold")).pack(fill="x")
+                     font=(CARATTERE, 16, "bold", STILE_CARATTERE)).pack(fill="x")
             tk.Label(testi, text="Extended Video Broadcast", bg=PANNELLO, fg=GRIGIO,
                      anchor="w").pack(fill="x")
             tk.Label(testi, text=_("Version") + " " + VERSIONE, bg=PANNELLO, fg=ACCENTO,
@@ -8101,7 +8409,7 @@ class TV(object):
                         fill="x", pady=(14, 0))
             tk.Label(dentro, text="This product uses the TMDB API but is not endorsed or "
                      "certified by TMDB.", bg=PANNELLO, fg=GRIGIO, anchor="w", justify="left",
-                     wraplength=360, font=("TkDefaultFont", 8)).pack(fill="x", pady=(4, 0))
+                     wraplength=360, font=(CARATTERE, 8, STILE_CARATTERE)).pack(fill="x", pady=(4, 0))
         Finestrella(self.root, _("About XVB..."), corpo)
 
     def dona(self):
@@ -8427,6 +8735,7 @@ class TV(object):
         comandi del colore del pallino del canale."""
         self.linea.itemconfig(self.pieno_linea, fill=colore)
         self.et_titolo.config(fg=colore)
+        self.et_canale.config(fg="#ffffff")
         self.et_orologio.config(fg=colore)
         self.et_formato.config(fg=colore)
         self.colore_barra = colore
@@ -8504,7 +8813,7 @@ class TV(object):
         self.parte_linea = parte
         w = self.linea.winfo_width()
         self.linea.coords(self.pieno_linea, 0, 0, int(w * parte), self.alta_linea)
-        ora = time.strftime("%H:%M")
+        ora = time.strftime("%a %d %b  %H:%M")
         if self.et_orologio.cget("text") != ora:
             self.et_orologio.config(text=ora)
         self.root.after(500, self.aggiorna_linea)
@@ -9053,7 +9362,7 @@ class TV(object):
 
         def corpo(dentro):
             tk.Label(dentro, text=_("Open URL..."), bg=PANNELLO, fg=TESTO, anchor="w",
-                     font=("TkDefaultFont", 11, "bold")).pack(fill="x")
+                     font=(CARATTERE, 11, "bold", STILE_CARATTERE)).pack(fill="x")
             tk.Label(dentro, text=_("Save in:"), bg=PANNELLO, fg=GRIGIO, anchor="w"
                      ).pack(fill="x", pady=(10, 2))
             for k, n in (("radio", "Radio"), ("musica", "Music streams"),
@@ -9237,21 +9546,44 @@ class TV(object):
             self.stato.config(text=(" " + t) if img else t, image=img, compound="left")
             self.et_titolo.config(text="")
             self.et_ora.config(text="")
+            self.et_seguente.config(text="")
+            self.et_titolo_seguente.config(text="")
         self.root.after(0, fai)
 
     def scrivi_riga(self):
-        """Il canale, il titolo del programma e l'orario nella riga di
-        stato, e ci si segna cos'e' stato scritto: quando cambia
-        programma si riscrive da sola, ma solo se non c'e' sopra un altro
-        messaggio."""
+        """Mostra le informazioni EPG dei canali nella barra di stato."""
         self.riga_mostrata = self.riga()
         nome, titolo, ora = self.riga_mostrata
 
+        prossimo = ""
+        if self.epg and not self.file_in_onda:
+            ide = self.ide_in_onda
+            if not ide or ide not in self.epg:
+                ide = self.epg_nomi.get(nome_piatto(self.nome_in_onda))
+            adesso = time.time()
+            for _inizio, _fine, _titolo in self.epg.get(ide or "", []):
+                if _inizio > adesso:
+                    prossimo = _titolo or ""
+                    break
+
+        etichetta_seguente = {
+            "it": "A seguire: ", "en": "Next: ", "es": "A continuación: ",
+            "fr": "À suivre : ", "de": "Als Nächstes: ",
+            "pt": "A seguir: ", "ru": "Далее: ",
+        }.get(LINGUA, "Next: ")
+
         def fai():
-            self.stato.config(text=nome, image="")
-            self.et_titolo.config(text=("  -  " + titolo) if titolo else "")
-            self.et_ora.config(text=("  (" + ora + ")") if titolo and ora else
-                               ("  -  " + ora if ora else ""))
+            self.stato.config(text=nome, image="", compound="left")
+            self.et_titolo.config(
+                text=("  " + titolo) if titolo else "",
+                fg=self.colore_barra or TESTO)
+            self.et_ora.config(text=("  " + ora) if titolo and ora else
+                               ("  " + ora if ora else ""))
+            self.et_seguente.config(
+                text=("  " + etichetta_seguente) if prossimo else "",
+                fg=TESTO)
+            self.et_titolo_seguente.config(
+                text=prossimo, fg=self.colore_barra or TESTO)
         self.root.after(0, fai)
 
 

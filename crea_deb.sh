@@ -1,33 +1,61 @@
 #!/bin/sh
 set -e
+
 QUI="$(cd "$(dirname "$0")" && pwd)"
 cd "$QUI"
 
 VER="${1:-$(sed -n 's/^VERSIONE = "\(.*\)"/\1/p' xvb.py)}"
 [ -n "$VER" ] || VER=1.0
 
-for f in xvb.py icone icon.png; do
-    [ -e "$f" ] || { echo "manca $f in $QUI"; exit 1; }
+# Controllo dei file necessari
+for f in xvb.py icone icon.png fonts; do
+    [ -e "$f" ] || {
+        echo "ERRORE: manca $f in $QUI"
+        exit 1
+    }
+done
+
+# Controllo dei font Google Sans
+for f in \
+    fonts/static/GoogleSans-Regular.ttf \
+    fonts/static/GoogleSans-Bold.ttf \
+    
+do
+    [ -f "$f" ] || {
+        echo "ERRORE: manca il font $f"
+        exit 1
+    }
 done
 
 D="$(mktemp -d)"
-mkdir -p "$D/DEBIAN" "$D/usr/lib/xvb" "$D/usr/bin" \
+trap 'rm -rf "$D"' EXIT
+
+mkdir -p "$D/DEBIAN" \
+         "$D/usr/lib/xvb" \
+         "$D/usr/bin" \
          "$D/usr/share/applications" \
          "$D/usr/share/icons/hicolor/512x512/apps" \
          "$D/usr/share/pixmaps" \
          "$D/usr/share/metainfo"
 
+# Applicazione e risorse
 cp xvb.py "$D/usr/lib/xvb/"
-cp -r icone "$D/usr/lib/xvb/"
-# Copia l'icona sia in hicolor che in pixmaps (fondamentale per gli store)
+cp -a icone "$D/usr/lib/xvb/"
+cp -a fonts "$D/usr/lib/xvb/"
+
+# Icone
 cp icon.png "$D/usr/share/icons/hicolor/512x512/apps/xvb.png"
 cp icon.png "$D/usr/share/pixmaps/xvb.png"
 
+# Collegamento Python
 ln -s /usr/bin/python3 "$D/usr/lib/xvb/xvb"
+
+# Avviatore
 cat > "$D/usr/bin/xvb" <<'FINE'
 #!/bin/sh
 exec /usr/lib/xvb/xvb /usr/lib/xvb/xvb.py "$@"
 FINE
+
 chmod 755 "$D/usr/bin/xvb"
 
 # Desktop File
@@ -77,16 +105,16 @@ cat > "$D/usr/share/metainfo/xvb.metainfo.xml" <<FINE
 </component>
 FINE
 
-# Triggers per aggiornare la cache dell'interfaccia
+# Triggers
 cat > "$D/DEBIAN/triggers" <<'FINE'
 activate-noawait update-desktop-database
 activate-noawait gtk-update-icon-cache
 FINE
 
-# Calcolo automatico della dimensione del pacchetto installato (in KB)
+# Dimensione installata
 INSTALLED_SIZE=$(du -s --block-size=1k "$D" | cut -f1)
 
-# Control File con Installed-Size e Homepage
+# Control
 cat > "$D/DEBIAN/control" <<FINE
 Package: xvb
 Version: $VER
@@ -105,7 +133,8 @@ FINE
 
 chmod -R go-w "$D"
 chmod 755 "$D"
+
 dpkg-deb --build --root-owner-group "$D" "$QUI/xvb_${VER}_all.deb"
-rm -rf "$D"
 
 echo "Fatto: xvb_${VER}_all.deb"
+
