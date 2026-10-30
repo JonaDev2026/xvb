@@ -30,10 +30,9 @@ A media player built on libmpv. It plays local videos and music, video DVDs, dat
 
 
 
-https://github.com/user-attachments/assets/e18c12db-1e74-44d5-b415-40f5dc4ffe55
 
 
-
+https://github.com/user-attachments/assets/30a608c2-2b61-4584-9f92-f83869406058
 
 
 ## Installation & System Requirements
