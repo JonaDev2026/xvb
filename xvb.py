@@ -240,7 +240,7 @@ def avvia_mpris(app):
     threading.Thread(target=GLib.MainLoop().run, daemon=True).start()
     return m
 
-VERSIONE = "4.3.1"
+VERSIONE = "4.3.2"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"
@@ -2789,11 +2789,84 @@ def prendi_epg(dove):
     f = os.path.join(CACHE_EPG, hashlib.md5(dove.encode()).hexdigest())
     if os.path.isfile(f) and time.time() - os.path.getmtime(f) < EPG_VECCHIA:
         return f
-    r = Request(dove, headers={"User-Agent": UA})
-    dati = urlopen(r, timeout=60).read()
-    with open(f, "wb") as o:
+    try:
+        r = Request(dove, headers={"User-Agent": UA})
+        dati = urlopen(r, timeout=60).read()
+    except Exception:
+        if os.path.isfile(f):
+            return f                # non si scarica: meglio la copia vecchia che niente
+        raise
+    with open(f + ".part", "wb") as o:
         o.write(dati)
+    os.replace(f + ".part", f)
     return f
+
+
+def unisci_programmi(base, altri):
+    """base e altri: liste ordinate (inizio, fine, titolo). Si tiene tutta la
+    base e di altri si aggiungono solo i programmi che non si sovrappongono."""
+    import bisect
+    if not altri:
+        return base
+    if not base:
+        return list(altri)
+    res = list(base)
+    inizi = [b_[0] for b_ in res]
+    for s_, e_, t_ in altri:
+        i = bisect.bisect_left(inizi, e_)
+        if i > 0 and res[i - 1][1] > s_:
+            continue
+        res.insert(i, (s_, e_, t_))
+        inizi.insert(i, s_)
+    return res
+
+
+def unisci_guide(guide):
+    """guide: [(nomi, programmi)] in ordine di preferenza. Lo stesso canale
+    in guide diverse (stesso id, o stesso nome) e' un canale solo: decide la
+    prima guida che ha i suoi programmi, le altre riempiono i buchi e il
+    futuro. Torna (nomi, programmi)."""
+    padre = {}
+
+    def radice(x):
+        while padre.setdefault(x, x) != x:
+            padre[x] = padre[padre[x]]
+            x = padre[x]
+        return x
+
+    per_nome = {}
+    for nomi, _p in guide:
+        for nome, ide in nomi.items():
+            if ide:
+                per_nome.setdefault(nome, []).append(ide)
+    for ids in per_nome.values():
+        for ide in ids[1:]:
+            padre[radice(ide)] = radice(ids[0])
+    for _n, prog in guide:
+        for ide in prog:
+            if ide:
+                radice(ide)
+    gruppi = {}
+    for ide in list(padre):
+        gruppi.setdefault(radice(ide), []).append(ide)
+    programmi = {}
+    for _n, prog in guide:
+        if "" in prog:
+            programmi.setdefault("", prog[""])
+    for ids in gruppi.values():
+        lista = []
+        for _n, prog in guide:
+            for ide in ids:
+                if ide in prog:
+                    lista = unisci_programmi(lista, prog[ide])
+        if lista:
+            for ide in ids:
+                programmi[ide] = lista
+    nomi_tutti = {}
+    for nomi, _p in guide:
+        for nome, ide in nomi.items():
+            nomi_tutti.setdefault(nome, ide)
+    return nomi_tutti, programmi
 
 
 def piu_nuova(a, b):
@@ -4966,6 +5039,7 @@ class TV(object):
         threading.Thread(target=self.guarda, daemon=True).start()
         if self.cfg.get("epg"):
             self.carica_guide()
+        self.root.after(30 * 60 * 1000, self.giro_guide)
 
         self.root.after(8000, lambda: self.controlla_versione(zitto=True))
 
@@ -8825,41 +8899,67 @@ class TV(object):
         return (self.cfg.get("epg_nomi_utente", {}).get(dove)
                 or self.cfg.get("epg_nomi", {}).get(dove) or nome_epg(dove))
 
-    def carica_guide(self):
+    def carica_guide(self, silenzioso=False):
         """Tutte le guide del config, in un thread, unite in una sola."""
-        threading.Thread(target=self._carica_guide, args=(list(self.cfg.get("epg", [])),),
-                         daemon=True).start()
+        threading.Thread(target=self._carica_guide,
+                         args=(list(self.cfg.get("epg", [])), silenzioso), daemon=True).start()
 
-    def _carica_guide(self, dove_tutte):
+    def _carica_guide(self, dove_tutte, silenzioso=False):
         global EPG_ICONE, EPG_ICONE_NOME
-
-
-        EPG_ICONE, EPG_ICONE_NOME = {}, {}
-        nomi, programmi = {}, {}
-        for dove in dove_tutte:
-            self.scrivi(_("loading %s...") % self.nome_guida(dove))
-            try:
-                f = prendi_epg(dove)
-                dentro = nome_dentro(f)
-                if dentro:
-                    self.cfg.setdefault("epg_nomi", {})[dove] = dentro
-                    scrivi_config(self.cfg)
-                n, p = leggi_epg(f)
-            except Exception as e:
-                self.scrivi(_("guide not loaded: %s") % e, errore=True)
-                time.sleep(2)
-                continue
-            for k, v in n.items():
-                nomi.setdefault(k, v)
-            for k, v in p.items():
-                if k not in programmi:
-                    programmi[k] = v
-        self.epg_nomi, self.epg = nomi, programmi
+        self.guide_in_corso = True
+        self.epg_tentata = time.time()
+        quando = time.time()
+        try:
+            EPG_ICONE, EPG_ICONE_NOME = {}, {}
+            guide = []
+            for dove in dove_tutte:
+                if not silenzioso:
+                    self.scrivi(_("loading %s...") % self.nome_guida(dove))
+                try:
+                    f = prendi_epg(dove)
+                    dentro = nome_dentro(f)
+                    if dentro:
+                        self.cfg.setdefault("epg_nomi", {})[dove] = dentro
+                        scrivi_config(self.cfg)
+                    guide.append(leggi_epg(f))
+                except Exception as e:
+                    self.scrivi(_("guide not loaded: %s") % e, errore=True)
+                    time.sleep(2)
+            if guide or not silenzioso:
+                nomi, programmi = unisci_guide(guide)
+                self.epg_nomi, self.epg = nomi, programmi
+                self.epg_quando = quando
+        finally:
+            self.guide_in_corso = False
+        if silenzioso:
+            return
         self.root.after(0, self.rifai_albero)
         self.root.after(0, self.filtra)
         self.scrivi(_("guide loaded: %d channels, %d programmes") % (
-            len(nomi), sum(len(v) for v in programmi.values())))
+            len(self.epg_nomi), sum(len(v) for v in self.epg.values())))
         self.root.after(4000, self.scrivi_riga)
+
+    def giro_guide(self):
+        """Ogni mezz'ora: se una guida ha piu' di sei ore (o il file locale e'
+        cambiato) si riscaricano tutte, in silenzio. Dopo un tentativo non si
+        riprova prima di un'ora."""
+        try:
+            ora = time.time()
+            vecchia = False
+            for dove in self.cfg.get("epg", []):
+                if os.path.isfile(dove):
+                    if os.path.getmtime(dove) > getattr(self, "epg_quando", 0):
+                        vecchia = True
+                else:
+                    f = os.path.join(CACHE_EPG, hashlib.md5(dove.encode()).hexdigest())
+                    if not os.path.isfile(f) or ora - os.path.getmtime(f) >= EPG_VECCHIA:
+                        vecchia = True
+            if (vecchia and self.cfg.get("epg") and not getattr(self, "guide_in_corso", False)
+                    and ora - getattr(self, "epg_tentata", 0) >= 3600):
+                self.carica_guide(silenzioso=True)
+        except Exception:
+            pass
+        self.root.after(30 * 60 * 1000, self.giro_guide)
 
     def programma(self):
         """Il programma in onda sul canale: (inizio, fine, titolo), o
