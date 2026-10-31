@@ -67,6 +67,25 @@ Once installed, XVB Player will be available in your applications menu or via te
 Configuration files and user settings are saved in `~/.config/xvb/`. PVR recordings are stored in `~/Videos/xvb/`.
 
 
+## Recommended Italian IPTV Playlist
+
+XVB recommends the Italian free IPTV playlist provided by [Free-TV](https://github.com/Free-TV/IPTV).
+
+### Italy Playlist (Raw M3U)
+
+[Open Italy M3U Playlist](https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_italy.m3u8)
+
+### Electronic Programme Guide (EPG)
+
+For Italian TV programme information, XVB recommends the epgshare01 IT1 XMLTV source.
+
+### Italy EPG (XML.GZ)
+
+[Download Italy EPG – IT1](https://epgshare01.online/epgshare01/epg_ripper_IT1.xml.gz)
+
+Add the playlist and its EPG source through the XVB Playlist Manager.
+
+
 ## Known issues
 
 ### Wayland
