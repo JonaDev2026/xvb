@@ -5658,7 +5658,9 @@ class TV(object):
         normale."""
         for d, iid in self.iid_di.items():
             if self.el_liste.exists(iid):
-                self.tag_riga(iid, d == dove)
+                self.tag_riga(
+                    iid,
+                    d == dove and not getattr(self, "_categoria_m3u_attiva", None))
         for iid in list(self.iid_reg) + list(self.iid_media):
             if self.el_liste.exists(iid):
                 self.tag_riga(iid, False)
@@ -5710,6 +5712,9 @@ class TV(object):
         if s and s[0] in getattr(self, "iid_categoria_m3u", {}):
             d, nome_categoria = self.iid_categoria_m3u[s[0]]
             self._categoria_m3u_attiva = (d, nome_categoria)
+            for _d, _iid in self.iid_di.items():
+                if self.el_liste.exists(_iid):
+                    self.tag_riga(_iid, False)
             for _iid, (_d, _cat) in self.iid_categoria_m3u.items():
                 if self.el_liste.exists(_iid):
                     self.tag_riga(_iid, (_d, _cat) == (d, nome_categoria))
@@ -5723,13 +5728,13 @@ class TV(object):
 
         d = self.lista_selezionata()
         if d:
-            iid_playlist = self.iid_di.get(d)
-            if (iid_playlist and self.el_liste.exists(iid_playlist)
-                    and not getattr(self, "_clic_indicatore_liste", False)):
-                self.el_liste.item(iid_playlist, open=True)
-                self.cfg.setdefault("aperte", {})["m3u-playlist:" + d] = True
-                scrivi_config(self.cfg)
             self._categoria_m3u_attiva = None
+            for _iid in self.iid_categoria_m3u:
+                if self.el_liste.exists(_iid):
+                    self.tag_riga(_iid, False)
+            for _d, _iid in self.iid_di.items():
+                if self.el_liste.exists(_iid):
+                    self.tag_riga(_iid, _d == d)
             if d != self.cfg.get("lista") or self.reg_in_uso is not None \
                     or self.media_in_uso is not None:
                 self.reg_in_uso = self.media_in_uso = None
@@ -6632,17 +6637,24 @@ class TV(object):
 
     def clic_indicatore_liste(self, ev):
         elemento = self.el_liste.identify_element(ev.x, ev.y)
+        iid = self.el_liste.identify_row(ev.y)
+
         if elemento != "Treeitem.indicator":
+            chiave = getattr(self, "chiave_di", {}).get(iid)
+            if chiave in ("iptv", "m3u", "epg"):
+                self.col_mouse = False
+                return "break"
             self.col_mouse = True
             return
 
-        iid = self.el_liste.identify_row(ev.y)
         if not iid:
             return "break"
 
         self.col_mouse = False
         aperta = bool(self.el_liste.item(iid, "open"))
+        self.el_liste.focus(iid)
         self.el_liste.item(iid, open=not aperta)
+        self.apri_chiudi_cartella(not aperta)
         return "break"
 
     def clic_liste(self, ev):
