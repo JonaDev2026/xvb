@@ -4723,13 +4723,13 @@ class TV(object):
                                      bg=STATO, fg=TESTO)
         self.et_categoria.pack(side="left", fill="y")
         self.stato = tk.Label(self.riga_stato, text=_("ready"), anchor="w",
-                              bg=STATO, fg="#ffffff")
+                              bg=STATO, fg=TESTO)
         self.stato.pack(side="left", padx=(8, 0), fill="y")
 
         self.et_canale = self.stato
         self.et_titolo = tk.Label(self.riga_stato, text="", bg=STATO, fg=TESTO)
         self.et_titolo.pack(side="left", fill="y")
-        self.et_ora = tk.Label(self.riga_stato, text="", bg=STATO, fg="#ffffff")
+        self.et_ora = tk.Label(self.riga_stato, text="", bg=STATO, fg=TESTO)
         self.et_ora.pack(side="left", fill="y")
 
         self.et_seguente = tk.Label(self.riga_stato, text="", bg=STATO, fg=TESTO)
@@ -5223,10 +5223,14 @@ class TV(object):
                 if colore not in self.globi:
                     self.globi[colore] = globo(colore, dentro=RIDOTTE) or self.vuoto
                 img = self.globi[colore]
-            iid = self.el_liste.insert(padre, "end", text=" " + nome_di(d),
-                                       image=img, values=("\u2715",),
-                                       tags=("usata",) if d == adesso else ())
+            chiave_playlist = "m3u-playlist:" + d
+            iid = self.el_liste.insert(
+                padre, "end", text=" " + nome_di(d),
+                image=img, values=("\u2715",),
+                open=aperta_di(chiave_playlist, False),
+                tags=("usata",) if d == adesso else ())
             self.iid_di[d] = iid
+            self.chiave_di[iid] = chiave_playlist
             return iid
 
         self.cartella_di = {}
@@ -5632,6 +5636,11 @@ class TV(object):
 
         d = self.lista_selezionata()
         if d:
+            iid_playlist = self.iid_di.get(d)
+            if iid_playlist and self.el_liste.exists(iid_playlist):
+                self.el_liste.item(iid_playlist, open=True)
+                self.cfg.setdefault("aperte", {})["m3u-playlist:" + d] = True
+                scrivi_config(self.cfg)
             self._categoria_m3u_attiva = None
             if d != self.cfg.get("lista") or self.reg_in_uso is not None \
                     or self.media_in_uso is not None:
@@ -10063,13 +10072,21 @@ class TV(object):
             "pt": "a seguir: ", "ru": "Далее: ",
         }.get(LINGUA, "Next: ")
 
-        categoria_attiva = getattr(self, "_categoria_m3u_attiva", None)
         categoria = ""
         colore_categoria = TESTO
-        if categoria_attiva and categoria_attiva[0] == self.cfg.get("lista"):
-            categoria = categoria_attiva[1]
-            colore_categoria = getattr(self, "_colore_categoria_m3u", {}).get(
-                categoria_attiva, TESTO)
+        url_in_onda = self.file_in_onda or self.cfg.get("canale")
+        if url_in_onda and not self.file_in_onda:
+            mappe = getattr(self, "_mappa_categorie_m3u", {})
+            colori = getattr(self, "_colore_categoria_m3u", {})
+            for lista_m3u in self.liste:
+                mappa = mappe.get(lista_m3u)
+                if mappa is None:
+                    mappa = categorie_m3u(lista_m3u, solo_cache=True)
+                    mappe[lista_m3u] = mappa
+                if url_in_onda in mappa:
+                    categoria = mappa[url_in_onda]
+                    colore_categoria = colori.get((lista_m3u, categoria), TESTO)
+                    break
 
         def fai():
             icona_categoria = (
@@ -10079,12 +10096,13 @@ class TV(object):
             self.et_categoria.config(
                 text=(categoria + "") if categoria else "",
                 fg=TESTO)
-            self.stato.config(text=nome, image="", compound="left")
+            self.stato.config(text=nome, image="", compound="left", fg=TESTO)
             self.et_titolo.config(
                 text=(" " + titolo) if titolo else "",
                 fg=schiarisci(self.colore_barra) if self.colore_barra else TESTO)
-            self.et_ora.config(text=("  " + ora) if titolo and ora else
-                               ("  " + ora if ora else ""))
+            self.et_ora.config(
+                text=("  " + ora) if titolo and ora else ("  " + ora if ora else ""),
+                fg=TESTO)
             self.et_seguente.config(
                 text=("  " + etichetta_seguente) if prossimo else "",
                 fg=TESTO)
