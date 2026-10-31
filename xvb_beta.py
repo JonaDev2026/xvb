@@ -6237,6 +6237,10 @@ class TV(object):
         gli importati. La scansione delle cartelle avviene in background."""
         tipo, c = chiave
 
+        # Uscendo da una sottocategoria M3U, il filtro non deve
+        # rimanere attivo sulle librerie locali.
+        self._categoria_m3u_attiva = None
+
         # Invalida le operazioni IPTV ancora in corso.
         self._xvb_carica_token = getattr(self, "_xvb_carica_token", 0) + 1
         self._xvb_filtra_token = getattr(self, "_xvb_filtra_token", 0) + 1
@@ -6399,7 +6403,8 @@ class TV(object):
                 self.tag_riga(iid, k == chiave)
                 if k == chiave:
                     self.mostra_riga(iid)
-        for iid in list(self.iid_reg) + list(self.iid_di.values()):
+        for iid in (list(self.iid_reg) + list(self.iid_di.values())
+                    + list(self.iid_categoria_m3u)):
             if self.el_liste.exists(iid):
                 self.tag_riga(iid, False)
         self.non_sul_verde(self.el_liste, "usata")
@@ -6904,6 +6909,11 @@ class TV(object):
 
     def _filtra_iptv_completato(self, token, risultato):
         if token != getattr(self, "_xvb_filtra_token", None):
+            return
+
+        # Non aggiornare la lista se nel frattempo e' stata aperta
+        # una libreria locale o le registrazioni.
+        if self.media_in_uso is not None or self.reg_in_uso is not None:
             return
 
         filtrati, posti, errore = risultato
