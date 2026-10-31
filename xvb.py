@@ -243,7 +243,7 @@ def avvia_mpris(app):
     threading.Thread(target=GLib.MainLoop().run, daemon=True).start()
     return m
 
-VERSIONE = "4.0"
+VERSIONE = "4.2"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"        # dove stanno le release, per l'avviso di aggiornamento
@@ -296,8 +296,10 @@ TESTI = {
         "Remove cover": "Togli copertina",
         "Choose an image": "Scegli un'immagine",
         "Radio": "Radio",
-        "Music streams": "Stream musicali",
-        "Film streams": "Stream film",
+        "Podcast": "Podcast",
+        "Music": "Musica",
+        "IP cam": "Cam-IP",
+        "Film": "Film",
         "Temporary": "Provvisori",
         "Save in:": "Salva in:",
         "Move to %s": "Sposta in %s",
@@ -486,8 +488,10 @@ TESTI = {
         "Remove cover": "Quitar portada",
         "Choose an image": "Elige una imagen",
         "Radio": "Radio",
-        "Music streams": "Streams de música",
-        "Film streams": "Streams de películas",
+        "Podcast": "Podcast",
+        "Music": "Música",
+        "IP cam": "Cámaras IP",
+        "Film": "Películas",
         "Temporary": "Temporales",
         "Save in:": "Guardar en:",
         "Move to %s": "Mover a %s",
@@ -676,8 +680,10 @@ TESTI = {
         "Remove cover": "Retirer la pochette",
         "Choose an image": "Choisir une image",
         "Radio": "Radio",
-        "Music streams": "Flux musicaux",
-        "Film streams": "Flux de films",
+        "Podcast": "Podcasts",
+        "Music": "Musique",
+        "IP cam": "Caméras IP",
+        "Film": "Films",
         "Temporary": "Temporaires",
         "Save in:": "Enregistrer dans :",
         "Move to %s": "Déplacer vers %s",
@@ -866,8 +872,10 @@ TESTI = {
         "Remove cover": "Cover entfernen",
         "Choose an image": "Bild wählen",
         "Radio": "Radio",
-        "Music streams": "Musik-Streams",
-        "Film streams": "Film-Streams",
+        "Podcast": "Podcasts",
+        "Music": "Musik",
+        "IP cam": "IP-Kameras",
+        "Film": "Filme",
         "Temporary": "Temporär",
         "Save in:": "Speichern in:",
         "Move to %s": "Verschieben nach %s",
@@ -1072,8 +1080,10 @@ TESTI = {
         "Remove cover": "Remover capa",
         "Choose an image": "Escolha uma imagem",
         "Radio": "Rádio",
-        "Music streams": "Streams de música",
-        "Film streams": "Streams de filmes",
+        "Podcast": "Podcasts",
+        "Music": "Música",
+        "IP cam": "Câmeras IP",
+        "Film": "Filmes",
         "Temporary": "Temporários",
         "Save in:": "Salvar em:",
         "Move to %s": "Mover para %s",
@@ -1279,8 +1289,10 @@ TESTI = {
         "Remove cover": "Убрать обложку",
         "Choose an image": "Выберите изображение",
         "Radio": "Радио",
-        "Music streams": "Музыкальные потоки",
-        "Film streams": "Видеопотоки",
+        "Podcast": "Подкасты",
+        "Music": "Музыка",
+        "IP cam": "IP-камеры",
+        "Film": "Фильмы",
         "Temporary": "Временные",
         "Save in:": "Сохранить в:",
         "Move to %s": "Переместить в %s",
@@ -1504,7 +1516,7 @@ PROPORZIONI = (("Auto", "-1"), ("16:9", "16:9"), ("4:3", "4:3"), ("21:9", "21:9"
 # ma solo fino alla chiusura)
 LARGA_BARRA = 220
 RIDOTTE = 18       # le icone della barra di destra: lato in px (il riquadro resta 24)
-IN_RIPRODUZIONE = "#323036"   # il fondo fisso della riga in riproduzione (argento)
+IN_RIPRODUZIONE = "#42414d"   # il fondo fisso della riga in riproduzione (argento)
 PREFERITI = "favorite"     # la cartella dei preferiti, in playlists/
 # i preferiti, per ora spenti: niente cuore e niente cartella nella barra
 # (i file in playlists/favorite/ restano dove sono). True per riaccenderli
@@ -1537,21 +1549,21 @@ SCALA_FILE = ("#ff5257", "#30d158", "#ff7f11", "#42a0ff",   # rosso, verde, aran
 # messo sopra in trasparenza: i bottoni all'8 per cento, la riga
 # selezionata al 14. Tk la trasparenza vera non ce l'ha, quindi sono i
 # grigi che verrebbero fuori da quel bianco sopra al pannello.
-FONDO = "#121212"          # lo sfondo
-PANNELLO = "#131215"       # la superficie dei pannelli (sidebar, come Celluloid)
+FONDO = "#1c1b22"          # lo sfondo
+PANNELLO = "#1c1b22"       # la superficie dei pannelli (sidebar, come Celluloid)
 BARRA = PANNELLO           # la barra dei comandi: come quella dei menu in alto
-STATO = "#0c0c0c"          # la riga col nome del canale, piu' scura
+STATO = "#42414d"          # la riga col nome del canale, piu' scura
 TASTO = "#2c2c2c"          # bianco 8% sopra al pannello: bottoni, casella
-SCELTO = "#3a3a3a"         # bianco 14%: la riga selezionata
-ZEBRA = "#212024"          # una riga si' e una no, e le sottocategorie a destra
+SCELTO = "#0071e3"         # bianco 14%: la riga selezionata
+ZEBRA = "#2b2a33"          # una riga si' e una no, e le sottocategorie a destra
 TESTO = "#e0e0e0"          # bianco 87%: il testo
 GRIGIO = "#9e9e9e"         # bianco 60%: il testo secondario
 ACCENTO = "#bb86fc"        # il colore primario, per volume e caricamento
-IN_ONDA = "#323036"        # il primario in trasparenza: cio' che sta andando
+IN_ONDA = "#42414d"        # il primario in trasparenza: cio' che sta selezionato sulla barra di destra
 TESTO_ONDA = "#e9ddff"     # il testo sopra al viola
-CERCA = "#252428"          # la pillola della ricerca
-CIMA = PANNELLO            # la barra dei menu in alto: come le sidebar
-MENU = CERCA               # le tendine e la voce scelta nella barra in alto: come la ricerca
+CERCA = "#42414d"          # la pillola della ricerca
+CIMA = "#1c1b22"           # la barra dei menu in alto: come le sidebar
+MENU = CIMA              # le tendine e la voce scelta nella barra in alto: come la ricerca
 
 
 # ------------------------------------------------------- quello che ricorda
@@ -1639,6 +1651,10 @@ def categorie():
                 fuori.append((n, dentro))
     return fuori
 
+
+# le categorie degli indirizzi (chiave, nome in inglese = chiave di traduzione)
+CATEGORIE_URL = (("podcast", "Podcast"), ("musica", "Music"), ("radio", "Radio"),
+                 ("cam", "IP cam"), ("film", "Film"), ("video", "Video"))
 
 CACHE_LISTE = os.path.join(CASA, ".cache", "xvb", "liste")
 LISTA_VECCHIA = 6 * 3600        # una lista da url si riscarica dopo sei ore
@@ -2022,6 +2038,17 @@ def copertina_da_brano(artista, titolo):
     return urls[:3], (data[:4] if data[:4].isdigit() and data != "9999" else ""), nome
 
 
+def poster_film(f):
+    """L'immagine di un film accanto al file (stesso nome, poster, folder,
+    cover), originale e non ridotta; None se non c'e'."""
+    cartella, base = os.path.split(f)
+    radice = os.path.splitext(base)[0]
+    nomi = ([radice + e for e in (".jpg", ".jpeg", ".png", ".JPG", ".JPEG", ".PNG")] +
+            [n + e for n in ("poster", "folder", "cover") for e in (".jpg", ".jpeg", ".png")])
+    return next((os.path.join(cartella, n) for n in nomi
+                 if os.path.isfile(os.path.join(cartella, n))), None)
+
+
 def anteprima_di(f):
     """L'immagine per un file nell'elenco, salvata in cache: per la musica
     la copertina (dentro al file, o cover/folder.jpg nella cartella); per
@@ -2216,6 +2243,19 @@ def svg_in_png(dati):
         return cairosvg.svg2png(bytestring=dati, output_width=256)
     except Exception:
         return dati
+
+
+def schiarisci(colore, minimo=0.80):
+    """Lo stesso colore piu' chiaro, per i testi sullo scuro: stessa tinta,
+    luce almeno `minimo`. Se non e' un #rrggbb lo lascia com'e'."""
+    import colorsys
+    try:
+        r, g, b = (int(colore[i:i + 2], 16) / 255.0 for i in (1, 3, 5))
+    except (ValueError, TypeError, IndexError):
+        return colore
+    h, l, sa = colorsys.rgb_to_hls(r, g, b)
+    r, g, b = colorsys.hls_to_rgb(h, max(l, minimo), sa)
+    return "#%02x%02x%02x" % (int(round(r * 255)), int(round(g * 255)), int(round(b * 255)))
 
 
 def colore_dal_logo(url_logo):
@@ -2858,9 +2898,25 @@ def nome_piatto(nome):
     return re.sub(r"(fhd|uhd|hd|4k|sd)$", "", n)
 
 
-POSTER_H = 64                   # altezza del poster sopra a ogni canale, in pixel
+POSTER_H = 192                   # altezza del poster sopra a ogni canale, in pixel
 CACHE_POSTER = os.path.join(CASA, ".cache", "xvb", "poster")
 EPG_ICONE = {}                  # (id canale, inizio) -> indirizzo dell'immagine del programma
+EPG_ICONE_NOME = {}             # (nome canale normalizzato, inizio, titolo) -> immagine
+
+
+def icona_programma_epg(ide, nome, programma):
+    """Trova la locandina anche nelle altre guide, se l'ID XMLTV cambia.
+
+    Prima rispetta l'ID della guida principale; se li' manca l'immagine,
+    cerca per nome del canale, inizio e titolo del programma.
+    """
+    if not programma:
+        return None
+    inizio, _fine, titolo = programma
+    src = EPG_ICONE.get((ide or "", inizio))
+    if src:
+        return src
+    return EPG_ICONE_NOME.get((nome_piatto(nome), inizio, nome_piatto(titolo)))
 
 
 def leggi_epg(f):
@@ -2871,15 +2927,17 @@ def leggi_epg(f):
     with open(f, "rb") as h:
         testa = h.read(2)
     apri = gzip.open if testa == b"\x1f\x8b" else open
-    nomi, programmi = {}, {}
+    nomi, programmi, nomi_per_id = {}, {}, {}
     da = time.time() - 3600
     with apri(f, "rb") as h:
         for _ev, el in ET.iterparse(h):
             if el.tag == "channel":
                 ide = el.get("id") or ""
                 for n in el.findall("display-name"):
-                    if n.text:
-                        nomi.setdefault(nome_piatto(n.text), ide)
+                    if n.text and n.text.strip():
+                        chiave = nome_piatto(n.text)
+                        nomi.setdefault(chiave, ide)
+                        nomi_per_id.setdefault(ide, set()).add(chiave)
                 el.clear()
             elif el.tag == "programme":
                 inizio, fine = ora_xmltv(el.get("start")), ora_xmltv(el.get("stop"))
@@ -2890,7 +2948,13 @@ def leggi_epg(f):
                         (inizio, fine, titolo))
                     ic = el.find("icon")
                     if ic is not None and ic.get("src"):
-                        EPG_ICONE[(el.get("channel") or "", inizio)] = ic.get("src")
+                        src = ic.get("src")
+                        ide = el.get("channel") or ""
+                        # La prima guida che offre l'immagine mantiene la priorita'.
+                        EPG_ICONE.setdefault((ide, inizio), src)
+                        titolo_key = nome_piatto(titolo)
+                        for nome_key in nomi_per_id.get(ide, ()):
+                            EPG_ICONE_NOME.setdefault((nome_key, inizio, titolo_key), src)
                 el.clear()
     for lista in programmi.values():
         lista.sort()
@@ -3071,6 +3135,23 @@ class Cursore(tk.Canvas):
             self.create_line(x0, y, x, y, width=4, fill="#ffffff", capstyle="round")
 
 
+
+def colore_sfondo_guida(hex_colore, bg_hex="#121212", alfa=0.40):
+    """Calcola il colore del blocco in onda con un effetto trasparenza al 40%
+    miscelato con lo sfondo scuro, garantendo massima leggibilità al testo bianco."""
+    try:
+        h_c = hex_colore.lstrip("#")
+        r1, g1, b1 = int(h_c[0:2], 16), int(h_c[2:4], 16), int(h_c[4:6], 16)
+        bg_c = bg_hex.lstrip("#")
+        r2, g2, b2 = int(bg_c[0:2], 16), int(bg_c[2:4], 16), int(bg_c[4:6], 16)
+        rf = int(r1 * alfa + r2 * (1.0 - alfa))
+        gf = int(g1 * alfa + g2 * (1.0 - alfa))
+        bf = int(b1 * alfa + b2 * (1.0 - alfa))
+        return "#%02x%02x%02x" % (rf, gf, bf)
+    except Exception:
+        return "#252030"
+
+
 class Guida(tk.Toplevel):
     """La griglia dei programmi, stile guida TV: una riga per canale della
     lista aperta, il tempo che scorre a destra, i programmi come blocchi;
@@ -3079,8 +3160,8 @@ class Guida(tk.Toplevel):
     vedere il canale. Rotella per le righe, Shift+rotella per il tempo."""
 
     ORA = 300           # pixel per ora
-    RIGA = 40           # altezza di una riga
-    NOMI = 190          # larghezza della colonna dei nomi
+    RIGA = 64           # altezza di una riga (il logo del canale ci sta dentro)
+    NOMI = 250          # larghezza della colonna dei nomi
     TESTA = 28          # altezza della riga delle ore
 
     def __init__(self, app):
@@ -3100,18 +3181,31 @@ class Guida(tk.Toplevel):
         self.testa.grid(row=0, column=1, sticky="nsew")
         self.nomi = tk.Canvas(self, bg=FONDO, width=self.NOMI, highlightthickness=0, bd=0)
         self.nomi.grid(row=1, column=0, sticky="nsew")
-        self.tela = tk.Canvas(self, bg=FONDO, highlightthickness=0, bd=0)
+        self.tela = tk.Canvas(self, bg=FONDO, highlightthickness=0, bd=0, xscrollincrement=40, yscrollincrement=32)
         self.tela.grid(row=1, column=1, sticky="nsew")
+        self.sbx = tk.Scrollbar(self, orient="horizontal", command=self.xv, bg=TASTO,
+                                troughcolor=FONDO, activebackground=GRIGIO, bd=0,
+                                highlightthickness=0, relief="flat", elementborderwidth=0)
+        self.sbx.grid(row=2, column=1, sticky="ew")
+        self.sby = tk.Scrollbar(self, orient="vertical", command=self.yv, bg=TASTO,
+                                troughcolor=FONDO, activebackground=GRIGIO, bd=0,
+                                highlightthickness=0, relief="flat", elementborderwidth=0)
+        self.sby.grid(row=1, column=2, sticky="ns")
+        self.tela.config(xscrollcommand=self.sbx.set, yscrollcommand=self.sby.set)
         self.da = int(time.time() // 1800 * 1800) - 1800    # mezz'ora prima, tondo
         self.fino = self.da + 6 * 3600
         self.righe = []             # (nome, url, ide, programmi)
-        self.blocchi = {}           # (w, h, colore, fondo) -> immagine del blocco in onda
         self.raccogli()
         self.tela.bind("<Configure>", lambda e: self.disegna())
         for c in (self.tela, self.nomi, self.testa):
             c.bind("<Button-4>", lambda e: self.scorri_y(-1))
             c.bind("<Button-5>", lambda e: self.scorri_y(+1))
             c.bind("<MouseWheel>", lambda e: self.scorri_y(-1 if e.delta > 0 else +1))
+            try:
+                c.bind("<Button-6>", lambda e: self.scorri_x(-1))
+                c.bind("<Button-7>", lambda e: self.scorri_x(+1))
+            except tk.TclError:
+                pass
             c.bind("<Shift-Button-4>", lambda e: self.scorri_x(-1))
             c.bind("<Shift-Button-5>", lambda e: self.scorri_x(+1))
             c.bind("<Shift-MouseWheel>", lambda e: self.scorri_x(-1 if e.delta > 0 else +1))
@@ -3167,19 +3261,14 @@ class Guida(tk.Toplevel):
             y1 = y0 + self.RIGA
             fondo = PANNELLO if i % 2 else FONDO
             c.create_rectangle(0, y0, largo, y1, fill=fondo, outline="")
-            colore = self.app.colore_canale(nome, url)
+            colore = self.app.colore_canale(nome, url)     # quello del logo salvato
             for a, b, titolo in prog:
                 xa, xb = max(self.x_di(a), 0), self.x_di(b)
                 in_onda = a <= adesso < b
-                # il blocco in onda: il colore del canale in una sfumatura
-                # morbida, piu' presente in alto e che si spegne in basso
-                if in_onda and HA_PIL:
-                    im = self.blocco(int(xb - xa - 2), self.RIGA - 8, colore, fondo)
-                    c.create_image(xa + 1, y0 + 4, anchor="nw", image=im, tags=("prog", url))
-                else:
-                    c.create_rectangle(xa + 1, y0 + 4, xb - 1, y1 - 4,
-                                       fill=colore if in_onda else TASTO, outline="",
-                                       tags=("prog", url))
+                # il blocco in onda: il colore del logo, piatto, niente sfumature
+                c.create_rectangle(xa + 1, y0 + 6, xb - 1, y1 - 6,
+                                   fill=colore_sfondo_guida(colore, fondo, 0.40) if in_onda else TASTO, outline="",
+                                   tags=("prog", url))
                 if xb - xa > 30:
                     testo = titolo
                     while testo and len(testo) * 7 > xb - xa - 14:
@@ -3189,11 +3278,15 @@ class Guida(tk.Toplevel):
                     c.create_text(xa + 8, (y0 + y1) // 2, anchor="w", text=testo,
                                   fill="#ffffff" if in_onda else TESTO,
                                   tags=("prog", url))
-            # la colonna dei nomi, col pallino disegnato (liscio)
+            # la colonna dei nomi: logo del canale (il pallino se manca)
             n.create_rectangle(0, y0, self.NOMI, y1, fill=fondo, outline="", tags=("nome", url))
-            n.create_image(17, (y0 + y1) // 2, image=self.app.pallino_di(nome, url),
-                           tags=("nome", url))
-            n.create_text(30, (y0 + y1) // 2, anchor="w", text=nome[:24],
+            logo = self.app.logo_di(url)
+            if logo is not None:
+                n.create_image(8 + LOGO_L // 2, (y0 + y1) // 2, image=logo, tags=("nome", url))
+            else:
+                n.create_image(8 + LOGO_L // 2, (y0 + y1) // 2,
+                               image=self.app.pallino_di(nome, url), tags=("nome", url))
+            n.create_text(LOGO_L + 18, (y0 + y1) // 2, anchor="w", text=nome[:18],
                           fill=TESTO, tags=("nome", url))
         # adesso
         x = self.x_di(adesso)
@@ -3203,25 +3296,13 @@ class Guida(tk.Toplevel):
         h.xview_moveto(c.xview()[0])
         n.yview_moveto(c.yview()[0])
 
-    def blocco(self, w, h, colore, fondo):
-        """L'immagine del blocco in onda: il colore del canale fuso col
-        fondo della riga, al 55% in alto e al 20% in basso, angoli
-        morbidi. Tenuta in cache per misura e colore."""
-        w = max(1, w)
-        k = (w, h, colore, fondo)
-        if k in self.blocchi:
-            return self.blocchi[k]
-        r1, g1, b1 = (int(colore[i:i + 2], 16) for i in (1, 3, 5))
-        r0, g0, b0 = (int(fondo[i:i + 2], 16) for i in (1, 3, 5))
-        im = Image.new("RGB", (w, h))
-        px = im.load()
-        for y in range(h):
-            t = 0.55 - 0.35 * y / float(max(1, h - 1))
-            c = (int(r0 + (r1 - r0) * t), int(g0 + (g1 - g0) * t), int(b0 + (b1 - b0) * t))
-            for x in range(w):
-                px[x, y] = c
-        self.blocchi[k] = ImageTk.PhotoImage(im)
-        return self.blocchi[k]
+    def yv(self, *a):
+        self.tela.yview(*a)
+        self.nomi.yview_moveto(self.tela.yview()[0])
+
+    def xv(self, *a):
+        self.tela.xview(*a)
+        self.testa.xview_moveto(self.tela.xview()[0])
 
     def ridisegna(self):
         self.disegna()
@@ -3519,6 +3600,7 @@ class Elenco(tk.Text):
         self.prog_di = None                 # iid -> (inizio, fine) del programma in onda, o None
         self.barre = []                     # riserva di barre (pista, pieno), una per voce visibile
         self.poster_h = 0                   # px riservati sopra a ogni voce per il poster (0 = niente)
+        self.poster_onda_h = 0              # px sopra alla sola riga in onda (poster spenti)
         self.poster_di = None               # (iid, larghezza, altezza) -> (immagine Tk o None, titolo)
         self.poster_lbl = []                # riserva di riquadri, uno per voce visibile
         self.doppio = None                  # doppio clic su un poster
@@ -3542,10 +3624,10 @@ class Elenco(tk.Text):
         self.tag_lower("zebra")
         # il nome bianco con un po' d'aria sopra, il sottotitolo attaccato
         # sotto e con l'aria in fondo
-        self.nome_sopra = 18               # l'aria sopra al nome (col poster, sotto al poster)
+        self.nome_sopra = 10               # l'aria sopra al nome (col poster, sotto al poster)
         self.tag_configure("nome", foreground="#ffffff", spacing1=self.nome_sopra, spacing3=4,
                            font=(CARATTERE, -NOME_PX, "bold"))
-        self.tag_configure("sotto", spacing1=0, spacing3=24, font=(CARATTERE, -SOTTO_PX))
+        self.tag_configure("sotto", spacing1=0, spacing3=14, font=(CARATTERE, -SOTTO_PX))
         self.tag_configure("onda")
         self.tag_raise("onda")
         self.tag_raise("scelto")
@@ -3707,6 +3789,8 @@ class Elenco(tk.Text):
             self.image_create("%d.0" % r, image=rientro)
             sotto_img = rientro
         self.tag_add(tinta, "%d.0" % r); self.tag_add("nome", "%d.0" % r)
+        if self.poster_onda_h and not self.poster_h and "onda" in d["tags"]:
+            self.tag_add("pronda", "%d.0" % r)
         self.image_create("%d.0" % (r + 1), image=sotto_img)
         self.tag_add(tinta, "%d.0" % (r + 1)); self.tag_add("sotto", "%d.0" % (r + 1))
         self.image_create("%d.0" % (r + 2), image=self.stacco)
@@ -3733,6 +3817,18 @@ class Elenco(tk.Text):
         self.tag_configure("nome", spacing1=self.nome_sopra + (h + 3 if h else 0))
         self.ridisegna_colonna()
 
+    def metti_poster_onda(self, h):
+        """Lo spazio sopra al nome della sola riga in onda (0 = nessuno)."""
+        if h == self.poster_onda_h:
+            return
+        self.poster_onda_h = h
+        self.tag_configure("pronda", spacing1=self.nome_sopra + (h + 3 if h else 0))
+        self.tag_raise("pronda")
+        for iid, d in list(self.dati.items()):
+            if "onda" in d["tags"]:
+                self.disegna(iid)
+        self.ridisegna_colonna()
+
     def _nuovo_poster(self):
         e = tk.Label(self, bd=0, highlightthickness=0, bg=PANNELLO, fg=GRIGIO,
                      cursor="arrow", font=(CARATTERE, -SOTTO_PX), padx=6)
@@ -3748,7 +3844,7 @@ class Elenco(tk.Text):
         """Sopra al nome di ogni voce che si vede, l'immagine del programma
         in onda (o, se manca, il suo titolo), nello spazio lasciato apposta."""
         usati, h = 0, self.poster_h
-        if h and self.poster_di is not None and self.voci:
+        if (h or self.poster_onda_h) and self.poster_di is not None and self.voci:
             try:
                 su = int(self.index("@0,0").split(".")[0])
                 giu = int(self.index("@0,%d" % self.winfo_height()).split(".")[0])
@@ -3756,7 +3852,10 @@ class Elenco(tk.Text):
                 su = giu = 0
             larg = self.winfo_width()
             for i in range(max(0, (su - 1) // 3), min(len(self.voci), (giu - 1) // 3 + 1)):
-                img, titolo = self.poster_di(self.voci[i], larg - 8, h)
+                hh = h or (self.poster_onda_h if "onda" in self.dati[self.voci[i]]["tags"] else 0)
+                if not hh:
+                    continue
+                img, titolo = self.poster_di(self.voci[i], larg - 8, hh)
                 if img is None and not titolo:
                     continue
                 riga = self.dlineinfo("%d.0" % (3 * i + 1))       # il nome: sopra c'e' lo spazio
@@ -3771,7 +3870,7 @@ class Elenco(tk.Text):
                 else:
                     e.config(image="", text=titolo)
                 e.image = img
-                e.place(x=4, y=riga[1] + 3, width=larg - 8, height=h)
+                e.place(x=4, y=riga[1] + 3, width=larg - 8, height=hh)
         for e in self.poster_lbl[usati:]:
             e.place_forget()
 
@@ -3810,7 +3909,7 @@ class Elenco(tk.Text):
                 usate += 1
                 pieno.config(bg=self.dati[iid].get("colore") or GRIGIO)
                 x0 = (COLONNA if self.segno == "logo" else 0) + 8
-                pista.place(x=x0, y=riga[1] - 16, width=larg - x0, height=3)
+                pista.place(x=x0, y=riga[1] - 12, width=larg - x0, height=3)
                 pieno.place(x=0, y=0, relwidth=parte, relheight=1)
         for pista, _pieno in self.barre[usate:]:
             pista.place_forget()
@@ -3839,7 +3938,13 @@ class Elenco(tk.Text):
             if a is None and b is None:
                 continue
             # -1: misurato, la colonna veniva un pixel sotto alle righe
-            y0 = (a[1] + (self.poster_h + 3 if self.poster_h else 0) if a else b[1] - 20) - 1
+            hr = self.poster_h or (self.poster_onda_h if "onda" in self.dati[iid]["tags"] else 0)
+
+            # Posizione originale del logo: non deve spostarsi
+            y_logo = (a[1] + (hr + 3 if hr else 0) if a else b[1] - 20) - 1
+
+            # Altezza estesa dello sfondo della colonna
+            y0 = (a[1] if a else b[1] - 20) - 1
             y1 = ((b[1] + b[3]) if b else a[1] + a[3]) - 1
             d = self.dati[iid]
             img = d.get("logo") or (self.corto(d["image"]) if d.get("image") is not None else None)
@@ -3852,7 +3957,7 @@ class Elenco(tk.Text):
                 fondo = self.tag_cget("onda", "background") or ZEBRA
             c.create_rectangle(0, y0, COLONNA, y1, fill=fondo, outline="")
             if img is not None:
-                c.create_image(COLONNA // 2, (y0 + y1) // 2, image=img)
+                c.create_image(COLONNA // 2, (y_logo + y1) // 2, image=img)
 
     def clic_y(self, y):
         """Un clic nella colonna dei loghi vale come sulla sua voce."""
@@ -4389,7 +4494,7 @@ class TV(object):
             (_("Donate"), self.dona)])
 
         self.sinistra = tk.Frame(self.root, bg=PANNELLO,
-                                 width=LARGA_BARRA)
+                                 width=300)
         self.sinistra.pack(side="left", fill="y")
         self.sinistra.pack_propagate(False)
         self.cerca = Ricerca(self.sinistra, self.filtra, vuota=_("Search"))
@@ -5252,8 +5357,13 @@ class TV(object):
         aperta = aperta_di("url_tutti", True)
         rete = self.el_liste.insert("", "end", text=" URL", image=self.globi["azzurro"], open=aperta)
         self.chiave_di[rete] = "url_tutti"
-        for cat, etichetta, img in (("radio", "Radio", img_ra), ("musica", "Music streams", img_mu),
-                                    ("film", "Film streams", img_pl), (None, "Temporary", img_ti)):
+        img_pod = icona("podcast", img_ra, dentro=RIDOTTE)
+        img_cam = icona("cam", img_pl, dentro=RIDOTTE)
+        img_vid = icona("video", img_pl, dentro=RIDOTTE)
+        for cat, etichetta, img in (("podcast", "Podcast", img_pod), ("musica", "Music", img_mu),
+                                    ("radio", "Radio", img_ra), ("cam", "IP cam", img_cam),
+                                    ("film", "Film", img_pl), ("video", "Video", img_vid),
+                                    (None, "Temporary", img_ti)):
             lista = self.url_di(cat)
             if not lista:
                 continue
@@ -5850,7 +5960,7 @@ class TV(object):
             self.canali, nome = media_in(c), os.path.basename(c.rstrip(os.sep)) or c
         elif tipo == "url":
             self.canali = [(self.nome_di_url(u), u, None) for u in self.url_di(c)]
-            nome = _({"radio": "Radio", "musica": "Music streams", "film": "Film streams"}.get(c, "Temporary"))
+            nome = _(dict(CATEGORIE_URL).get(c, "Temporary"))
         elif tipo == "cd":
             tracce = dict(cd_audio()).get(c, 0)
             self.canali = [(_("Track %d") % i, "cdda://%s#%d" % (c, i), None)
@@ -5909,8 +6019,7 @@ class TV(object):
         elif iid in getattr(self, "iid_url", {}):
             cat, u = self.iid_url[iid]
             voci = [(_("Rename..."), lambda: self.rinomina_url(u))]
-            altre = [(k, n) for k, n in (("radio", "Radio"), ("musica", "Music streams"),
-                                         ("film", "Film streams"), (None, "Temporary")) if k != cat]
+            altre = [(k, n) for k, n in CATEGORIE_URL + ((None, "Temporary"),) if k != cat]
             voci += [(_("Set cover..."), lambda: self.metti_copertina(u))]
             if os.path.isfile(copertina_url(u)):
                 voci.append((_("Remove cover"), lambda: self.togli_copertina(u)))
@@ -6388,11 +6497,58 @@ class TV(object):
         return " " + nome + ("\n " + sotto if sotto else "")
 
     def poster_attivo(self):
-        return bool(self.cfg.get("poster_epg", False) and self.epg
-                    and not self.media_in_uso and not self.reg_in_uso)
+        if not self.cfg.get("poster_epg", False) or self.reg_in_uso:
+            return False
+        if self.media_in_uso:
+            return self.media_in_uso[0] in ("cartella", "importati")
+        return bool(self.epg)
+
+    def altezza_poster_onda(self):
+        """Riserva lo spazio in alto solo per i video in riproduzione (esclude l'audio)."""
+        if (self.cfg.get("poster_epg", False) or not HA_PIL or self.reg_in_uso):
+            return 0
+        
+        # Se c'è un file multimediale locale in riproduzione
+        if self.file_in_onda:
+            url = self.file_in_onda
+            # Se è un file audio, non riservare alcuno spazio in alto
+            if os.path.splitext(url)[1][1:].lower() in AUDIO:
+                return 0
+            src = poster_film(url) or self.anteprime.get(url) or self.info.get(url, {}).get("poster")
+            return POSTER_H if src else 0
+
+        if self.media_in_uso:
+            return 0
+        
+        url = self.cfg.get("canale")
+        if not url or os.path.isabs(url):
+            return 0
+        for nome, u, ide in self.visti[:3000]:
+            if u == url:
+                break
+        else:
+            return 0
+        if not ide or ide not in self.epg:
+            ide = self.epg_nomi.get(nome_piatto(nome))
+        p = self.programma_di(ide, nome)
+        if not p:
+            return 0
+        src = icona_programma_epg(ide, nome, p)
+        if not src:
+            return 0
+        f = os.path.join(CACHE_POSTER, hashlib.md5(src.encode("utf-8")).hexdigest() + ".jpg")
+        if os.path.isfile(f):
+            return POSTER_H
+        self.scarica_poster(src, f)
+        return 0
+
+    def poster_scaricato(self):
+        self.applica_poster()
+        self.elenco.ridisegna_colonna()
 
     def applica_poster(self):
         self.elenco.metti_poster(POSTER_H if self.poster_attivo() else 0)
+        self.elenco.metti_poster_onda(0 if self.poster_attivo() else self.altezza_poster_onda())
 
     def poster_si_no(self):
         self.cfg["poster_epg"] = not self.cfg.get("poster_epg", False)
@@ -6400,20 +6556,31 @@ class TV(object):
         self.applica_poster()
 
     def poster_di(self, iid, w, h):
-        """Per il riquadro sopra la voce: (immagine Tk o None, titolo del
-        programma in onda). Solo per i canali con la guida."""
+        """Mostra l'anteprima per i canali TV o per i video locali in riproduzione (mai per la musica)."""
         try:
             nome, url, ide = self.visti[int(iid)]
         except (ValueError, IndexError):
             return None, ""
-        if os.path.isabs(url) or not self.epg:
+        
+        if os.path.isabs(url):
+            # Se è un file audio, escludilo categoricamente dal riquadro sopra il titolo
+            if os.path.splitext(url)[1][1:].lower() in AUDIO:
+                return None, ""
+            
+            # Per i video locali, mostra il poster solo se è in corso la riproduzione o se l'opzione è attiva
+            if self.poster_attivo() or url == self.file_in_onda:
+                src = poster_film(url) or self.anteprime.get(url) or self.info.get(url, {}).get("poster")
+                return (self.poster_pronto(src, w, h) if src else None), ""
+            return None, ""
+            
+        if not self.epg:
             return None, ""
         if not ide or ide not in self.epg:
             ide = self.epg_nomi.get(nome_piatto(nome))
         p = self.programma_di(ide, nome)
         if not p:
             return None, ""
-        src = EPG_ICONE.get((ide or "", p[0]))
+        src = icona_programma_epg(ide, nome, p)
         return (self.poster_pronto(src, w, h) if src else None), p[2]
 
     def poster_pronto(self, src, w, h):
@@ -6421,20 +6588,33 @@ class TV(object):
         e' ancora sul disco la si scarica (un thread) e intanto None."""
         if not HA_PIL or w < 10:
             return None
+        locale = os.path.isabs(src)
+        if locale:
+            try:
+                src = "%s|%d" % (src, os.path.getmtime(src))    # se il file cambia, si rilegge
+            except OSError:
+                return None
         chiave = (src, w, h)
         img = self.poster_tk.get(chiave)
         if img is not None:
             return img
         pil = self.poster_pil.get(src)
         if pil is None:
-            f = os.path.join(CACHE_POSTER, hashlib.md5(src.encode("utf-8")).hexdigest() + ".jpg")
+            if locale:
+                f = src.rsplit("|", 1)[0]
+            else:
+                f = os.path.join(CACHE_POSTER, hashlib.md5(src.encode("utf-8")).hexdigest() + ".jpg")
             if not os.path.isfile(f):
-                self.scarica_poster(src, f)
+                if not locale:
+                    self.scarica_poster(src, f)
                 return None
             try:
                 pil = Image.open(f).convert("RGB")
+                pil.thumbnail((600, 600))
             except Exception:
                 return None
+            if len(self.poster_pil) > 150:
+                self.poster_pil.clear()
             self.poster_pil[src] = pil
         k = max(w / float(pil.width), h / float(pil.height))
         im = pil.resize((max(w, int(round(pil.width * k))),
@@ -6470,7 +6650,7 @@ class TV(object):
                 im.thumbnail((600, 600))
                 os.makedirs(CACHE_POSTER, exist_ok=True)
                 im.save(f, "JPEG", quality=85)
-                self.root.after(0, self.elenco.ridisegna_colonna)
+                self.root.after(0, self.poster_scaricato)
             except Exception:
                 pass
         self.poster_thread = False
@@ -6572,6 +6752,7 @@ class TV(object):
                 t = self.testo_riga(nome, url, ide)
                 if self.elenco.item(str(i), "text") != t:
                     self.elenco.item(str(i), text=t)
+        self.applica_poster()
         self.elenco.ridisegna_colonna()
         self.root.after(60000, self.aggiorna_sottotitoli)
 
@@ -6722,6 +6903,7 @@ class TV(object):
         (IN_RIPRODUZIONE), testo e pallino neri. Il colore del canale resta
         su comandi, riga di stato e linea di avanzamento. Quella di prima
         torna normale."""
+        self.applica_poster()
         for i, (nome, u, _l) in enumerate(self.visti[:3000]):
             if not self.elenco.exists(str(i)):
                 continue
@@ -8535,6 +8717,10 @@ class TV(object):
                          daemon=True).start()
 
     def _carica_guide(self, dove_tutte):
+        global EPG_ICONE, EPG_ICONE_NOME
+        # Ogni ricaricamento ricostruisce gli indici delle immagini da tutte
+        # le guide configurate, qualunque sia il loro numero.
+        EPG_ICONE, EPG_ICONE_NOME = {}, {}
         nomi, programmi = {}, {}
         for dove in dove_tutte:
             self.scrivi(_("loading %s...") % self.nome_guida(dove))
@@ -8734,10 +8920,10 @@ class TV(object):
         """La progress, il titolo del programma e la sfumatura dietro ai
         comandi del colore del pallino del canale."""
         self.linea.itemconfig(self.pieno_linea, fill=colore)
-        self.et_titolo.config(fg=colore)
+        self.et_titolo.config(fg=schiarisci(colore))
         self.et_canale.config(fg="#ffffff")
-        self.et_orologio.config(fg=colore)
-        self.et_formato.config(fg=colore)
+        self.et_orologio.config(fg=TESTO)
+        self.et_formato.config(fg=schiarisci(colore))
         self.colore_barra = colore
         self.icona_shuffle()
         self.icona_ripeti()
@@ -9358,15 +9544,14 @@ class TV(object):
         # o Temporary (provvisorio). Proposti il nome ricavato dall'indirizzo
         # e l'ultima scelta; Annulla = non si apre niente
         nomi = self.cfg.setdefault("nomi_url", {})
-        dove = tk.StringVar(value=self.cfg.get("ultima_categoria_url", ""))
+        dove = tk.StringVar(value=self.cfg.get("ultima_categoria_url", "radio"))
 
         def corpo(dentro):
             tk.Label(dentro, text=_("Open URL..."), bg=PANNELLO, fg=TESTO, anchor="w",
                      font=(CARATTERE, 11, "bold", STILE_CARATTERE)).pack(fill="x")
             tk.Label(dentro, text=_("Save in:"), bg=PANNELLO, fg=GRIGIO, anchor="w"
                      ).pack(fill="x", pady=(10, 2))
-            for k, n in (("radio", "Radio"), ("musica", "Music streams"),
-                         ("film", "Film streams"), ("", "Temporary")):
+            for k, n in CATEGORIE_URL + (("", "Temporary"),):
                 tk.Radiobutton(dentro, text=_(n), variable=dove, value=k, anchor="w",
                                bg=PANNELLO, fg=TESTO, selectcolor=CERCA, bd=0,
                                activebackground=PANNELLO, activeforeground="#ffffff",
@@ -9396,7 +9581,7 @@ class TV(object):
 
     def metti_url(self, cat, url):
         """L'indirizzo in cima alla sua categoria, tolto dalle altre."""
-        for c in ("radio", "musica", "film"):
+        for c, _n in CATEGORIE_URL:
             lista = self.cfg.setdefault("url_salvati", {}).setdefault(c, [])
             self.cfg["url_salvati"][c] = [u for u in lista if u != url]
         self.cfg["url_aperti"] = [u for u in self.cfg.get("url_aperti", []) if u != url]
@@ -9576,14 +9761,14 @@ class TV(object):
             self.stato.config(text=nome, image="", compound="left")
             self.et_titolo.config(
                 text=("  " + titolo) if titolo else "",
-                fg=self.colore_barra or TESTO)
+                fg=schiarisci(self.colore_barra) if self.colore_barra else TESTO)
             self.et_ora.config(text=("  " + ora) if titolo and ora else
                                ("  " + ora if ora else ""))
             self.et_seguente.config(
                 text=("  " + etichetta_seguente) if prossimo else "",
                 fg=TESTO)
             self.et_titolo_seguente.config(
-                text=prossimo, fg=self.colore_barra or TESTO)
+                text=prossimo, fg=schiarisci(self.colore_barra) if self.colore_barra else TESTO)
         self.root.after(0, fai)
 
 
