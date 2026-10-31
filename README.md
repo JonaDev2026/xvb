@@ -4,8 +4,6 @@
 
 # XVB Player
 
-⚠️ **Requires an X11 session.** Fully compatible (100%) and optimized for **Ubuntu 24.04 LTS**, **Linux Mint 22**, and **Debian 13**.
-
 A media player built on libmpv. It plays local videos and music, video DVDs, data discs and ISO images, IPTV playlists with a TV guide and recording, and RTSP network security cameras.
 
 ![XVB](preview0.png)
@@ -25,13 +23,6 @@ A media player built on libmpv. It plays local videos and music, video DVDs, dat
 - Controls drawn over the video, semi-transparent, hiding by themselves when only the video is shown
 - Video and audio adjustments, hardware decoding (on by default), tracks, chapters, external subtitles (SRT, ASS/SSA) with delay and size synchronization, screenshots, picture in picture (PiP)
 - Dark interface in English, Italian, Spanish, French, German, Portuguese and Russian, following the system language
-
-## Video Preview
-
-
-
-https://github.com/user-attachments/assets/2cad3eca-50b5-45bd-8429-608c20fdb791
-
 
 
 
