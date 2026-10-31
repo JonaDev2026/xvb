@@ -8,7 +8,7 @@
 
 A media player built on libmpv. It plays local videos and music, video DVDs, data discs and ISO images, IPTV playlists with a TV guide and recording, and RTSP network security cameras.
 
-![XVB](preview5.png)
+![XVB](preview0.png)
 
 ## Features
 
