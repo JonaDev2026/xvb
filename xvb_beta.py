@@ -4737,7 +4737,7 @@ class TV(object):
 
 
         self.el_liste.bind(
-            "<Button-1>", self.clic_indicatore_liste, add="+")
+            "<Button-1>", self.gestisci_click_sidebar, add="+")
         self.el_liste.bind("<KeyPress>", lambda e: setattr(self, "col_mouse", False), add="+")
 
 
@@ -5672,16 +5672,23 @@ class TV(object):
             self.cartelle[k] = cartellina(colore, aperta, dentro=RIDOTTE) or self.vuoto
         return self.cartelle[k]
 
-    def apri_chiudi_cartella(self, aperta):
-        """La cartella cambia faccia quando si apre e quando si chiude."""
-        iid = self.el_liste.focus()
-        if iid in self.cartella_di:
-            self.el_liste.item(iid, image=self.icona_cartella(
-                self.cartella_di[iid], aperta))
+    def apri_chiudi_cartella(self, aperta, iid=None):
+        """Aggiorna icona e stato persistente della cartella."""
+        if iid is None:
+            iid = self.el_liste.focus()
+        if not iid or not self.el_liste.exists(iid):
+            return
+
+        colore = getattr(self, "cartella_di", {}).get(iid)
+        if colore is not None:
+            self.el_liste.item(
+                iid,
+                image=self.icona_cartella(colore, aperta)
+            )
+
         chiave = getattr(self, "chiave_di", {}).get(iid)
         if chiave:
-
-            self.cfg.setdefault("aperte", {})[chiave] = aperta
+            self.cfg.setdefault("aperte", {})[chiave] = bool(aperta)
             scrivi_config(self.cfg)
 
     def lista_selezionata(self):
@@ -6635,27 +6642,30 @@ class TV(object):
         if self.cfg.get("lista") and not self.media_in_uso and not self.reg_in_uso:
             self.segna_in_uso(self.cfg["lista"])
 
-    def clic_indicatore_liste(self, ev):
-        elemento = self.el_liste.identify_element(ev.x, ev.y)
+    def gestisci_click_sidebar(self, ev):
         iid = self.el_liste.identify_row(ev.y)
-
-        if elemento != "Treeitem.indicator":
-            chiave = getattr(self, "chiave_di", {}).get(iid)
-            if chiave in ("iptv", "m3u", "epg"):
-                self.col_mouse = False
-                return "break"
+        if not iid:
             self.col_mouse = True
             return
 
-        if not iid:
+        elemento = self.el_liste.identify_element(ev.x, ev.y)
+
+        if elemento == "Treeitem.indicator":
+            self.col_mouse = False
+            return
+
+        chiave = getattr(self, "chiave_di", {}).get(iid)
+
+        if chiave in ("iptv", "epg", "m3u", "locale", "url_tutti"):
+            self.col_mouse = False
+            aperta = not bool(self.el_liste.item(iid, "open"))
+            self.el_liste.focus(iid)
+            self.el_liste.item(iid, open=aperta)
+            self.apri_chiudi_cartella(aperta, iid)
             return "break"
 
-        self.col_mouse = False
-        aperta = bool(self.el_liste.item(iid, "open"))
-        self.el_liste.focus(iid)
-        self.el_liste.item(iid, open=not aperta)
-        self.apri_chiudi_cartella(not aperta)
-        return "break"
+        self.col_mouse = True
+        return
 
     def clic_liste(self, ev):
         """Un clic nella barra delle liste: se e' sulla x della riga si
