@@ -5715,6 +5715,7 @@ class TV(object):
         if os.path.isabs(f) and not f.startswith(REGISTRAZIONI + os.sep):
             self.cfg["recenti"] = ([f] + [x for x in self.cfg.get("recenti", []) if x != f])[:12]
         self.file_in_onda = f
+        self._lista_in_onda = None
         self.nome = self.nome_in_onda = nome or os.path.splitext(os.path.basename(f))[0]
         self.ide_in_onda = None
         dvd = f.startswith("dvd://")
@@ -7385,6 +7386,7 @@ class TV(object):
             self.file_in_onda = None
         self.et_formato.config(text="")
         self.nome_in_onda, self.ide_in_onda = nome, ide
+        self._lista_in_onda = self.cfg.get("lista")
         self.attesa_da = time.time()
         self.colora_stato(self.colore_canale(nome, url))
         self.indice = next((k for k, c in enumerate(self.visti)
@@ -10049,6 +10051,7 @@ class TV(object):
         errori hanno davanti l'icona icone/error.png (se c'e')."""
         def fai():
             img = self.icona_errore if errore and self.icona_errore else ""
+            self.ic_categoria.config(image="")
             self.et_categoria.config(text="")
             self.stato.config(text=(" " + t) if img else t, image=img, compound="left")
             self.et_titolo.config(text="")
@@ -10082,19 +10085,18 @@ class TV(object):
         categoria = ""
         colore_categoria = TESTO
         url_in_onda = self.cfg.get("canale")
-        if (url_in_onda and not self.file_in_onda and self.nome_in_onda
-                and getattr(self, "fermato", None) is None):
+        lista_in_onda = getattr(self, "_lista_in_onda", None)
+        if (url_in_onda and lista_in_onda and not self.file_in_onda
+                and self.nome_in_onda and getattr(self, "fermato", None) is None):
             mappe = getattr(self, "_mappa_categorie_m3u", {})
             colori = getattr(self, "_colore_categoria_m3u", {})
-            for lista_m3u in self.liste:
-                mappa = mappe.get(lista_m3u)
-                if mappa is None:
-                    mappa = categorie_m3u(lista_m3u, solo_cache=True)
-                    mappe[lista_m3u] = mappa
-                if url_in_onda in mappa:
-                    categoria = mappa[url_in_onda]
-                    colore_categoria = colori.get((lista_m3u, categoria), TESTO)
-                    break
+            mappa = mappe.get(lista_in_onda)
+            if mappa is None:
+                mappa = categorie_m3u(lista_in_onda, solo_cache=True)
+                mappe[lista_in_onda] = mappa
+            categoria = mappa.get(url_in_onda, "")
+            if categoria:
+                colore_categoria = colori.get((lista_in_onda, categoria), TESTO)
 
         def fai():
             icona_categoria = (
