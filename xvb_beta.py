@@ -6236,6 +6236,11 @@ class TV(object):
         """A sinistra, al posto dei canali, i file di quella cartella o
         gli importati. La scansione delle cartelle avviene in background."""
         tipo, c = chiave
+
+        # Invalida le operazioni IPTV ancora in corso.
+        self._xvb_carica_token = getattr(self, "_xvb_carica_token", 0) + 1
+        self._xvb_filtra_token = getattr(self, "_xvb_filtra_token", 0) + 1
+
         self.reg_in_uso, self.media_in_uso = None, chiave
         token = getattr(self, "_media_scan_token", 0) + 1
         self._media_scan_token = token
