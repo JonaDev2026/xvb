@@ -4716,9 +4716,12 @@ class TV(object):
                     self.icona_errore = tk.PhotoImage(file=f_err)
             except Exception:
                 self.icona_errore = None
+        self.ic_categoria = tk.Label(self.riga_stato, text="", anchor="w",
+                                     bg=STATO)
+        self.ic_categoria.pack(side="left", padx=(8, 0), fill="y")
         self.et_categoria = tk.Label(self.riga_stato, text="", anchor="w",
-                                      bg=STATO, fg=TESTO)
-        self.et_categoria.pack(side="left", padx=(8, 0), fill="y")
+                                     bg=STATO, fg=TESTO)
+        self.et_categoria.pack(side="left", fill="y")
         self.stato = tk.Label(self.riga_stato, text=_("ready"), anchor="w",
                               bg=STATO, fg="#ffffff")
         self.stato.pack(side="left", padx=(8, 0), fill="y")
@@ -7568,7 +7571,7 @@ class TV(object):
             "pt": "faltam %d min",
             "ru": "осталось %d мин.",
         }.get(LINGUA, "%d min remaining") % mancanti
-        fascia = "%s/%s - %s" % (
+        fascia = "%s/%s   %s" % (
             time.strftime("%H:%M", time.localtime(inizio)),
             time.strftime("%H:%M", time.localtime(fine)), restano)
         return (self.nome_canale(), titolo or "?", fascia)
@@ -10055,9 +10058,9 @@ class TV(object):
                     break
 
         etichetta_seguente = {
-            "it": "A seguire: ", "en": "Next: ", "es": "A continuación: ",
-            "fr": "À suivre : ", "de": "Als Nächstes: ",
-            "pt": "A seguir: ", "ru": "Далее: ",
+            "it": "a seguire: ", "en": "Next: ", "es": "a continuación: ",
+            "fr": "À suivre : ", "de": "als Nächstes: ",
+            "pt": "a seguir: ", "ru": "Далее: ",
         }.get(LINGUA, "Next: ")
 
         categoria_attiva = getattr(self, "_categoria_m3u_attiva", None)
@@ -10069,12 +10072,16 @@ class TV(object):
                 categoria_attiva, TESTO)
 
         def fai():
+            icona_categoria = (
+                self.icona_cartella(colore_categoria, False)
+                if categoria else "")
+            self.ic_categoria.config(image=icona_categoria)
             self.et_categoria.config(
-                text=("📁 " + categoria + " – ") if categoria else "",
-                fg=colore_categoria)
+                text=(categoria + "") if categoria else "",
+                fg=TESTO)
             self.stato.config(text=nome, image="", compound="left")
             self.et_titolo.config(
-                text=("  " + titolo) if titolo else "",
+                text=(" " + titolo) if titolo else "",
                 fg=schiarisci(self.colore_barra) if self.colore_barra else TESTO)
             self.et_ora.config(text=("  " + ora) if titolo and ora else
                                ("  " + ora if ora else ""))
