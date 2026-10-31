@@ -4701,13 +4701,7 @@ class TV(object):
 
 
         self.el_liste.bind(
-            "<Button-1>",
-            lambda e: (
-                setattr(self, "col_mouse", True),
-                setattr(self, "_clic_indicatore_liste",
-                        self.el_liste.identify_element(e.x, e.y) == "Treeitem.indicator"),
-                self.root.after(250, lambda: setattr(self, "_clic_indicatore_liste", False))),
-            add="+")
+            "<Button-1>", self.clic_indicatore_liste, add="+")
         self.el_liste.bind("<KeyPress>", lambda e: setattr(self, "col_mouse", False), add="+")
 
 
@@ -5813,38 +5807,70 @@ class TV(object):
 
     def carica(self, dove):
         self.reg_in_uso = self.media_in_uso = None
-
-
         self.cfg["lista"] = dove
         scrivi_config(self.cfg)
         self.scrivi(_("loading %s...") % nome_di(dove))
-        threading.Thread(target=self._carica, args=(dove,), daemon=True).start()
 
-    def _carica(self, dove):
-        try:
-            canali = leggi_lista(dove)
-        except Exception as e:
-            self.scrivi(_("cannot read %s: %s") % (nome_di(dove), e), errore=True)
+        token = getattr(self, "_xvb_carica_token", 0) + 1
+        self._xvb_carica_token = token
+
+        def lavora():
+            try:
+                canali = leggi_lista(dove)
+                try:
+                    categorie = categorie_m3u(dove, solo_cache=True)
+                except Exception:
+                    categorie = {}
+                risultato = (canali, categorie, None)
+            except Exception as e:
+                risultato = (None, None, str(e))
+
+            try:
+                self.root.after(
+                    0, lambda: self._xvb_carica_completato(
+                        token, dove, risultato))
+            except Exception:
+                pass
+
+        threading.Thread(
+            target=lavora,
+            name="XVB-IPTV-Loader",
+            daemon=True
+        ).start()
+
+    def _xvb_carica_completato(self, token, dove, risultato):
+        if token != getattr(self, "_xvb_carica_token", None):
             return
+
+        canali, categorie, errore = risultato
+
+        if errore:
+            self.scrivi(
+                _("cannot read %s: %s") % (nome_di(dove), errore),
+                errore=True
+            )
+            return
+
         self.canali = canali
-        try:
-            self._mappa_categorie_m3u[dove] = categorie_m3u(
-                dove, solo_cache=True)
-        except Exception:
-            pass
+        self._mappa_categorie_m3u[dove] = categorie or {}
         self.cfg["lista"] = dove
         scrivi_config(self.cfg)
-        self.root.after(0, self.filtra)
-        self.root.after(0, self.segna_in_uso, dove)
-        self.scrivi(_("%s - %d channels") % (nome_di(dove), len(canali)))
 
+        self.filtra()
+        self.segna_in_uso(dove)
+        self.scrivi(
+            _("%s - %d channels") % (nome_di(dove), len(canali))
+        )
 
         ultimo = self.cfg.get("canale")
         if ultimo:
             for nome, url, ide in canali:
                 if url == ultimo:
-                    self.root.after(300, lambda n=nome, u=url, i=ide:
-                                    self.ricorda_canale(n, u, i))
+                    self.root.after(
+                        300,
+                        lambda n=nome, u=url, i=ide:
+                            self.ricorda_canale(n, u, i)
+                    )
                     break
 
     def ricorda_canale(self, nome, url, ide):
@@ -6550,6 +6576,21 @@ class TV(object):
         if self.cfg.get("lista") and not self.media_in_uso and not self.reg_in_uso:
             self.segna_in_uso(self.cfg["lista"])
 
+    def clic_indicatore_liste(self, ev):
+        elemento = self.el_liste.identify_element(ev.x, ev.y)
+        if elemento != "Treeitem.indicator":
+            self.col_mouse = True
+            return
+
+        iid = self.el_liste.identify_row(ev.y)
+        if not iid:
+            return "break"
+
+        self.col_mouse = False
+        aperta = bool(self.el_liste.item(iid, "open"))
+        self.el_liste.item(iid, open=not aperta)
+        return "break"
+
     def clic_liste(self, ev):
         """Un clic nella barra delle liste: se e' sulla x della riga si
         toglie quella cosa (dopo conferma), senza selezionarla."""
@@ -6700,6 +6741,114 @@ class TV(object):
 
 
     def filtra(self):
+        if self.canali and self.media_in_uso is None and self.reg_in_uso is None:
+            self._filtra_iptv_async()
+            return
+
+        self._filtra_originale()
+
+    def _filtra_iptv_async(self):
+        token = getattr(self, "_xvb_filtra_token", 0) + 1
+        self._xvb_filtra_token = token
+
+        canali = list(self.canali)
+        query = self.cerca.get().lower()
+        nomi = dict(self.cfg.get("nomi_canali", {}))
+        categoria = getattr(self, "_categoria_m3u_attiva", None)
+
+        mappa = {}
+        if categoria and categoria[0] == self.cfg.get("lista"):
+            mappa = dict(
+                getattr(self, "_mappa_categorie_m3u", {}).get(
+                    categoria[0], {}
+                )
+            )
+
+        self._render_token = getattr(self, "_render_token", 0) + 1
+        self.elenco.delete(*self.elenco.get_children())
+        self.applica_poster()
+        self._render_colori = []
+        self._render_adesso = self.file_in_onda or self.cfg.get("canale")
+
+        def lavora():
+            try:
+                posti = {
+                    url: i
+                    for i, (_nome, url, _ide) in enumerate(canali)
+                    if os.path.isabs(url)
+                }
+
+                if query:
+                    filtrati = []
+                    for canale in canali:
+                        nome, url, _ide = canale
+                        testo = nome + "\\n" + nomi.get(url, "")
+
+                        if os.path.isabs(url):
+                            try:
+                                titolo, sotto = self.righe_file(url, nome)
+                                testo += "\\n" + titolo + "\\n" + sotto
+                            except Exception:
+                                pass
+
+                        if query in testo.lower():
+                            filtrati.append(canale)
+                else:
+                    filtrati = canali
+
+                if categoria and categoria[0] == self.cfg.get("lista"):
+                    filtrati = [
+                        c for c in filtrati
+                        if mappa.get(c[1], "Altri") == categoria[1]
+                    ]
+
+                risultato = (filtrati, posti, None)
+
+            except Exception as e:
+                risultato = (None, None, str(e))
+
+            try:
+                self.root.after(
+                    0,
+                    lambda: self._filtra_iptv_completato(token, risultato)
+                )
+            except Exception:
+                pass
+
+        threading.Thread(
+            target=lavora,
+            name="XVB-IPTV-Filter",
+            daemon=True
+        ).start()
+
+    def _filtra_iptv_completato(self, token, risultato):
+        if token != getattr(self, "_xvb_filtra_token", None):
+            return
+
+        filtrati, posti, errore = risultato
+
+        if errore:
+            self.scrivi(
+                _("Error filtering channels: %s") % errore,
+                errore=True
+            )
+            return
+
+        self.visti = filtrati
+        self.posto_file = posti
+
+        if not self.cerca.get():
+            self.indice_fresco = False
+
+        token_render = getattr(self, "_render_token", 0) + 1
+        self._render_token = token_render
+        self._render_colori = []
+        self._render_adesso = self.file_in_onda or self.cfg.get("canale")
+
+        self._disegna_blocco(token_render, 0)
+
+    def _filtra_originale(self):
+
         """Filtra tutti i contenuti e li disegna a piccoli blocchi.
 
         La ricerca lavora sull'intera libreria; soltanto la costruzione
