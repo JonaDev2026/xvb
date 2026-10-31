@@ -4667,7 +4667,14 @@ class TV(object):
         self.el_liste.bind("<Button-3>", self.menu_liste)
 
 
-        self.el_liste.bind("<Button-1>", lambda e: setattr(self, "col_mouse", True), add="+")
+        self.el_liste.bind(
+            "<Button-1>",
+            lambda e: (
+                setattr(self, "col_mouse", True),
+                setattr(self, "_clic_indicatore_liste",
+                        self.el_liste.identify_element(e.x, e.y) == "Treeitem.indicator"),
+                self.root.after(250, lambda: setattr(self, "_clic_indicatore_liste", False))),
+            add="+")
         self.el_liste.bind("<KeyPress>", lambda e: setattr(self, "col_mouse", False), add="+")
 
 
@@ -5637,7 +5644,8 @@ class TV(object):
         d = self.lista_selezionata()
         if d:
             iid_playlist = self.iid_di.get(d)
-            if iid_playlist and self.el_liste.exists(iid_playlist):
+            if (iid_playlist and self.el_liste.exists(iid_playlist)
+                    and not getattr(self, "_clic_indicatore_liste", False)):
                 self.el_liste.item(iid_playlist, open=True)
                 self.cfg.setdefault("aperte", {})["m3u-playlist:" + d] = True
                 scrivi_config(self.cfg)
@@ -5777,7 +5785,6 @@ class TV(object):
         scrivi_config(self.cfg)
         self.root.after(0, self.filtra)
         self.root.after(0, self.segna_in_uso, dove)
-        self.root.after(0, self.rifai_albero)
         self.scrivi(_("%s - %d channels") % (nome_di(dove), len(canali)))
 
 
@@ -10074,8 +10081,9 @@ class TV(object):
 
         categoria = ""
         colore_categoria = TESTO
-        url_in_onda = self.file_in_onda or self.cfg.get("canale")
-        if url_in_onda and not self.file_in_onda:
+        url_in_onda = self.cfg.get("canale")
+        if (url_in_onda and not self.file_in_onda and self.nome_in_onda
+                and getattr(self, "fermato", None) is None):
             mappe = getattr(self, "_mappa_categorie_m3u", {})
             colori = getattr(self, "_colore_categoria_m3u", {})
             for lista_m3u in self.liste:
