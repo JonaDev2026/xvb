@@ -15,6 +15,14 @@ for f in xvb.py icone icon.png fonts; do
     }
 done
 
+# Le icone delle categorie Podcast e Cam-IP sono risorse obbligatorie.
+for f in icone/mic.png icone/cam.png icone/tv.png icone/m3u.png; do
+    [ -f "$f" ] || {
+        echo "ERRORE: manca l'icona $f"
+        exit 1
+    }
+done
+
 # Controllo dei font Google Sans
 for f in \
     fonts/static/GoogleSans-Regular.ttf \
@@ -99,7 +107,7 @@ cat > "$D/usr/share/metainfo/xvb.metainfo.xml" <<FINE
   <screenshots>
     <screenshot type="default">
       <caption>XVB Player Main Window</caption>
-      <image type="source">https://raw.githubusercontent.com/JonaDev2026/xvb/main/preview.png</image>
+      <image type="source">https://raw.githubusercontent.com/JonaDev2026/xvb/main/preview0.png</image>
     </screenshot>
   </screenshots>
 </component>
