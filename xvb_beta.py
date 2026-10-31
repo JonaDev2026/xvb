@@ -1646,6 +1646,7 @@ CATEGORIE_URL = (("podcast", "Podcast"), ("musica", "Music"), ("radio", "Radio")
 
 CACHE_LISTE = os.path.join(CASA, ".cache", "xvb", "liste")
 LISTA_VECCHIA = 6 * 3600
+_CACHE_PARSED_LOCK = threading.RLock()
 
 
 def copia_lista_url(url, aggiorna=True):
@@ -1670,65 +1671,97 @@ def copia_lista_url(url, aggiorna=True):
     return f
 
 
-def leggi_lista(f, solo_cache=False):
-    """I canali di una lista: (nome, indirizzo, tvg-id o None). Il tvg-id
-    serve a trovare il canale nella guida. Se f e' un url si legge la
-    copia in cache (scaricandola se serve; con solo_cache mai)."""
+def _percorso_lista(f, solo_cache=False):
     if re.match(r"https?://", f, re.I):
-        if solo_cache:
-            f = os.path.join(CACHE_LISTE, hashlib.md5(f.encode()).hexdigest() + ".m3u")
-            if not os.path.isfile(f):
-                return []
-        else:
-            f = copia_lista_url(f)
-    righe = open(f, encoding="utf-8", errors="ignore").read().splitlines()
-    fuori, nome, ide, logo, lic = [], None, None, None, None
-    for riga in righe:
-        riga = riga.strip()
-        if riga.startswith("#EXTINF"):
-            m = re.match(r'#EXTINF:[^,"]*(?:"[^"]*"[^,"]*)*,(.*)$', riga)
-            nome = (m.group(1) if m else riga.split(",", 1)[-1]).strip() or _("unnamed")
-            m = re.search(r'tvg-id="([^"]*)"', riga)
-            ide = m.group(1).strip() if m else None
-            m = re.search(r'tvg-logo="([^"]+)"', riga)
-            logo = m.group(1).strip() if m else None
-            m = re.search(r'license-type="([^"]*)"', riga)
-            d = re.search(r'license-details="([^"]*)"', riga)
-            lic = d.group(1).strip() if m and d and m.group(1).strip().lower() == "clearkey" else None
-        elif riga and not riga.startswith("#"):
-            fuori.append((nome or riga, riga, ide or None))
-            if logo:
-                LOGHI[riga] = logo
-            if lic:
-                CHIAVI[riga] = lic
-            nome, ide, logo, lic = None, None, None, None
-    return fuori
+        percorso = os.path.join(CACHE_LISTE, hashlib.md5(f.encode()).hexdigest() + ".m3u")
+        if not os.path.isfile(percorso):
+            if solo_cache:
+                return None
+            percorso = copia_lista_url(f)
+        return percorso
+    return f if os.path.isfile(f) else None
 
 
-def categorie_m3u(f, solo_cache=True):
-    # Mappa URL -> group-title; i canali senza gruppo finiscono in Altri.
-    if re.match(r"https?://", f, re.I):
-        if solo_cache:
-            f = os.path.join(CACHE_LISTE, hashlib.md5(f.encode()).hexdigest() + ".m3u")
-            if not os.path.isfile(f):
-                return {}
-        else:
-            f = copia_lista_url(f)
-    risultato = {}
-    categoria = ""
+def _cache_lista_valida(f):
+    percorso = _percorso_lista(f, solo_cache=True)
+    if not percorso:
+        return None
+    chiave = hashlib.sha256(f.encode("utf-8", "replace")).hexdigest()
+    archivio = os.path.join(CACHE_LISTE, "parsed", chiave + ".json")
     try:
-        with open(f, encoding="utf-8", errors="ignore") as sorgente:
+        st = os.stat(percorso)
+        with open(archivio, "r", encoding="utf-8") as o:
+            dati = json.load(o)
+        if (dati.get("versione") == 1
+                and dati.get("percorso") == os.path.abspath(percorso)
+                and dati.get("mtime_ns") == st.st_mtime_ns
+                and dati.get("dimensione") == st.st_size):
+            return dati
+    except (OSError, ValueError, TypeError):
+        return None
+    return None
+
+
+def _dati_lista(f, solo_cache=False):
+    percorso = _percorso_lista(f, solo_cache=solo_cache)
+    if not percorso:
+        return {"canali": [], "categorie": {}, "loghi": {}, "chiavi": {}}
+    os.makedirs(os.path.join(CACHE_LISTE, "parsed"), exist_ok=True)
+    chiave = hashlib.sha256(f.encode("utf-8", "replace")).hexdigest()
+    archivio = os.path.join(CACHE_LISTE, "parsed", chiave + ".json")
+    with _CACHE_PARSED_LOCK:
+        dati = _cache_lista_valida(f)
+        if dati is not None:
+            return dati
+        st = os.stat(percorso)
+        canali, categorie, loghi, chiavi = [], {}, {}, {}
+        nome = ide = logo = lic = None
+        categoria = ""
+        with open(percorso, encoding="utf-8", errors="ignore") as sorgente:
             for riga in sorgente:
                 riga = riga.strip()
                 if riga.startswith("#EXTINF"):
+                    m = re.match(r'#EXTINF:[^,"]*(?:"[^"]*"[^,]*)*,(.*)$', riga)
+                    nome = (m.group(1) if m else riga.split(",", 1)[-1]).strip() or _("unnamed")
+                    m = re.search(r'tvg-id="([^"]*)"', riga)
+                    ide = m.group(1).strip() if m else None
+                    m = re.search(r'tvg-logo="([^"]+)"', riga)
+                    logo = m.group(1).strip() if m else None
+                    m = re.search(r'license-type="([^"]*)"', riga)
+                    d = re.search(r'license-details="([^"]*)"', riga)
+                    lic = d.group(1).strip() if m and d and m.group(1).strip().lower() == "clearkey" else None
                     m = re.search(r'group-title="([^"]*)"', riga, re.I)
-                    categoria = (m.group(1).strip() if m else "") or "Altri"
+                    categoria = m.group(1).strip() if m else ""
                 elif riga and not riga.startswith("#"):
-                    risultato[riga] = categoria or "Altri"
+                    canali.append([nome or riga, riga, ide or None])
+                    categorie[riga] = categoria
+                    if logo:
+                        loghi[riga] = logo
+                    if lic:
+                        chiavi[riga] = lic
+                    nome = ide = logo = lic = None
                     categoria = ""
-    except (OSError, UnicodeError):
-        return {}
-    return risultato
+        dati = {"versione": 1, "percorso": os.path.abspath(percorso),
+                "mtime_ns": st.st_mtime_ns, "dimensione": st.st_size,
+                "canali": canali, "categorie": categorie,
+                "loghi": loghi, "chiavi": chiavi}
+        temporaneo = archivio + ".tmp"
+        with open(temporaneo, "w", encoding="utf-8") as o:
+            json.dump(dati, o, ensure_ascii=False, separators=(",", ":"))
+        os.replace(temporaneo, archivio)
+        return dati
+
+
+def leggi_lista(f, solo_cache=False):
+    dati = _dati_lista(f, solo_cache=solo_cache)
+    LOGHI.update(dati.get("loghi", {}))
+    CHIAVI.update(dati.get("chiavi", {}))
+    return [tuple(c) for c in dati.get("canali", [])]
+
+
+def categorie_m3u(f, solo_cache=True):
+    dati = _dati_lista(f, solo_cache=solo_cache)
+    return {url: (categoria or "Altri") for url, categoria in dati.get("categorie", {}).items()}
 
 
 LOGHI = {}
@@ -5204,6 +5237,19 @@ class TV(object):
     def rifai_albero(self):
         """Solo la barra delle liste, senza aprirne nessuna."""
         self.liste = self.tutte_le_liste()
+        if not getattr(self, "_cache_liste_avviata", False):
+            self._cache_liste_avviata = True
+            def prepara_cache_liste():
+                for sorgente_lista in tuple(self.liste):
+                    try:
+                        leggi_lista(sorgente_lista)
+                    except Exception:
+                        pass
+                try:
+                    self.root.after(0, self.rifai_albero)
+                except Exception:
+                    pass
+            threading.Thread(target=prepara_cache_liste, daemon=True).start()
         self.el_liste.delete(*self.el_liste.get_children())
         self.iid_di = {}
         self.iid_epg = {}
@@ -5294,7 +5340,10 @@ class TV(object):
         indice_colore_categoria = [0]
 
         def aggiungi_categorie_playlist(d, iid_playlist):
-            mappa = categorie_m3u(d, solo_cache=True)
+            dati_cache = _cache_lista_valida(d)
+            mappa = ({url: (categoria or "Altri")
+                      for url, categoria in dati_cache.get("categorie", {}).items()}
+                     if dati_cache else {})
             self._mappa_categorie_m3u[d] = mappa
             nomi = sorted(set(mappa.values()), key=str.casefold)
             for nome_categoria in nomi:
@@ -5538,7 +5587,8 @@ class TV(object):
                  [d for d in self.liste if d != ricordata]
         for d in ordine:
             try:
-                if any(url == canale for _n, url, _i in leggi_lista(d, solo_cache=True)):
+                dati_cache = _cache_lista_valida(d)
+                if dati_cache and any(c[1] == canale for c in dati_cache.get("canali", [])):
                     return d
             except Exception:
                 continue
@@ -10049,11 +10099,16 @@ class TV(object):
     def scrivi(self, t, errore=False):
         """Un messaggio nella riga di stato: titolo e orario si tolgono. Gli
         errori hanno davanti l'icona icone/error.png (se c'e')."""
+        if (getattr(self, "fermato", None) is None
+                and (getattr(self, "file_in_onda", None)
+                     or (self.cfg.get("canale") and getattr(self, "nome_in_onda", None)))):
+            self.scrivi_riga()
+            return
         def fai():
             img = self.icona_errore if errore and self.icona_errore else ""
             self.ic_categoria.config(image="")
             self.et_categoria.config(text="")
-            self.stato.config(text=(" " + t) if img else t, image=img, compound="left")
+            self.stato.config(text=(" " + t) if img else t, image=(img if getattr(self, "categoria_in_stato", False) else ""), compound="left")
             self.et_titolo.config(text="")
             self.et_ora.config(text="")
             self.et_seguente.config(text="")
