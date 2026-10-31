@@ -1646,6 +1646,8 @@ CATEGORIE_URL = (("podcast", "Podcast"), ("musica", "Music"), ("radio", "Radio")
 
 CACHE_LISTE = os.path.join(CASA, ".cache", "xvb", "liste")
 LISTA_VECCHIA = 6 * 3600
+_CACHE_PARSED_LOCK = threading.RLock()
+_CACHE_PARSED_MEMORIA = {}
 
 
 def copia_lista_url(url, aggiorna=True):
@@ -1670,39 +1672,132 @@ def copia_lista_url(url, aggiorna=True):
     return f
 
 
-def leggi_lista(f, solo_cache=False):
-    """I canali di una lista: (nome, indirizzo, tvg-id o None). Il tvg-id
-    serve a trovare il canale nella guida. Se f e' un url si legge la
-    copia in cache (scaricandola se serve; con solo_cache mai)."""
+def _percorso_lista(f, solo_cache=False):
     if re.match(r"https?://", f, re.I):
-        if solo_cache:
-            f = os.path.join(CACHE_LISTE, hashlib.md5(f.encode()).hexdigest() + ".m3u")
-            if not os.path.isfile(f):
-                return []
-        else:
-            f = copia_lista_url(f)
-    righe = open(f, encoding="utf-8", errors="ignore").read().splitlines()
-    fuori, nome, ide, logo, lic = [], None, None, None, None
-    for riga in righe:
-        riga = riga.strip()
-        if riga.startswith("#EXTINF"):
-            m = re.match(r'#EXTINF:[^,"]*(?:"[^"]*"[^,"]*)*,(.*)$', riga)
-            nome = (m.group(1) if m else riga.split(",", 1)[-1]).strip() or _("unnamed")
-            m = re.search(r'tvg-id="([^"]*)"', riga)
-            ide = m.group(1).strip() if m else None
-            m = re.search(r'tvg-logo="([^"]+)"', riga)
-            logo = m.group(1).strip() if m else None
-            m = re.search(r'license-type="([^"]*)"', riga)
-            d = re.search(r'license-details="([^"]*)"', riga)
-            lic = d.group(1).strip() if m and d and m.group(1).strip().lower() == "clearkey" else None
-        elif riga and not riga.startswith("#"):
-            fuori.append((nome or riga, riga, ide or None))
-            if logo:
-                LOGHI[riga] = logo
-            if lic:
-                CHIAVI[riga] = lic
-            nome, ide, logo, lic = None, None, None, None
-    return fuori
+        percorso = os.path.join(CACHE_LISTE, hashlib.md5(f.encode()).hexdigest() + ".m3u")
+        if not os.path.isfile(percorso):
+            if solo_cache:
+                return None
+            percorso = copia_lista_url(f)
+        return percorso
+    return f if os.path.isfile(f) else None
+
+
+def _cache_lista_memoria_valida(f):
+    percorso = _percorso_lista(f, solo_cache=True)
+    if not percorso:
+        return None
+    try:
+        st = os.stat(percorso)
+        with _CACHE_PARSED_LOCK:
+            voce = _CACHE_PARSED_MEMORIA.get(f)
+            if (voce
+                    and voce[0] == os.path.abspath(percorso)
+                    and voce[1] == st.st_mtime_ns
+                    and voce[2] == st.st_size):
+                return voce[3]
+    except OSError:
+        pass
+    return None
+
+
+def _cache_lista_valida(f):
+    dati = _cache_lista_memoria_valida(f)
+    if dati is not None:
+        return dati
+
+    percorso = _percorso_lista(f, solo_cache=True)
+    if not percorso:
+        return None
+    chiave = hashlib.sha256(f.encode("utf-8", "replace")).hexdigest()
+    archivio = os.path.join(CACHE_LISTE, "parsed", chiave + ".json")
+    try:
+        st = os.stat(percorso)
+        with open(archivio, "r", encoding="utf-8") as o:
+            dati = json.load(o)
+        if (dati.get("versione") == 1
+                and dati.get("percorso") == os.path.abspath(percorso)
+                and dati.get("mtime_ns") == st.st_mtime_ns
+                and dati.get("dimensione") == st.st_size):
+            with _CACHE_PARSED_LOCK:
+                _CACHE_PARSED_MEMORIA[f] = (
+                    os.path.abspath(percorso),
+                    st.st_mtime_ns,
+                    st.st_size,
+                    dati
+                )
+            return dati
+    except (OSError, ValueError, TypeError):
+        return None
+    return None
+
+
+def _dati_lista(f, solo_cache=False):
+    percorso = _percorso_lista(f, solo_cache=solo_cache)
+    if not percorso:
+        return {"canali": [], "categorie": {}, "loghi": {}, "chiavi": {}}
+    os.makedirs(os.path.join(CACHE_LISTE, "parsed"), exist_ok=True)
+    chiave = hashlib.sha256(f.encode("utf-8", "replace")).hexdigest()
+    archivio = os.path.join(CACHE_LISTE, "parsed", chiave + ".json")
+    with _CACHE_PARSED_LOCK:
+        dati = _cache_lista_valida(f)
+        if dati is not None:
+            return dati
+        st = os.stat(percorso)
+        canali, categorie, loghi, chiavi = [], {}, {}, {}
+        nome = ide = logo = lic = None
+        categoria = ""
+        with open(percorso, encoding="utf-8", errors="ignore") as sorgente:
+            for riga in sorgente:
+                riga = riga.strip()
+                if riga.startswith("#EXTINF"):
+                    m = re.match(r'#EXTINF:[^,"]*(?:"[^"]*"[^,]*)*,(.*)$', riga)
+                    nome = (m.group(1) if m else riga.split(",", 1)[-1]).strip() or _("unnamed")
+                    m = re.search(r'tvg-id="([^"]*)"', riga)
+                    ide = m.group(1).strip() if m else None
+                    m = re.search(r'tvg-logo="([^"]+)"', riga)
+                    logo = m.group(1).strip() if m else None
+                    m = re.search(r'license-type="([^"]*)"', riga)
+                    d = re.search(r'license-details="([^"]*)"', riga)
+                    lic = d.group(1).strip() if m and d and m.group(1).strip().lower() == "clearkey" else None
+                    m = re.search(r'group-title="([^"]*)"', riga, re.I)
+                    categoria = m.group(1).strip() if m else ""
+                elif riga and not riga.startswith("#"):
+                    canali.append([nome or riga, riga, ide or None])
+                    categorie[riga] = categoria
+                    if logo:
+                        loghi[riga] = logo
+                    if lic:
+                        chiavi[riga] = lic
+                    nome = ide = logo = lic = None
+                    categoria = ""
+        dati = {"versione": 1, "percorso": os.path.abspath(percorso),
+                "mtime_ns": st.st_mtime_ns, "dimensione": st.st_size,
+                "canali": canali, "categorie": categorie,
+                "loghi": loghi, "chiavi": chiavi}
+        temporaneo = archivio + ".tmp"
+        with open(temporaneo, "w", encoding="utf-8") as o:
+            json.dump(dati, o, ensure_ascii=False, separators=(",", ":"))
+        os.replace(temporaneo, archivio)
+        _CACHE_PARSED_MEMORIA[f] = (
+            os.path.abspath(percorso),
+            st.st_mtime_ns,
+            st.st_size,
+            dati
+        )
+        return dati
+
+
+def leggi_lista(f, solo_cache=False):
+    dati = _dati_lista(f, solo_cache=solo_cache)
+    LOGHI.update(dati.get("loghi", {}))
+    CHIAVI.update(dati.get("chiavi", {}))
+    return [tuple(c) for c in dati.get("canali", [])]
+
+
+def categorie_m3u(f, solo_cache=True):
+    dati = _dati_lista(f, solo_cache=solo_cache)
+    return {url: (categoria or "Altri") for url, categoria in dati.get("categorie", {}).items()}
 
 
 LOGHI = {}
@@ -4641,7 +4736,8 @@ class TV(object):
         self.el_liste.bind("<Button-3>", self.menu_liste)
 
 
-        self.el_liste.bind("<Button-1>", lambda e: setattr(self, "col_mouse", True), add="+")
+        self.el_liste.bind(
+            "<Button-1>", self.gestisci_click_sidebar, add="+")
         self.el_liste.bind("<KeyPress>", lambda e: setattr(self, "col_mouse", False), add="+")
 
 
@@ -4690,14 +4786,20 @@ class TV(object):
                     self.icona_errore = tk.PhotoImage(file=f_err)
             except Exception:
                 self.icona_errore = None
+        self.ic_categoria = tk.Label(self.riga_stato, text="", anchor="w",
+                                     bg=STATO)
+        self.ic_categoria.pack(side="left", padx=(8, 0), fill="y")
+        self.et_categoria = tk.Label(self.riga_stato, text="", anchor="w",
+                                     bg=STATO, fg=TESTO)
+        self.et_categoria.pack(side="left", fill="y")
         self.stato = tk.Label(self.riga_stato, text=_("ready"), anchor="w",
-                              bg=STATO, fg="#ffffff")
+                              bg=STATO, fg=TESTO)
         self.stato.pack(side="left", padx=(8, 0), fill="y")
 
         self.et_canale = self.stato
         self.et_titolo = tk.Label(self.riga_stato, text="", bg=STATO, fg=TESTO)
         self.et_titolo.pack(side="left", fill="y")
-        self.et_ora = tk.Label(self.riga_stato, text="", bg=STATO, fg="#ffffff")
+        self.et_ora = tk.Label(self.riga_stato, text="", bg=STATO, fg=TESTO)
         self.et_ora.pack(side="left", fill="y")
 
         self.et_seguente = tk.Label(self.riga_stato, text="", bg=STATO, fg=TESTO)
@@ -5165,9 +5267,25 @@ class TV(object):
     def rifai_albero(self):
         """Solo la barra delle liste, senza aprirne nessuna."""
         self.liste = self.tutte_le_liste()
+        if not getattr(self, "_cache_liste_avviata", False):
+            self._cache_liste_avviata = True
+            def prepara_cache_liste():
+                for sorgente_lista in tuple(self.liste):
+                    try:
+                        leggi_lista(sorgente_lista)
+                    except Exception:
+                        pass
+                try:
+                    self.root.after(0, self.rifai_albero)
+                except Exception:
+                    pass
+            threading.Thread(target=prepara_cache_liste, daemon=True).start()
         self.el_liste.delete(*self.el_liste.get_children())
         self.iid_di = {}
         self.iid_epg = {}
+        self.iid_categoria_m3u = {}
+        self._mappa_categorie_m3u = {}
+        self._colore_categoria_m3u = {}
         adesso = self.cfg.get("lista")
 
         posto = [0]
@@ -5188,10 +5306,15 @@ class TV(object):
                 if colore not in self.globi:
                     self.globi[colore] = globo(colore, dentro=RIDOTTE) or self.vuoto
                 img = self.globi[colore]
-            iid = self.el_liste.insert(padre, "end", text=" " + nome_di(d),
-                                       image=img, values=("\u2715",),
-                                       tags=("usata",) if d == adesso else ())
+            chiave_playlist = "m3u-playlist:" + d
+            iid = self.el_liste.insert(
+                padre, "end", text=" " + nome_di(d),
+                image=img, values=("\u2715",),
+                open=aperta_di(chiave_playlist, False),
+                tags=("usata",) if d == adesso else ())
             self.iid_di[d] = iid
+            self.chiave_di[iid] = chiave_playlist
+            return iid
 
         self.cartella_di = {}
 
@@ -5243,6 +5366,32 @@ class TV(object):
             image=self.icona_cartella(m3u_colore, m3u_aperta), open=m3u_aperta)
         self.cartella_di[cartella_m3u] = m3u_colore
         self.chiave_di[cartella_m3u] = "m3u"
+
+        indice_colore_categoria = [0]
+
+        def aggiungi_categorie_playlist(d, iid_playlist):
+            dati_cache = _cache_lista_valida(d)
+            mappa = ({url: (categoria or "Altri")
+                      for url, categoria in dati_cache.get("categorie", {}).items()}
+                     if dati_cache else {})
+            self._mappa_categorie_m3u[d] = mappa
+            nomi = sorted(set(mappa.values()), key=str.casefold)
+            for nome_categoria in nomi:
+                colore = PALLINI[indice_colore_categoria[0] % len(PALLINI)]
+                indice_colore_categoria[0] += 1
+                self._colore_categoria_m3u[(d, nome_categoria)] = colore
+                aperta_categoria = aperta_di(
+                    "m3u-cat:" + d + ":" + nome_categoria, False)
+                iid_categoria = self.el_liste.insert(
+                    iid_playlist, "end",
+                    text=" " + nome_categoria,
+                    image=self.icona_cartella(colore, aperta_categoria),
+                    open=aperta_categoria,
+                    tags=("usata",) if getattr(self, "_categoria_m3u_attiva", None) == (d, nome_categoria) else ("sotto",))
+                self.cartella_di[iid_categoria] = colore
+                self.chiave_di[iid_categoria] = (
+                    "m3u-cat:" + d + ":" + nome_categoria)
+                self.iid_categoria_m3u[iid_categoria] = (d, nome_categoria)
 
 
         self.iid_reg = {}
@@ -5428,7 +5577,8 @@ class TV(object):
             gia.update(dentro)
         for d in self.liste:
             if d not in gia:
-                riga(cartella_m3u, d)
+                iid_playlist = riga(cartella_m3u, d)
+                aggiungi_categorie_playlist(d, iid_playlist)
         for nome, dentro in categorie():
             if nome == PREFERITI and not PREFERITI_ACCESI:
                 continue
@@ -5444,7 +5594,8 @@ class TV(object):
             self.cartella_di[padre] = colore
             self.chiave_di[padre] = "cat:" + nome
             for d in dentro:
-                riga(padre, d)
+                iid_playlist = riga(padre, d)
+                aggiungi_categorie_playlist(d, iid_playlist)
 
         if self.cartella_reg:
             self.el_liste.move(self.cartella_reg, "", "end")
@@ -5466,7 +5617,8 @@ class TV(object):
                  [d for d in self.liste if d != ricordata]
         for d in ordine:
             try:
-                if any(url == canale for _n, url, _i in leggi_lista(d, solo_cache=True)):
+                dati_cache = _cache_lista_valida(d)
+                if dati_cache and any(c[1] == canale for c in dati_cache.get("canali", [])):
                     return d
             except Exception:
                 continue
@@ -5506,7 +5658,9 @@ class TV(object):
         normale."""
         for d, iid in self.iid_di.items():
             if self.el_liste.exists(iid):
-                self.tag_riga(iid, d == dove)
+                self.tag_riga(
+                    iid,
+                    d == dove and not getattr(self, "_categoria_m3u_attiva", None))
         for iid in list(self.iid_reg) + list(self.iid_media):
             if self.el_liste.exists(iid):
                 self.tag_riga(iid, False)
@@ -5518,16 +5672,23 @@ class TV(object):
             self.cartelle[k] = cartellina(colore, aperta, dentro=RIDOTTE) or self.vuoto
         return self.cartelle[k]
 
-    def apri_chiudi_cartella(self, aperta):
-        """La cartella cambia faccia quando si apre e quando si chiude."""
-        iid = self.el_liste.focus()
-        if iid in self.cartella_di:
-            self.el_liste.item(iid, image=self.icona_cartella(
-                self.cartella_di[iid], aperta))
+    def apri_chiudi_cartella(self, aperta, iid=None):
+        """Aggiorna icona e stato persistente della cartella."""
+        if iid is None:
+            iid = self.el_liste.focus()
+        if not iid or not self.el_liste.exists(iid):
+            return
+
+        colore = getattr(self, "cartella_di", {}).get(iid)
+        if colore is not None:
+            self.el_liste.item(
+                iid,
+                image=self.icona_cartella(colore, aperta)
+            )
+
         chiave = getattr(self, "chiave_di", {}).get(iid)
         if chiave:
-
-            self.cfg.setdefault("aperte", {})[chiave] = aperta
+            self.cfg.setdefault("aperte", {})[chiave] = bool(aperta)
             scrivi_config(self.cfg)
 
     def lista_selezionata(self):
@@ -5555,13 +5716,38 @@ class TV(object):
         if s and s[0] in self.iid_media:
             self.mostra_media(self.iid_media[s[0]])
             return
+        if s and s[0] in getattr(self, "iid_categoria_m3u", {}):
+            d, nome_categoria = self.iid_categoria_m3u[s[0]]
+            self._categoria_m3u_attiva = (d, nome_categoria)
+            for _d, _iid in self.iid_di.items():
+                if self.el_liste.exists(_iid):
+                    self.tag_riga(_iid, False)
+            for _iid, (_d, _cat) in self.iid_categoria_m3u.items():
+                if self.el_liste.exists(_iid):
+                    self.tag_riga(_iid, (_d, _cat) == (d, nome_categoria))
+            if d != self.cfg.get("lista") or self.reg_in_uso is not None \
+                    or self.media_in_uso is not None:
+                self.reg_in_uso = self.media_in_uso = None
+                self.carica(d)
+            else:
+                self.filtra()
+            return
+
         d = self.lista_selezionata()
-
-
-        if d and (d != self.cfg.get("lista") or self.reg_in_uso is not None
-                  or self.media_in_uso is not None):
-            self.reg_in_uso = self.media_in_uso = None
-            self.carica(d)
+        if d:
+            self._categoria_m3u_attiva = None
+            for _iid in self.iid_categoria_m3u:
+                if self.el_liste.exists(_iid):
+                    self.tag_riga(_iid, False)
+            for _d, _iid in self.iid_di.items():
+                if self.el_liste.exists(_iid):
+                    self.tag_riga(_iid, _d == d)
+            if d != self.cfg.get("lista") or self.reg_in_uso is not None \
+                    or self.media_in_uso is not None:
+                self.reg_in_uso = self.media_in_uso = None
+                self.carica(d)
+            else:
+                self.filtra()
 
     def suona_da_barra(self, chiave, dove):
         """Un file importato o un URL aperto, cliccato nella barra: a
@@ -5621,6 +5807,7 @@ class TV(object):
         if os.path.isabs(f) and not f.startswith(REGISTRAZIONI + os.sep):
             self.cfg["recenti"] = ([f] + [x for x in self.cfg.get("recenti", []) if x != f])[:12]
         self.file_in_onda = f
+        self._lista_in_onda = None
         self.nome = self.nome_in_onda = nome or os.path.splitext(os.path.basename(f))[0]
         self.ide_in_onda = None
         dvd = f.startswith("dvd://")
@@ -5668,33 +5855,86 @@ class TV(object):
 
     def carica(self, dove):
         self.reg_in_uso = self.media_in_uso = None
-
-
         self.cfg["lista"] = dove
         scrivi_config(self.cfg)
         self.scrivi(_("loading %s...") % nome_di(dove))
-        threading.Thread(target=self._carica, args=(dove,), daemon=True).start()
 
-    def _carica(self, dove):
-        try:
-            canali = leggi_lista(dove)
-        except Exception as e:
-            self.scrivi(_("cannot read %s: %s") % (nome_di(dove), e), errore=True)
+        token = getattr(self, "_xvb_carica_token", 0) + 1
+        self._xvb_carica_token = token
+
+        dati_cache = _cache_lista_memoria_valida(dove)
+        if dati_cache is not None:
+            LOGHI.update(dati_cache.get("loghi", {}))
+            CHIAVI.update(dati_cache.get("chiavi", {}))
+            canali = [
+                tuple(c) for c in dati_cache.get("canali", [])
+            ]
+            categorie = {
+                url: (categoria or "Altri")
+                for url, categoria in dati_cache.get("categorie", {}).items()
+            }
+            self._xvb_carica_completato(
+                token, dove, (canali, categorie, None)
+            )
             return
+
+        def lavora():
+            try:
+                canali = leggi_lista(dove)
+                try:
+                    categorie = categorie_m3u(dove, solo_cache=True)
+                except Exception:
+                    categorie = {}
+                risultato = (canali, categorie, None)
+            except Exception as e:
+                risultato = (None, None, str(e))
+
+            try:
+                self.root.after(
+                    0, lambda: self._xvb_carica_completato(
+                        token, dove, risultato))
+            except Exception:
+                pass
+
+        threading.Thread(
+            target=lavora,
+            name="XVB-IPTV-Loader",
+            daemon=True
+        ).start()
+
+    def _xvb_carica_completato(self, token, dove, risultato):
+        if token != getattr(self, "_xvb_carica_token", None):
+            return
+
+        canali, categorie, errore = risultato
+
+        if errore:
+            self.scrivi(
+                _("cannot read %s: %s") % (nome_di(dove), errore),
+                errore=True
+            )
+            return
+
         self.canali = canali
+        self._mappa_categorie_m3u[dove] = categorie or {}
         self.cfg["lista"] = dove
         scrivi_config(self.cfg)
-        self.root.after(0, self.filtra)
-        self.root.after(0, self.segna_in_uso, dove)
-        self.scrivi(_("%s - %d channels") % (nome_di(dove), len(canali)))
 
+        self.filtra()
+        self.segna_in_uso(dove)
+        self.scrivi(
+            _("%s - %d channels") % (nome_di(dove), len(canali))
+        )
 
         ultimo = self.cfg.get("canale")
         if ultimo:
             for nome, url, ide in canali:
                 if url == ultimo:
-                    self.root.after(300, lambda n=nome, u=url, i=ide:
-                                    self.ricorda_canale(n, u, i))
+                    self.root.after(
+                        300,
+                        lambda n=nome, u=url, i=ide:
+                            self.ricorda_canale(n, u, i)
+                    )
                     break
 
     def ricorda_canale(self, nome, url, ide):
@@ -5739,6 +5979,8 @@ class TV(object):
         """Reload: le copie delle liste da url si buttano, cosi' si
         riscaricano, e anche i colori presi dai loghi si rifanno; poi si
         rilegge tutto."""
+        with _CACHE_PARSED_LOCK:
+            _CACHE_PARSED_MEMORIA.clear()
         self.colori, self.in_coda, self.coda_colori[:] = {}, set(), []
         scrivi_colori(self.colori)
         for u in self.cfg.get("liste_url", {}):
@@ -5994,6 +6236,15 @@ class TV(object):
         """A sinistra, al posto dei canali, i file di quella cartella o
         gli importati. La scansione delle cartelle avviene in background."""
         tipo, c = chiave
+
+        # Uscendo da una sottocategoria M3U, il filtro non deve
+        # rimanere attivo sulle librerie locali.
+        self._categoria_m3u_attiva = None
+
+        # Invalida le operazioni IPTV ancora in corso.
+        self._xvb_carica_token = getattr(self, "_xvb_carica_token", 0) + 1
+        self._xvb_filtra_token = getattr(self, "_xvb_filtra_token", 0) + 1
+
         self.reg_in_uso, self.media_in_uso = None, chiave
         token = getattr(self, "_media_scan_token", 0) + 1
         self._media_scan_token = token
@@ -6152,7 +6403,8 @@ class TV(object):
                 self.tag_riga(iid, k == chiave)
                 if k == chiave:
                     self.mostra_riga(iid)
-        for iid in list(self.iid_reg) + list(self.iid_di.values()):
+        for iid in (list(self.iid_reg) + list(self.iid_di.values())
+                    + list(self.iid_categoria_m3u)):
             if self.el_liste.exists(iid):
                 self.tag_riga(iid, False)
         self.non_sul_verde(self.el_liste, "usata")
@@ -6400,6 +6652,31 @@ class TV(object):
         if self.cfg.get("lista") and not self.media_in_uso and not self.reg_in_uso:
             self.segna_in_uso(self.cfg["lista"])
 
+    def gestisci_click_sidebar(self, ev):
+        iid = self.el_liste.identify_row(ev.y)
+        if not iid:
+            self.col_mouse = True
+            return
+
+        elemento = self.el_liste.identify_element(ev.x, ev.y)
+
+        if elemento == "Treeitem.indicator":
+            self.col_mouse = False
+            return
+
+        chiave = getattr(self, "chiave_di", {}).get(iid)
+
+        if chiave in ("iptv", "epg", "m3u", "locale", "url_tutti"):
+            self.col_mouse = False
+            aperta = not bool(self.el_liste.item(iid, "open"))
+            self.el_liste.focus(iid)
+            self.el_liste.item(iid, open=aperta)
+            self.apri_chiudi_cartella(aperta, iid)
+            return "break"
+
+        self.col_mouse = True
+        return
+
     def clic_liste(self, ev):
         """Un clic nella barra delle liste: se e' sulla x della riga si
         toglie quella cosa (dopo conferma), senza selezionarla."""
@@ -6550,6 +6827,119 @@ class TV(object):
 
 
     def filtra(self):
+        if self.canali and self.media_in_uso is None and self.reg_in_uso is None:
+            self._filtra_iptv_async()
+            return
+
+        self._filtra_originale()
+
+    def _filtra_iptv_async(self):
+        token = getattr(self, "_xvb_filtra_token", 0) + 1
+        self._xvb_filtra_token = token
+
+        canali = list(self.canali)
+        query = self.cerca.get().lower()
+        nomi = dict(self.cfg.get("nomi_canali", {}))
+        categoria = getattr(self, "_categoria_m3u_attiva", None)
+
+        mappa = {}
+        if categoria and categoria[0] == self.cfg.get("lista"):
+            mappa = dict(
+                getattr(self, "_mappa_categorie_m3u", {}).get(
+                    categoria[0], {}
+                )
+            )
+
+        self._render_token = getattr(self, "_render_token", 0) + 1
+        self.elenco.delete(*self.elenco.get_children())
+        self.applica_poster()
+        self._render_colori = []
+        self._render_adesso = self.file_in_onda or self.cfg.get("canale")
+
+        def lavora():
+            try:
+                posti = {
+                    url: i
+                    for i, (_nome, url, _ide) in enumerate(canali)
+                    if os.path.isabs(url)
+                }
+
+                if query:
+                    filtrati = []
+                    for canale in canali:
+                        nome, url, _ide = canale
+                        testo = nome + "\\n" + nomi.get(url, "")
+
+                        if os.path.isabs(url):
+                            try:
+                                titolo, sotto = self.righe_file(url, nome)
+                                testo += "\\n" + titolo + "\\n" + sotto
+                            except Exception:
+                                pass
+
+                        if query in testo.lower():
+                            filtrati.append(canale)
+                else:
+                    filtrati = canali
+
+                if categoria and categoria[0] == self.cfg.get("lista"):
+                    filtrati = [
+                        c for c in filtrati
+                        if mappa.get(c[1], "Altri") == categoria[1]
+                    ]
+
+                risultato = (filtrati, posti, None)
+
+            except Exception as e:
+                risultato = (None, None, str(e))
+
+            try:
+                self.root.after(
+                    0,
+                    lambda: self._filtra_iptv_completato(token, risultato)
+                )
+            except Exception:
+                pass
+
+        threading.Thread(
+            target=lavora,
+            name="XVB-IPTV-Filter",
+            daemon=True
+        ).start()
+
+    def _filtra_iptv_completato(self, token, risultato):
+        if token != getattr(self, "_xvb_filtra_token", None):
+            return
+
+        # Non aggiornare la lista se nel frattempo e' stata aperta
+        # una libreria locale o le registrazioni.
+        if self.media_in_uso is not None or self.reg_in_uso is not None:
+            return
+
+        filtrati, posti, errore = risultato
+
+        if errore:
+            self.scrivi(
+                _("Error filtering channels: %s") % errore,
+                errore=True
+            )
+            return
+
+        self.visti = filtrati
+        self.posto_file = posti
+
+        if not self.cerca.get():
+            self.indice_fresco = False
+
+        token_render = getattr(self, "_render_token", 0) + 1
+        self._render_token = token_render
+        self._render_colori = []
+        self._render_adesso = self.file_in_onda or self.cfg.get("canale")
+
+        self._disegna_blocco(token_render, 0)
+
+    def _filtra_originale(self):
+
         """Filtra tutti i contenuti e li disegna a piccoli blocchi.
 
         La ricerca lavora sull'intera libreria; soltanto la costruzione
@@ -6575,6 +6965,14 @@ class TV(object):
             self.visti = list(self.canali)
             self.indice_fresco = False
 
+        categoria_attiva = getattr(self, "_categoria_m3u_attiva", None)
+        if categoria_attiva and categoria_attiva[0] == self.cfg.get("lista"):
+            mappa = getattr(self, "_mappa_categorie_m3u", {}).get(
+                categoria_attiva[0], {})
+            self.visti = [
+                c for c in self.visti
+                if mappa.get(c[1], "Altri") == categoria_attiva[1]
+            ]
 
         token = getattr(self, "_render_token", 0) + 1
         self._render_token = token
@@ -7278,6 +7676,7 @@ class TV(object):
             self.file_in_onda = None
         self.et_formato.config(text="")
         self.nome_in_onda, self.ide_in_onda = nome, ide
+        self._lista_in_onda = self.cfg.get("lista")
         self.attesa_da = time.time()
         self.colora_stato(self.colore_canale(nome, url))
         self.indice = next((k for k, c in enumerate(self.visti)
@@ -7480,7 +7879,7 @@ class TV(object):
             "pt": "faltam %d min",
             "ru": "осталось %d мин.",
         }.get(LINGUA, "%d min remaining") % mancanti
-        fascia = "%s/%s - %s" % (
+        fascia = "%s/%s   %s" % (
             time.strftime("%H:%M", time.localtime(inizio)),
             time.strftime("%H:%M", time.localtime(fine)), restano)
         return (self.nome_canale(), titolo or "?", fascia)
@@ -9940,9 +10339,16 @@ class TV(object):
     def scrivi(self, t, errore=False):
         """Un messaggio nella riga di stato: titolo e orario si tolgono. Gli
         errori hanno davanti l'icona icone/error.png (se c'e')."""
+        if (getattr(self, "fermato", None) is None
+                and (getattr(self, "file_in_onda", None)
+                     or (self.cfg.get("canale") and getattr(self, "nome_in_onda", None)))):
+            self.scrivi_riga()
+            return
         def fai():
             img = self.icona_errore if errore and self.icona_errore else ""
-            self.stato.config(text=(" " + t) if img else t, image=img, compound="left")
+            self.ic_categoria.config(image="")
+            self.et_categoria.config(text="")
+            self.stato.config(text=(" " + t) if img else t, image=(img if getattr(self, "categoria_in_stato", False) else ""), compound="left")
             self.et_titolo.config(text="")
             self.et_ora.config(text="")
             self.et_seguente.config(text="")
@@ -9966,18 +10372,42 @@ class TV(object):
                     break
 
         etichetta_seguente = {
-            "it": "A seguire: ", "en": "Next: ", "es": "A continuación: ",
-            "fr": "À suivre : ", "de": "Als Nächstes: ",
-            "pt": "A seguir: ", "ru": "Далее: ",
+            "it": "a seguire: ", "en": "Next: ", "es": "a continuación: ",
+            "fr": "À suivre : ", "de": "als Nächstes: ",
+            "pt": "a seguir: ", "ru": "Далее: ",
         }.get(LINGUA, "Next: ")
 
+        categoria = ""
+        colore_categoria = TESTO
+        url_in_onda = self.cfg.get("canale")
+        lista_in_onda = getattr(self, "_lista_in_onda", None)
+        if (url_in_onda and lista_in_onda and not self.file_in_onda
+                and self.nome_in_onda and getattr(self, "fermato", None) is None):
+            mappe = getattr(self, "_mappa_categorie_m3u", {})
+            colori = getattr(self, "_colore_categoria_m3u", {})
+            mappa = mappe.get(lista_in_onda)
+            if mappa is None:
+                mappa = categorie_m3u(lista_in_onda, solo_cache=True)
+                mappe[lista_in_onda] = mappa
+            categoria = mappa.get(url_in_onda, "")
+            if categoria:
+                colore_categoria = colori.get((lista_in_onda, categoria), TESTO)
+
         def fai():
-            self.stato.config(text=nome, image="", compound="left")
+            icona_categoria = (
+                self.icona_cartella(colore_categoria, False)
+                if categoria else "")
+            self.ic_categoria.config(image=icona_categoria)
+            self.et_categoria.config(
+                text=(categoria + "") if categoria else "",
+                fg=TESTO)
+            self.stato.config(text=nome, image="", compound="left", fg=TESTO)
             self.et_titolo.config(
-                text=("  " + titolo) if titolo else "",
+                text=(" " + titolo) if titolo else "",
                 fg=schiarisci(self.colore_barra) if self.colore_barra else TESTO)
-            self.et_ora.config(text=("  " + ora) if titolo and ora else
-                               ("  " + ora if ora else ""))
+            self.et_ora.config(
+                text=("  " + ora) if titolo and ora else ("  " + ora if ora else ""),
+                fg=TESTO)
             self.et_seguente.config(
                 text=("  " + etichetta_seguente) if prossimo else "",
                 fg=TESTO)
