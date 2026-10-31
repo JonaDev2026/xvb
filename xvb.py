@@ -240,7 +240,7 @@ def avvia_mpris(app):
     threading.Thread(target=GLib.MainLoop().run, daemon=True).start()
     return m
 
-VERSIONE = "4.3.2"
+VERSIONE = "4.3.3"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"
@@ -5192,7 +5192,15 @@ class TV(object):
         else:
             b.config(width=largo)
         b.pack(side=lato, padx=padx, pady=6)
+        b.sopra = False
+        b.bind("<Enter>", lambda e, b=b: self.hover_tk(b, True), add="+")
+        b.bind("<Leave>", lambda e, b=b: self.hover_tk(b, False), add="+")
         return b
+
+    def hover_tk(self, b, si):
+        b.sopra = si
+        if getattr(b, "icona", None):
+            self.vesti(b)
 
 
     def tutte_le_liste(self):
@@ -7988,6 +7996,12 @@ class TV(object):
         fondo = Image.new("RGBA", (w, h))
         for r in range(h):
             fondo.paste(self.tinta_barra(y + r), (0, r, w, r + 1))
+        if getattr(b, "sopra", False):
+            from PIL import ImageDraw
+            hv = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+            ImageDraw.Draw(hv).rounded_rectangle([1, 1, w - 2, h - 2], radius=10,
+                                                 fill=(255, 255, 255, 45))
+            fondo.alpha_composite(hv)
         fondo.alpha_composite(pil, ((w - pil.width) // 2, (h - pil.height) // 2))
         self.vestiti[b] = ImageTk.PhotoImage(fondo)
         c = self.tinta_barra(y + h // 2)
@@ -8326,6 +8340,15 @@ class TV(object):
         """Un clic sul video (lo riceve mpv, non Tk): sui comandi disegnati
         da mpv fa quello del bottone; in PiP, se e' sul tasto disegnato da
         mpv, si torna alla finestra normale."""
+        if (self.barra_in_overlay() and not self.barra_visibile
+                and not getattr(self, "mai_partito", False)):
+            try:
+                y = self.root.winfo_pointery() - self.video.winfo_rooty()
+                if y >= self.video.winfo_height() - self.OV_ALTA:
+                    self.mostra_barra(True)
+                    self.disegna_ov(forza=True)
+            except tk.TclError:
+                pass
         if self.clic_ov():
             return
         r = getattr(self, "pip_ov_riquadro", None)
@@ -8342,7 +8365,14 @@ class TV(object):
     def schermo_intero(self, ev=None, acceso=None):
         self.pieno = (not self.pieno) if acceso is None else acceso
         self.root.attributes("-fullscreen", self.pieno)
+        if self.pieno and self.sidebar_aperte():
+            self.sidebar_prima = (self.nascosti.get(self.sinistra), self.nascosti.get(self.destra))
+            self.nascosti[self.sinistra] = self.nascosti[self.destra] = True
+        elif not self.pieno and getattr(self, "sidebar_prima", None):
+            self.nascosti[self.sinistra], self.nascosti[self.destra] = self.sidebar_prima
+            self.sidebar_prima = None
         self.ridisponi()
+        self.icona_sidebar()
 
     def si_nasconde(self):
         """Comandi e mouse vanno e vengono quando c'e' solo il video: barre
@@ -8371,7 +8401,7 @@ class TV(object):
                 dentro = False
             if dentro:
                 self.mosso()
-        self.root.after(200, self.sorveglia_mouse)
+        self.root.after(80, self.sorveglia_mouse)
 
     def mosso(self, ev=None):
         """Il mouse si muove, i comandi si fanno vedere; sta fermo tre
@@ -8579,6 +8609,14 @@ class TV(object):
                     if xv > a:
                         d.line([(a, cy), (xv, cy)], fill="#ffffff", width=4)
                 continue
+            if getattr(self, "ov_sopra", None) is w:
+                try:
+                    hv = Image.new("RGBA", (int(larga), R - 16), (0, 0, 0, 0))
+                    ImageDraw.Draw(hv).rounded_rectangle([0, 0, int(larga) - 1, R - 17], radius=10,
+                                                         fill=(255, 255, 255, 45))
+                    im.alpha_composite(hv, (int(x0), H - R + 8))
+                except Exception:
+                    pass
             icona = getattr(w, "icona", None) or ""
             if w is self.b_qualita and self.passo_ingranaggio and "setting" in self.icone_pil:
                 pil = self.icone_pil["setting"].rotate(-self.passo_ingranaggio * 15,
