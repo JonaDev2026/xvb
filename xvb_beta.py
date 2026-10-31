@@ -1647,6 +1647,7 @@ CATEGORIE_URL = (("podcast", "Podcast"), ("musica", "Music"), ("radio", "Radio")
 CACHE_LISTE = os.path.join(CASA, ".cache", "xvb", "liste")
 LISTA_VECCHIA = 6 * 3600
 _CACHE_PARSED_LOCK = threading.RLock()
+_CACHE_PARSED_MEMORIA = {}
 
 
 def copia_lista_url(url, aggiorna=True):
@@ -1682,7 +1683,29 @@ def _percorso_lista(f, solo_cache=False):
     return f if os.path.isfile(f) else None
 
 
+def _cache_lista_memoria_valida(f):
+    percorso = _percorso_lista(f, solo_cache=True)
+    if not percorso:
+        return None
+    try:
+        st = os.stat(percorso)
+        with _CACHE_PARSED_LOCK:
+            voce = _CACHE_PARSED_MEMORIA.get(f)
+            if (voce
+                    and voce[0] == os.path.abspath(percorso)
+                    and voce[1] == st.st_mtime_ns
+                    and voce[2] == st.st_size):
+                return voce[3]
+    except OSError:
+        pass
+    return None
+
+
 def _cache_lista_valida(f):
+    dati = _cache_lista_memoria_valida(f)
+    if dati is not None:
+        return dati
+
     percorso = _percorso_lista(f, solo_cache=True)
     if not percorso:
         return None
@@ -1696,6 +1719,13 @@ def _cache_lista_valida(f):
                 and dati.get("percorso") == os.path.abspath(percorso)
                 and dati.get("mtime_ns") == st.st_mtime_ns
                 and dati.get("dimensione") == st.st_size):
+            with _CACHE_PARSED_LOCK:
+                _CACHE_PARSED_MEMORIA[f] = (
+                    os.path.abspath(percorso),
+                    st.st_mtime_ns,
+                    st.st_size,
+                    dati
+                )
             return dati
     except (OSError, ValueError, TypeError):
         return None
@@ -1749,6 +1779,12 @@ def _dati_lista(f, solo_cache=False):
         with open(temporaneo, "w", encoding="utf-8") as o:
             json.dump(dati, o, ensure_ascii=False, separators=(",", ":"))
         os.replace(temporaneo, archivio)
+        _CACHE_PARSED_MEMORIA[f] = (
+            os.path.abspath(percorso),
+            st.st_mtime_ns,
+            st.st_size,
+            dati
+        )
         return dati
 
 
@@ -5814,6 +5850,22 @@ class TV(object):
         token = getattr(self, "_xvb_carica_token", 0) + 1
         self._xvb_carica_token = token
 
+        dati_cache = _cache_lista_memoria_valida(dove)
+        if dati_cache is not None:
+            LOGHI.update(dati_cache.get("loghi", {}))
+            CHIAVI.update(dati_cache.get("chiavi", {}))
+            canali = [
+                tuple(c) for c in dati_cache.get("canali", [])
+            ]
+            categorie = {
+                url: (categoria or "Altri")
+                for url, categoria in dati_cache.get("categorie", {}).items()
+            }
+            self._xvb_carica_completato(
+                token, dove, (canali, categorie, None)
+            )
+            return
+
         def lavora():
             try:
                 canali = leggi_lista(dove)
@@ -5915,6 +5967,8 @@ class TV(object):
         """Reload: le copie delle liste da url si buttano, cosi' si
         riscaricano, e anche i colori presi dai loghi si rifanno; poi si
         rilegge tutto."""
+        with _CACHE_PARSED_LOCK:
+            _CACHE_PARSED_MEMORIA.clear()
         self.colori, self.in_coda, self.coda_colori[:] = {}, set(), []
         scrivi_colori(self.colori)
         for u in self.cfg.get("liste_url", {}):
