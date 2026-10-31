@@ -4716,6 +4716,9 @@ class TV(object):
                     self.icona_errore = tk.PhotoImage(file=f_err)
             except Exception:
                 self.icona_errore = None
+        self.et_categoria = tk.Label(self.riga_stato, text="", anchor="w",
+                                      bg=STATO, fg=TESTO)
+        self.et_categoria.pack(side="left", padx=(8, 0), fill="y")
         self.stato = tk.Label(self.riga_stato, text=_("ready"), anchor="w",
                               bg=STATO, fg="#ffffff")
         self.stato.pack(side="left", padx=(8, 0), fill="y")
@@ -5196,6 +5199,7 @@ class TV(object):
         self.iid_epg = {}
         self.iid_categoria_m3u = {}
         self._mappa_categorie_m3u = {}
+        self._colore_categoria_m3u = {}
         adesso = self.cfg.get("lista")
 
         posto = [0]
@@ -5273,20 +5277,24 @@ class TV(object):
         self.cartella_di[cartella_m3u] = m3u_colore
         self.chiave_di[cartella_m3u] = "m3u"
 
+        indice_colore_categoria = [0]
+
         def aggiungi_categorie_playlist(d, iid_playlist):
             mappa = categorie_m3u(d, solo_cache=True)
             self._mappa_categorie_m3u[d] = mappa
             nomi = sorted(set(mappa.values()), key=str.casefold)
             for nome_categoria in nomi:
-                colore = colore_cartella(nome_categoria, posto[0])
-                posto[0] += 1
+                colore = PALLINI[indice_colore_categoria[0] % len(PALLINI)]
+                indice_colore_categoria[0] += 1
+                self._colore_categoria_m3u[(d, nome_categoria)] = colore
                 aperta_categoria = aperta_di(
                     "m3u-cat:" + d + ":" + nome_categoria, False)
                 iid_categoria = self.el_liste.insert(
                     iid_playlist, "end",
                     text=" " + nome_categoria,
                     image=self.icona_cartella(colore, aperta_categoria),
-                    open=aperta_categoria)
+                    open=aperta_categoria,
+                    tags=("usata",) if getattr(self, "_categoria_m3u_attiva", None) == (d, nome_categoria) else ("sotto",))
                 self.cartella_di[iid_categoria] = colore
                 self.chiave_di[iid_categoria] = (
                     "m3u-cat:" + d + ":" + nome_categoria)
@@ -5608,6 +5616,9 @@ class TV(object):
         if s and s[0] in getattr(self, "iid_categoria_m3u", {}):
             d, nome_categoria = self.iid_categoria_m3u[s[0]]
             self._categoria_m3u_attiva = (d, nome_categoria)
+            for _iid, (_d, _cat) in self.iid_categoria_m3u.items():
+                if self.el_liste.exists(_iid):
+                    self.tag_riga(_iid, (_d, _cat) == (d, nome_categoria))
             if d != self.cfg.get("lista") or self.reg_in_uso is not None \
                     or self.media_in_uso is not None:
                 self.reg_in_uso = self.media_in_uso = None
@@ -10019,6 +10030,7 @@ class TV(object):
         errori hanno davanti l'icona icone/error.png (se c'e')."""
         def fai():
             img = self.icona_errore if errore and self.icona_errore else ""
+            self.et_categoria.config(text="")
             self.stato.config(text=(" " + t) if img else t, image=img, compound="left")
             self.et_titolo.config(text="")
             self.et_ora.config(text="")
@@ -10048,7 +10060,18 @@ class TV(object):
             "pt": "A seguir: ", "ru": "Далее: ",
         }.get(LINGUA, "Next: ")
 
+        categoria_attiva = getattr(self, "_categoria_m3u_attiva", None)
+        categoria = ""
+        colore_categoria = TESTO
+        if categoria_attiva and categoria_attiva[0] == self.cfg.get("lista"):
+            categoria = categoria_attiva[1]
+            colore_categoria = getattr(self, "_colore_categoria_m3u", {}).get(
+                categoria_attiva, TESTO)
+
         def fai():
+            self.et_categoria.config(
+                text=("📁 " + categoria + " – ") if categoria else "",
+                fg=colore_categoria)
             self.stato.config(text=nome, image="", compound="left")
             self.et_titolo.config(
                 text=("  " + titolo) if titolo else "",
