@@ -6034,6 +6034,9 @@ class TV(object):
         if os.path.isabs(f) and os.path.splitext(f)[1][1:].lower() in AUDIO:
             self.richiedi_foto_artisti(f)
         self.nome = self.nome_in_onda = nome or os.path.splitext(os.path.basename(f))[0]
+        # Ogni nuovo brano deve selezionare subito la propria immagine:
+        # cover immediata, foto artista se gia' presente in cache.
+        self.mostra_sfondo(True)
         self.ide_in_onda = None
         dvd = f.startswith("dvd://")
         est = "dvd" if dvd else "cd" if e_cd(f) else \
@@ -10260,9 +10263,9 @@ class TV(object):
             giusto = self.sfondo_giusto()
             if giusto != self.sfondo_file:
                 self.sfondo_file, self.sfondo_misura = giusto, None
-            self.sfondo_misura = None
+            # Non invalidare la misura se l'immagine e' gia' quella giusta:
+            # evita ridisegni inutili e lampeggi durante la riproduzione.
             self.rifai_sfondo()
-
             for t in (300, 1500):
                 self.root.after(t, lambda: self.sfondo_su and self.rifai_sfondo())
         else:
