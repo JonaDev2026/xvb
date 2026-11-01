@@ -1503,6 +1503,9 @@ for _l, _t in (("it", "Nuova playlist..."), ("es", "Nueva lista..."),
                ("fr", "Nouvelle liste..."), ("de", "Neue Playlist..."),
                ("pt", "Nova playlist..."), ("ru", "Новый плейлист...")):
     TESTI[_l]["New playlist..."] = _t
+for _l, _t in (("it", "Preferiti"), ("es", "Favoritos"), ("fr", "Favoris"),
+               ("de", "Favoriten"), ("pt", "Favoritos"), ("ru", "Избранное")):
+    TESTI[_l]["Favorites"] = _t
 
 
 def _(testo):
@@ -2548,6 +2551,42 @@ def cartellina(colore, aperta=False, lato=PUNTO, dentro=None):
 
         d.line([(3 * u, 19 * u), (6 * u, 11.5 * u), (23 * u, 11.5 * u),
                 (20 * u, 19 * u)], fill=colore, width=sp, joint="curve")
+    return nel_riquadro(im, lato, dentro)
+
+
+def segnalibro(colore, lato=PUNTO, dentro=None):
+    """L'icona delle playlist dei preferiti (bookmark.svg), solo contorno,
+    del colore che le tocca."""
+    if not HA_PIL:
+        return None
+    from PIL import ImageDraw
+    K = 4
+    im = Image.new("RGBA", (lato * K, lato * K), (0, 0, 0, 0))
+    s = lato * K * 0.76 / 514.0
+
+    def P(x, y):
+        return ((x - 320) * s + lato * K / 2.0, (y - 318) * s + lato * K / 2.0)
+
+    def curva(a, b, c, e):
+        fuori = []
+        for i in range(1, 11):
+            t = i / 10.0
+            m = 1 - t
+            fuori.append(P(m ** 3 * a[0] + 3 * m * m * t * b[0] + 3 * m * t * t * c[0] + t ** 3 * e[0],
+                           m ** 3 * a[1] + 3 * m * m * t * b[1] + 3 * m * t * t * c[1] + t ** 3 * e[1]))
+        return fuori
+    pti = [P(192, 64)]
+    pti += curva((192, 64), (156.7, 64), (128, 92.7), (128, 128))
+    pti += [P(128, 544)]
+    pti += curva((128, 544), (128, 555.5), (134.2, 566.2), (144.2, 571.8))
+    pti += curva((144.2, 571.8), (154.2, 577.4), (166.5, 577.3), (176.4, 571.4))
+    pti += [P(320, 485.3), P(463.5, 571.4)]
+    pti += curva((463.5, 571.4), (473.4, 577.3), (485.7, 577.5), (495.7, 571.8))
+    pti += curva((495.7, 571.8), (505.7, 566.1), (512, 555.5), (512, 544))
+    pti += [P(512, 128)]
+    pti += curva((512, 128), (512, 92.7), (483.3, 64), (448, 64))
+    ImageDraw.Draw(im).line(pti + pti[:2], fill=colore, width=int(1.7 * lato * K / 24.0),
+                            joint="curve")
     return nel_riquadro(im, lato, dentro)
 
 
@@ -5456,10 +5495,12 @@ class TV(object):
                 iid_categoria = self.el_liste.insert(
                     iid_playlist, "end",
                     text=" " + nome_categoria,
-                    image=self.icona_cartella(colore, aperta_categoria),
+                    image=(self.icona_segnalibro(colore) if extra_x
+                           else self.icona_cartella(colore, aperta_categoria)),
                     open=aperta_categoria, **extra_x,
                     tags=("usata",) if getattr(self, "_categoria_m3u_attiva", None) == (d, nome_categoria) else ("sotto",))
-                self.cartella_di[iid_categoria] = colore
+                if not extra_x:
+                    self.cartella_di[iid_categoria] = colore
                 self.chiave_di[iid_categoria] = (
                     "m3u-cat:" + d + ":" + nome_categoria)
                 self.iid_categoria_m3u[iid_categoria] = (d, nome_categoria)
@@ -5659,7 +5700,7 @@ class TV(object):
             aperta = aperta_di("cat:" + nome, any(d == adesso for d in dentro))
 
             padre = self.el_liste.insert("" if nome == PREFERITI else cartella_m3u, "end",
-                                         text=" " + (_("Favorite") if nome == PREFERITI else nome),
+                                         text=" " + (_("Favorites") if nome == PREFERITI else nome),
                                          image=self.icona_cartella(colore, aperta),
                                          open=aperta)
             self.cartella_di[padre] = colore
@@ -5736,6 +5777,12 @@ class TV(object):
             if self.el_liste.exists(iid):
                 self.tag_riga(iid, False)
         self.non_sul_verde(self.el_liste, "usata")
+
+    def icona_segnalibro(self, colore):
+        k = (colore, "segnalibro")
+        if k not in self.cartelle:
+            self.cartelle[k] = segnalibro(colore, dentro=RIDOTTE) or self.vuoto
+        return self.cartelle[k]
 
     def icona_cartella(self, colore, aperta):
         k = (colore, aperta)
@@ -10626,7 +10673,9 @@ class TV(object):
 
         def fai():
             icona_categoria = (
-                self.icona_cartella(colore_categoria, False)
+                (self.icona_segnalibro(colore_categoria)
+                 if os.path.basename(os.path.dirname(lista_in_onda or "")) == PREFERITI
+                 else self.icona_cartella(colore_categoria, False))
                 if categoria else "")
             self.ic_categoria.config(image=icona_categoria)
             self.et_categoria.config(
