@@ -29,7 +29,7 @@ if os.path.isdir(_FONT_STATIC_DIR):
         with open(_FONTCONFIG_FILE, "w", encoding="utf-8") as _fc_file:
             _fc_file.write(_fc_xml)
         os.environ["FONTCONFIG_FILE"] = _FONTCONFIG_FILE
-        subprocess.run(["fc-cache", "-f", _FONT_STATIC_DIR],
+        subprocess.run(["fc-cache", _FONT_STATIC_DIR],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                        timeout=10, check=False)
     except Exception:
@@ -4480,11 +4480,17 @@ class TV(object):
                         pass
 
         if HA_PIL:
-            for n in ("play", "pausa"):
+            dimensioni_icone = {
+                "play": (34, 34),
+                "pausa": (34, 34),
+                "stop": (24, 24),
+                "prima": (34, 34),
+                "dopo": (34, 34),
+            }
+            for n, dimensione in dimensioni_icone.items():
                 if n in self.icone_pil:
                     im = self.icone_pil[n]
-                    lato = max(1, round(im.height * 1.4))
-                    im = im.resize((max(1, round(im.width * lato / im.height)), lato), Image.LANCZOS)
+                    im = im.resize(dimensione, Image.LANCZOS)
                     self.icone_pil[n] = im
                     self.icone[n] = ImageTk.PhotoImage(im)
 
@@ -4887,12 +4893,12 @@ class TV(object):
         gruppo = [self.tasto("prima", "<", lambda: self.salta(-1), 3, padx=(24, 0)),
                   self.tasto("-10", "-10", lambda: self.avanza(-10), 4, padx=0)]
 
-        self.b_pausa = self.tasto("play", _("Play"), self.pausa, 8, padx=0)
+        self.b_pausa = self.tasto("play", _("Play"), self.pausa, 8, padx=5)
         if self.b_pausa.icona:
             self.b_pausa.config(height=36)
             self.b_pausa.pack_configure(pady=3)
         gruppo += [self.b_pausa,
-                   self.tasto("stop", _("Stop"), self.ferma, 4, padx=0),
+                   self.tasto("stop", _("Stop"), self.ferma, 4, padx=5),
                    self.tasto("+10", "+10", lambda: self.avanza(+10), 4, padx=0),
                    self.tasto("dopo", ">", lambda: self.salta(+1), 3, padx=0)]
 
@@ -4951,7 +4957,7 @@ class TV(object):
 
         self.disponi(False)
         self.video.bind("<Button-1>", lambda e: self.root.focus_set())
-        self.root.update()
+        self.root.update_idletasks()
 
         self.mpv = mpv.MPV(
             wid=str(self.video.winfo_id()),
@@ -7972,9 +7978,6 @@ class TV(object):
             b.config(text=testo)
 
     def vesti(self, b):
-        """Il bottone prende come immagine la fettina di sfumatura che gli
-        sta sotto con la sua icona sopra: cosi' non ha un fondo suo e la
-        sfumatura passa dietro. Senza sfumatura (o senza PIL) resta la png."""
         icona = getattr(b, "icona", None)
         if not icona:
             return
@@ -7983,30 +7986,24 @@ class TV(object):
             b.config(image=self.icone[icona], bg=BARRA, activebackground=BARRA)
             return
         if not b.winfo_ismapped():
-
-
             if icona in self.icone:
-                # intanto un'immagine viva: quella che aveva puo' essere gia' stata buttata
                 b.config(image=self.icone[icona])
             self.root.after_idle(lambda: b.winfo_exists() and b.winfo_ismapped() and self.vesti(b))
             self.root.after(60, lambda: b.winfo_exists() and b.winfo_ismapped() and self.vesti(b))
             return
+            
         w, h = b.winfo_width(), b.winfo_height()
         y = b.winfo_y()
         fondo = Image.new("RGBA", (w, h))
         for r in range(h):
             fondo.paste(self.tinta_barra(y + r), (0, r, w, r + 1))
-        if getattr(b, "sopra", False):
-            from PIL import ImageDraw
-            hv = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-            ImageDraw.Draw(hv).rounded_rectangle([1, 1, w - 2, h - 2], radius=10,
-                                                 fill=(255, 255, 255, 45))
-            fondo.alpha_composite(hv)
+            
+        # L'effetto hover con il rettangolo bianco è stato rimosso qui sotto.
+        
         fondo.alpha_composite(pil, ((w - pil.width) // 2, (h - pil.height) // 2))
         self.vestiti[b] = ImageTk.PhotoImage(fondo)
         c = self.tinta_barra(y + h // 2)
         b.config(image=self.vestiti[b], bg=c, activebackground=c)
-
     def ferma(self):
         """Stop: si ferma tutto e torna lo schermo di XVB. Play dopo lo
         stop riparte da quello che si stava guardando (i file da dove
@@ -8573,12 +8570,16 @@ class TV(object):
         r0, g0, b0 = (int(base[j:j + 2], 16) for j in (1, 3, 5))
 
 
-        pc = colore or BARRA
+        pc = colore or ACCENTO
         try:
             pr, pg, pb = (int(pc[j:j + 2], 16) for j in (1, 3, 5))
         except ValueError:
             pr, pg, pb = r0, g0, b0
-        d.rectangle([0, L + 5, vw, H], fill=(int(pr * 0.4), int(pg * 0.4), int(pb * 0.4), 200))
+
+        d.rectangle(
+            [0, L + 5, vw, H],
+            fill=(int(pr * 0.4), int(pg * 0.4), int(pb * 0.4), 200)
+        )
 
 
         luce = Image.new("RGBA", (vw, H), (0, 0, 0, 0))
@@ -8609,14 +8610,7 @@ class TV(object):
                     if xv > a:
                         d.line([(a, cy), (xv, cy)], fill="#ffffff", width=4)
                 continue
-            if getattr(self, "ov_sopra", None) is w:
-                try:
-                    hv = Image.new("RGBA", (int(larga), R - 16), (0, 0, 0, 0))
-                    ImageDraw.Draw(hv).rounded_rectangle([0, 0, int(larga) - 1, R - 17], radius=10,
-                                                         fill=(255, 255, 255, 45))
-                    im.alpha_composite(hv, (int(x0), H - R + 8))
-                except Exception:
-                    pass
+            # Nessun riquadro attorno all'icona durante l'hover.
             icona = getattr(w, "icona", None) or ""
             if w is self.b_qualita and self.passo_ingranaggio and "setting" in self.icone_pil:
                 pil = self.icone_pil["setting"].rotate(-self.passo_ingranaggio * 15,
@@ -8627,6 +8621,16 @@ class TV(object):
                 pil.putalpha(pil.getchannel("A").point(lambda v, f=battito: int(v * f)))
             else:
                 pil = self.icone_pil.get(icona)
+
+            if pil is not None and getattr(self, "ov_sopra", None) is w:
+                try:
+                    pil = pil.copy()
+                    tinta = Image.new("RGBA", pil.size, colore or "#ffffff")
+                    tinta.putalpha(pil.getchannel("A"))
+                    pil = tinta
+                except Exception:
+                    pass
+
             if pil is not None:
                 im.alpha_composite(pil, (int(x0 + (larga - pil.width) // 2),
                                          int(cy - pil.height // 2)))
