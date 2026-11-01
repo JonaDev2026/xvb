@@ -1917,6 +1917,7 @@ COLONNA = LOGO_L
 CACHE_ANTEPRIME = os.path.join(CASA, ".cache", "xvb", "anteprime")
 CACHE_VINILI = os.path.join(CASA, ".cache", "xvb", "vinili")
 CACHE_ARTISTI = os.path.join(CASA, ".cache", "xvb", "artisti")
+CACHE_ARTISTI_INDEX = os.path.join(CACHE_ARTISTI, "indice.json")
 
 
 def copertina_dentro(f):
@@ -4571,6 +4572,14 @@ class TV(object):
         self.posto_file = {}
         self.sfondo_su = False
         self.tag_file = {}
+        # Cache persistente file -> artista: evita di rileggere i tag ad ogni brano.
+        self._xvb_artisti_file = leggi_json(CACHE_ARTISTI_INDEX)
+        if not isinstance(self._xvb_artisti_file, dict):
+            self._xvb_artisti_file = {}
+        self._xvb_artisti_lock = threading.RLock()
+        self._xvb_artisti_dirty = 0
+        self._xvb_artisti_mem = {}
+        self._xvb_render_cache = {}
         self.info = leggi_json(FILE_INFO)
         self.loghi_img = {}
         self._disco = {"url": None, "ang": 0.0, "base": None, "img": None}
@@ -10099,17 +10108,47 @@ class TV(object):
         self.root.after(500, self.aggiorna_linea)
 
     def artista_del_file(self, f):
-        """Artista del brano, prima dai tag gia' letti e poi dal percorso."""
+        """Artista del brano: cache RAM, indice su disco, tag solo al primo accesso."""
         if not f or not os.path.isabs(f) or os.path.splitext(f)[1][1:].lower() not in AUDIO:
             return ""
-        tag = self.tag_file.get(f)
-        if not tag:
-            tag = tag_di(f, self.tag_cache)
-            self.tag_file[f] = tag
-        artista = (tag[1] if tag and len(tag) > 1 else "").strip()
-        if not artista:
-            _titolo, artista, _album, _anno = dal_percorso(f, self.cfg.get("cartelle", []))
-        return str(artista or "").strip()
+        try:
+            st = os.stat(f)
+            firma = [int(getattr(st, "st_mtime_ns", st.st_mtime * 1e9)), int(st.st_size)]
+        except OSError:
+            return ""
+        with self._xvb_artisti_lock:
+            voce = self._xvb_artisti_file.get(f)
+            if isinstance(voce, list) and len(voce) == 3 and voce[:2] == firma:
+                return str(voce[2] or "")
+            tag = self.tag_file.get(f)
+            if not tag:
+                tag = tag_di(f, self.tag_cache)
+                self.tag_file[f] = tag
+            artista = (tag[1] if tag and len(tag) > 1 else "").strip()
+            if not artista:
+                _titolo, artista, _album, _anno = dal_percorso(f, self.cfg.get("cartelle", []))
+            artista = str(artista or "").strip()
+            self._xvb_artisti_file[f] = firma + [artista]
+            self._xvb_artisti_mem[artista.casefold()] = artista
+            self._xvb_artisti_dirty += 1
+            if self._xvb_artisti_dirty >= 8:
+                self.salva_cache_artisti()
+            return artista
+
+    def salva_cache_artisti(self):
+        """Scrive l'indice in modo atomico, senza interrompere la riproduzione."""
+        with self._xvb_artisti_lock:
+            if not self._xvb_artisti_dirty:
+                return
+            try:
+                os.makedirs(CACHE_ARTISTI, exist_ok=True)
+                temporaneo = CACHE_ARTISTI_INDEX + ".tmp"
+                with open(temporaneo, "w", encoding="utf-8") as h:
+                    json.dump(self._xvb_artisti_file, h, ensure_ascii=False, separators=(",", ":"))
+                os.replace(temporaneo, CACHE_ARTISTI_INDEX)
+                self._xvb_artisti_dirty = 0
+            except Exception:
+                pass
 
     def percorso_foto_artista(self, artista):
         chiave = hashlib.sha256(artista.casefold().encode("utf-8")).hexdigest()
@@ -10177,60 +10216,62 @@ class TV(object):
             return None
 
     def richiedi_foto_artisti(self, corrente=None):
-        """Scansiona la raccolta partendo dal brano avviato, 30 file per lotto."""
+        """Precarica le foto in un thread: nessuna scansione/tag sul thread Tk."""
         if not HA_PIL or not HA_TAG or not corrente or not os.path.isabs(corrente):
             return
         if getattr(self, "_xvb_artisti_in_corso", False):
-            return
-        voci = list(getattr(self, "canali", []) or [])
-        file_audio = [f for _n, f, _i in voci
-                      if os.path.isabs(f) and os.path.splitext(f)[1][1:].lower() in AUDIO]
-        if corrente not in file_audio:
-            file_audio.insert(0, corrente)
-        else:
-            i = file_audio.index(corrente)
-            file_audio = file_audio[i:] + file_audio[:i]
-        # Un brano per artista: evita richieste duplicate nella stessa scansione.
-        ordinati, visti = [], set()
-        for f in file_audio:
-            artista = self.artista_del_file(f)
-            chiave = artista.casefold()
-            if artista and chiave not in visti:
-                visti.add(chiave)
-                ordinati.append((f, artista))
-        if not ordinati:
             return
         self._xvb_artisti_in_corso = True
 
         def lavora():
             try:
-                for inizio in range(0, len(ordinati), 30):
-                    lotto = ordinati[inizio:inizio + 30]
-                    for f, artista in lotto:
-                        foto = self.scarica_foto_artista(artista)
-                        if foto:
-                            def aggiorna(a=artista, p=foto):
-                                corrente = self.file_in_onda or ""
-                                if (corrente and os.path.isabs(corrente)
-                                        and os.path.splitext(corrente)[1][1:].lower() in AUDIO
-                                        and self.artista_del_file(corrente).casefold() == a.casefold()
-                                        and os.path.isfile(p) and os.path.getsize(p) > 0):
-                                    # Applica direttamente la foto appena scaricata:
-                                    # non ricalcolare la cover e non passare dal cambio
-                                    # stato che puo' nascondere/mostrare l'overlay.
-                                    self.sfondo_su = True
+                voci = list(getattr(self, "canali", []) or [])
+                file_audio = [f for _n, f, _i in voci
+                              if os.path.isabs(f) and os.path.splitext(f)[1][1:].lower() in AUDIO]
+                if corrente in file_audio:
+                    i = file_audio.index(corrente)
+                    file_audio = file_audio[i:] + file_audio[:i]
+                else:
+                    file_audio.insert(0, corrente)
+                visti = set()
+                richieste = 0
+                for f in file_audio:
+                    artista = self.artista_del_file(f)
+                    chiave = artista.casefold()
+                    if not artista or chiave in visti:
+                        continue
+                    visti.add(chiave)
+                    # Una foto gia' presente non genera rete, attese o ridisegni.
+                    destinazione = self.percorso_foto_artista(artista)
+                    if os.path.isfile(destinazione) and os.path.getsize(destinazione) > 0:
+                        continue
+                    foto = self.scarica_foto_artista(artista)
+                    if foto:
+                        def aggiorna(a=artista, p=foto):
+                            corrente_attuale = self.file_in_onda or ""
+                            if (corrente_attuale and os.path.isabs(corrente_attuale)
+                                    and os.path.splitext(corrente_attuale)[1][1:].lower() in AUDIO
+                                    and self.artista_del_file(corrente_attuale).casefold() == a.casefold()
+                                    and os.path.isfile(p)):
+                                self.sfondo_su = True
+                                if self.sfondo_file != p:
                                     self.sfondo_file = p
                                     self.sfondo_misura = None
-                                    self.rifai_sfondo()
-                            try:
-                                self.root.after(0, aggiorna)
-                            except Exception:
-                                pass
-                        # Il servizio gratuito consente circa 30 richieste/minuto.
-                        time.sleep(2.1)
-                    if inizio + 30 < len(ordinati):
+                                self.rifai_sfondo()
+                        try:
+                            self.root.after(0, aggiorna)
+                        except Exception:
+                            pass
+                    richieste += 1
+                    # Massimo 30 richieste per lotto; pausa conforme al servizio.
+                    time.sleep(2.1)
+                    if richieste and richieste % 30 == 0:
+                        self.salva_cache_artisti()
                         time.sleep(5)
+            except Exception:
+                pass
             finally:
+                self.salva_cache_artisti()
                 self._xvb_artisti_in_corso = False
 
         threading.Thread(target=lavora, name="XVB-foto-artisti", daemon=True).start()
@@ -10305,11 +10346,18 @@ class TV(object):
         if (ow, oh, self.sfondo_file) == self.sfondo_misura:
             return
         try:
-            im = Image.open(self.sfondo_file).convert("RGBA")
-            k = min(ow / float(im.width), oh / float(im.height))
-            im = im.resize((max(1, int(im.width * k)), max(1, int(im.height * k))), Image.LANCZOS)
-            tela = Image.new("RGBA", (ow, oh), (0, 0, 0, 255))
-            tela.alpha_composite(im, ((ow - im.width) // 2, (oh - im.height) // 2))
+            chiave = (self.sfondo_file, ow, oh)
+            tela = self._xvb_render_cache.get(chiave)
+            if tela is None:
+                im = Image.open(self.sfondo_file).convert("RGBA")
+                k = min(ow / float(im.width), oh / float(im.height))
+                im = im.resize((max(1, int(im.width * k)), max(1, int(im.height * k))), Image.LANCZOS)
+                tela = Image.new("RGBA", (ow, oh), (0, 0, 0, 255))
+                tela.alpha_composite(im, ((ow - im.width) // 2, (oh - im.height) // 2))
+                # Cache limitata: evita crescita RAM con librerie molto grandi.
+                if len(self._xvb_render_cache) >= 8:
+                    self._xvb_render_cache.pop(next(iter(self._xvb_render_cache)))
+                self._xvb_render_cache[chiave] = tela
             self.ov_sfondo = mpv.ImageOverlay(self.mpv, OV_SFONDO, tela, pos=(0, 0))
             self.sfondo_misura = (ow, oh, self.sfondo_file)
         except Exception:
@@ -11082,6 +11130,7 @@ class TV(object):
         self.cfg["url_aperti"] = []
 
     def chiudi(self):
+        self.salva_cache_artisti()
         self.via_i_provvisori()
         try:
             if self.porta is not None:
