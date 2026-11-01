@@ -240,7 +240,7 @@ def avvia_mpris(app):
     threading.Thread(target=GLib.MainLoop().run, daemon=True).start()
     return m
 
-VERSIONE = "4.3.4"
+VERSIONE = "4.3.5"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"
@@ -1915,6 +1915,9 @@ RIGA_ELENCO = 64
 LOGO_L, LOGO_A = 72, 56
 COLONNA = LOGO_L
 CACHE_ANTEPRIME = os.path.join(CASA, ".cache", "xvb", "anteprime")
+CACHE_VINILI = os.path.join(CASA, ".cache", "xvb", "vinili")
+CACHE_ARTISTI = os.path.join(CASA, ".cache", "xvb", "artisti")
+CACHE_ARTISTI_INDEX = os.path.join(CACHE_ARTISTI, "indice.json")
 
 
 def copertina_dentro(f):
@@ -2478,6 +2481,75 @@ def carica_logo(f, larga, alta, dentro=None, margine=0, quadrata=False):
         return None
 
 
+_MASCHERE_DISCO = {}
+_ANELLI_DISCO = {}
+
+
+def disco_base(f, lato):
+    """La copertina di un brano, quadrata (ritagliata al centro), pronta per
+    farne un vinile."""
+    im = Image.open(f).convert("RGBA")
+    l = min(im.size)
+    x0, y0 = (im.width - l) // 2, (im.height - l) // 2
+    return im.crop((x0, y0, x0 + l, y0 + l)).resize((lato, lato), Image.LANCZOS)
+
+
+def disco_frame(base, larga, alta, angolo=0.0, colore=None):
+    """Il vinile: copertina tonda col foro al centro e, intorno al foro, la
+    striscia del colore della voce; girata in senso orario dell'angolo dato,
+    in un riquadro fisso larga x alta."""
+    from PIL import ImageDraw
+    K = base.width
+    if K not in _MASCHERE_DISCO:
+        m = Image.new("L", (K, K), 0)
+        d = ImageDraw.Draw(m)
+        d.ellipse([0, 0, K - 1, K - 1], fill=255)
+        r = K * 0.075
+        d.ellipse([K / 2.0 - r, K / 2.0 - r, K / 2.0 + r, K / 2.0 + r], fill=0)
+        _MASCHERE_DISCO[K] = m
+    im = base.rotate(-angolo, resample=Image.BICUBIC) if angolo else base.copy()
+    im.putalpha(_MASCHERE_DISCO[K])
+    if colore and (K, colore) not in _ANELLI_DISCO:
+        try:
+            ov = Image.new("RGBA", (K, K), (0, 0, 0, 0))
+            d = ImageDraw.Draw(ov)
+            R, r = K * 0.19, K * 0.075
+            d.ellipse([K / 2.0 - R, K / 2.0 - R, K / 2.0 + R, K / 2.0 + R], fill=colore)
+            d.ellipse([K / 2.0 - r, K / 2.0 - r, K / 2.0 + r, K / 2.0 + r], fill=(0, 0, 0, 0))
+        except Exception:
+            ov = None
+        _ANELLI_DISCO[(K, colore)] = ov
+    if colore and _ANELLI_DISCO.get((K, colore)) is not None:
+        im.alpha_composite(_ANELLI_DISCO[(K, colore)])
+    im = im.resize((alta, alta), Image.LANCZOS)
+    box = Image.new("RGBA", (larga, alta), (0, 0, 0, 0))
+    box.alpha_composite(im, ((larga - alta) // 2, 0))
+    return box
+
+
+def disco_vinile(f, larga, alta, colore=None):
+    """Carica il vinile dalla cache su disco o lo genera una sola volta."""
+    try:
+        stat = os.stat(f)
+        chiave = "%s|%s|%s|%s|%s|%s" % (
+            os.path.abspath(f), stat.st_mtime_ns, stat.st_size,
+            colore or "", larga, alta
+        )
+        nome = hashlib.md5(chiave.encode("utf-8")).hexdigest() + ".png"
+        percorso = os.path.join(CACHE_VINILI, nome)
+
+        if not os.path.isfile(percorso) or os.path.getsize(percorso) == 0:
+            os.makedirs(CACHE_VINILI, exist_ok=True)
+            immagine = disco_frame(
+                disco_base(f, alta * 3), larga, alta, 0.0, colore
+            )
+            immagine.save(percorso, "PNG")
+
+        return ImageTk.PhotoImage(Image.open(percorso).convert("RGBA"))
+    except Exception:
+        return None
+
+
 def pallino(colore, lato=PUNTO):
     """Un pallino colorato, stile etichette del Mac, in un riquadro
     quadrato trasparente."""
@@ -2628,6 +2700,28 @@ def disco(colore, lato=PUNTO, alta=None, dentro=None):
     d.ellipse((3 * u, 3 * u, 21 * u, 21 * u), outline=colore, width=sp)
     d.ellipse((9.5 * u, 9.5 * u, 14.5 * u, 14.5 * u), outline=colore, width=sp)
     d.arc((6 * u, 6 * u, 18 * u, 18 * u), 200, 250, fill=colore, width=int(1.2 * u))
+    return nel_riquadro(im, lato, dentro)
+
+
+def vinile(colore, lato=PUNTO, dentro=None):
+    """L'icona di un album: un vinile nero col foro e la fascia centrale del
+    colore dato."""
+    if not HA_PIL:
+        return None
+    from PIL import ImageDraw
+    K = 4
+    im = Image.new("RGBA", (lato * K, lato * K), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    u = lato * K / 24.0
+    c = 12 * u
+
+    def cerchio(r, **kw):
+        d.ellipse((c - r * u, c - r * u, c + r * u, c + r * u), **kw)
+    cerchio(11.4, fill=(24, 24, 28, 255), outline="#6a6a74", width=max(1, int(1.2 * u)))
+    cerchio(9.2, outline=(72, 72, 80, 255), width=max(1, int(0.5 * u)))
+    cerchio(7.2, outline=(72, 72, 80, 255), width=max(1, int(0.5 * u)))
+    cerchio(5.2, fill=colore)
+    cerchio(1.9, fill=(0, 0, 0, 0))
     return nel_riquadro(im, lato, dentro)
 
 
@@ -4171,7 +4265,8 @@ class Elenco(tk.Text):
                 fondo = self.tag_cget("onda", "background") or ZEBRA
             c.create_rectangle(0, y0, COLONNA, y1, fill=fondo, outline="")
             if img is not None:
-                c.create_image(COLONNA // 2, (y_logo + y1) // 2, image=img)
+                c.create_image(COLONNA // 2, (y_logo + y1) // 2, image=img,
+                               tags=("lg_" + iid,))
 
     def clic_y(self, y):
         """Un clic nella colonna dei loghi vale come sulla sua voce."""
@@ -4477,8 +4572,17 @@ class TV(object):
         self.posto_file = {}
         self.sfondo_su = False
         self.tag_file = {}
+        # Cache persistente file -> artista: evita di rileggere i tag ad ogni brano.
+        self._xvb_artisti_file = leggi_json(CACHE_ARTISTI_INDEX)
+        if not isinstance(self._xvb_artisti_file, dict):
+            self._xvb_artisti_file = {}
+        self._xvb_artisti_lock = threading.RLock()
+        self._xvb_artisti_dirty = 0
+        self._xvb_artisti_mem = {}
+        self._xvb_render_cache = {}
         self.info = leggi_json(FILE_INFO)
         self.loghi_img = {}
+        self._disco = {"url": None, "ang": 0.0, "base": None, "img": None}
         self.anteprime = {}
         self.riprendi_da = 0.0
         self.percorso_mpv = None
@@ -4493,6 +4597,7 @@ class TV(object):
         self.root = tk.Tk(className="xvb")
         imposta_font_globale(self.root)
         self.root.title("XVB v" + VERSIONE)
+        self.root.after(500, self._giradisco)
 
 
         for p in (os.path.join(QUI, "icon.png"),
@@ -5632,7 +5737,14 @@ class TV(object):
                 k = ("cartella", p)
 
 
-                img_sotto = self.img_liste["disco"] if img_di(tutti) == img_mu else img_di(dentro)
+                if img_di(tutti) == img_mu:
+                    kv = ("vinile", colore_di(d))
+                    if kv not in self.img_liste:
+                        self.img_liste[kv] = (vinile(colore_di(d))
+                                              or self.img_liste["disco"])
+                    img_sotto = self.img_liste[kv]
+                else:
+                    img_sotto = img_di(dentro)
                 figlio = self.el_liste.insert(iid, "end", text=" %s (%d)" % (d, len(dentro)),
                                               image=img_sotto,
                                               tags=("usata",) if k == self.media_in_uso else ())
@@ -5928,7 +6040,12 @@ class TV(object):
             self.cfg["recenti"] = ([f] + [x for x in self.cfg.get("recenti", []) if x != f])[:12]
         self.file_in_onda = f
         self._lista_in_onda = None
+        if os.path.isabs(f) and os.path.splitext(f)[1][1:].lower() in AUDIO:
+            self.richiedi_foto_artisti(f)
         self.nome = self.nome_in_onda = nome or os.path.splitext(os.path.basename(f))[0]
+        # Ogni nuovo brano deve selezionare subito la propria immagine:
+        # cover immediata, foto artista se gia' presente in cache.
+        self.mostra_sfondo(True)
         self.ide_in_onda = None
         dvd = f.startswith("dvd://")
         est = "dvd" if dvd else "cd" if e_cd(f) else \
@@ -6039,6 +6156,8 @@ class TV(object):
         self._mappa_categorie_m3u[dove] = categorie or {}
         self.cfg["lista"] = dove
         scrivi_config(self.cfg)
+        
+        
 
         self.filtra()
         self.segna_in_uso(dove)
@@ -6421,7 +6540,7 @@ class TV(object):
                             if n.startswith(".") or not e_media(n):
                                 continue
                             batch.append((os.path.splitext(n)[0], os.path.join(dove, n), None))
-                            if len(batch) >= 100:
+                            if len(batch) >= 30:
                                 pronto = batch
                                 batch = []
                                 inviati = True
@@ -6507,7 +6626,7 @@ class TV(object):
                 self.elenco.insert("", "end", iid=str(i), text=self.testo_riga(nome, url, ide),
                                    image=self.pallino_di(nome, url),
                                    colore=self.colore_canale(nome, url),
-                                   logo=self.logo_di(url) or self.icona_file_di(url))
+                                   logo=self.logo_di(url, self.colore_canale(nome, url)) or self.icona_file_di(url))
                 if url not in self.colori and url in LOGHI and url not in self.in_coda:
                     self.in_coda.add(url)
                     self._render_colori.append(url)
@@ -7146,7 +7265,7 @@ class TV(object):
             self.elenco.insert("", "end", iid=str(i), text=self.testo_riga(nome, url, ide),
                                image=self.pallino_di(nome, url),
                                colore=self.colore_canale(nome, url),
-                               logo=self.logo_di(url) or self.icona_file_di(url))
+                               logo=self.logo_di(url, self.colore_canale(nome, url)) or self.icona_file_di(url))
             if url not in self.colori and url in LOGHI and url not in self.in_coda:
                 self.in_coda.add(url)
                 self._render_colori.append(url)
@@ -7405,7 +7524,7 @@ class TV(object):
         except (ValueError, IndexError):
             return None
         if self.media_in_uso or self.reg_in_uso or os.path.isabs(url):
-            if not os.path.isabs(url) or os.path.splitext(url)[1][1:].lower() in AUDIO:
+            if not os.path.isabs(url):
                 return None
             pos = self.cfg.get("posizioni", {}).get(url)
             if not pos:
@@ -7508,8 +7627,30 @@ class TV(object):
                 nuovi = True
         if nuovi:
             scrivi_tag(self.tag_cache)
-            if self.media_in_uso == chiave:
+
+        if self.media_in_uso == chiave:
+            if chiave[0] == "cartella" and not self.cfg.get("shuffle"):
+                def chiave_titolo(canale):
+                    nome, f, _ide = canale
+                    tag = self.tag_file.get(f, ("", "", "", ""))
+                    info = self.info.get(f, {})
+                    titolo = (
+                        (tag[0] if tag else "")
+                        or info.get("titolo", "")
+                        or nome
+                    )
+                    return str(titolo).strip().casefold()
+
+                ordinati = sorted(canali, key=chiave_titolo)
+                self.root.after(
+                    0,
+                    lambda k=chiave, lista=ordinati:
+                        self._applica_ordine_titolo(k, lista)
+                )
+            elif nuovi:
                 self.root.after(0, self.filtra)
+
+            if nuovi:
                 self.root.after(0, self.scrivi_riga)
 
 
@@ -7529,6 +7670,15 @@ class TV(object):
 
             if fatte and self.media_in_uso == chiave:
                 self.root.after(0, self.filtra)
+
+    def _applica_ordine_titolo(self, chiave, ordinati):
+        """Applica l'ordine alfabetico per titolo dopo la lettura dei tag."""
+        if self.media_in_uso != chiave or self.cfg.get("shuffle"):
+            return
+        self.canali = list(ordinati)
+        self.ordine_vero = list(ordinati)
+        self.filtra()
+        self.scrivi_riga()
 
     def colore_canale(self, nome, url):
         """Il colore del canale: quello preso dal suo logo, se lo si ha;
@@ -7593,10 +7743,11 @@ class TV(object):
             self.icona_colonna = carica_logo(self.icona_file, LOGO_L, LOGO_A)
         return self.icona_colonna
 
-    def logo_di(self, url):
+    def logo_di(self, url, colore=None):
         """Il logo del canale come immagine per l'elenco, dalla cache dei
         loghi (quella scaricata per i colori). None se non c'e' ancora."""
-        if url in self.loghi_img:
+        cd = self.__dict__.setdefault("_colori_dischi", {})
+        if url in self.loghi_img and (colore is None or cd.get(url, colore) == colore):
             return self.loghi_img[url]
         if not HA_PIL:
             return None
@@ -7618,16 +7769,72 @@ class TV(object):
 
         film = url.startswith("dvd://") or (os.path.isabs(url)
                                              and os.path.splitext(url)[1][1:].lower() not in AUDIO)
-        im = carica_logo(f, LOGO_L, LOGO_A, margine=6 if iptv else 0, quadrata=film)
+        if os.path.isabs(url) and os.path.splitext(url)[1][1:].lower() in AUDIO:
+            im = disco_vinile(f, LOGO_L, LOGO_A, colore)
+            cd[url] = colore
+        else:
+            im = carica_logo(f, LOGO_L, LOGO_A, margine=6 if iptv else 0, quadrata=film)
         if im is not None:
             self.loghi_img[url] = im
         return im
+
+    def _giradisco(self):
+        """Il vinile: la copertina tonda del brano in onda gira piano in senso
+        orario finche' suona; in pausa si ferma dov'e'; cambiando brano la
+        riga di prima torna ferma."""
+        try:
+            self._giradisco_passo()
+        except Exception:
+            pass
+        self.root.after(40, self._giradisco)
+
+    def _giradisco_riga(self, url, im, fermo=False):
+        """Girando, cambia solo la copertina nella colonna dei loghi (ridisegnare
+        la riga a ogni passo andrebbe a scatti); a fine rotazione la riga si
+        ridisegna una volta, con la copertina ferma."""
+        for i, (_n, u, _l) in enumerate(self.visti):
+            iid = str(i)
+            if u != url or not self.elenco.exists(iid):
+                continue
+            if fermo:
+                self.elenco.item(iid, logo=self.logo_di(url, self.elenco.dati[iid].get("colore"))
+                                 or self.icona_file_di(url))
+            else:
+                self.elenco.dati[iid]["logo"] = im
+                self.elenco.colonna.itemconfigure("lg_" + iid, image=im)
+
+    def _giradisco_passo(self):
+        st = self._disco
+        url = self.file_in_onda
+        audio = bool(HA_PIL and url and os.path.isabs(url)
+                     and os.path.splitext(url)[1][1:].lower() in AUDIO)
+        if st["url"] and st["url"] != url:
+            vecchio = st["url"]
+            st["url"] = st["base"] = st["img"] = None
+            self._giradisco_riga(vecchio, None, fermo=True)
+        adesso = time.monotonic()
+        dt = min(0.2, adesso - st.get("t", adesso))
+        st["t"] = adesso
+        if not audio or getattr(self, "mpv", None) is None or self.mpv.pause:
+            return
+        if st["url"] != url:
+            f = self.anteprime.get(url)
+            if not f or not os.path.isfile(f):
+                return
+            colore = next((self.elenco.dati[str(i)].get("colore")
+                           for i, (_n, u, _l) in enumerate(self.visti)
+                           if u == url and self.elenco.exists(str(i))), None)
+            st.update(url=url, ang=0.0, colore=colore, base=disco_base(f, LOGO_A * 3))
+        st["ang"] = (st["ang"] + 60.0 * dt) % 360.0
+        st["img"] = ImageTk.PhotoImage(
+            disco_frame(st["base"], LOGO_L, LOGO_A, st["ang"], st.get("colore")))
+        self._giradisco_riga(url, st["img"])
 
     def aggiorna_pallino(self, url, c):
         for i, (nome, u, _i) in enumerate(self.visti):
             if u == url and self.elenco.exists(str(i)):
                 self.elenco.item(str(i), image=self.pallino_di(nome, u),
-                                 logo=self.logo_di(u) or self.icona_file_di(u))
+                                 logo=self.logo_di(u, self.colore_canale(nome, u)) or self.icona_file_di(u))
         if url == self.cfg.get("canale"):
             self.colora_stato(c)
             self.segna_in_onda(url)
@@ -9900,13 +10107,193 @@ class TV(object):
             self.et_orologio.config(text=ora)
         self.root.after(500, self.aggiorna_linea)
 
+    def artista_del_file(self, f):
+        """Artista del brano: cache RAM, indice su disco, tag solo al primo accesso."""
+        if not f or not os.path.isabs(f) or os.path.splitext(f)[1][1:].lower() not in AUDIO:
+            return ""
+        try:
+            st = os.stat(f)
+            firma = [int(getattr(st, "st_mtime_ns", st.st_mtime * 1e9)), int(st.st_size)]
+        except OSError:
+            return ""
+        # Il lock protegge solo i dizionari: mai tenerlo durante letture tag o disco.
+        with self._xvb_artisti_lock:
+            voce = self._xvb_artisti_file.get(f)
+            if isinstance(voce, list) and len(voce) == 3 and voce[:2] == firma:
+                return str(voce[2] or "")
+            tag = self.tag_file.get(f)
+        if not tag:
+            tag = tag_di(f, self.tag_cache)
+        artista = (tag[1] if tag and len(tag) > 1 else "").strip()
+        if not artista:
+            _titolo, artista, _album, _anno = dal_percorso(f, self.cfg.get("cartelle", []))
+        artista = str(artista or "").strip()
+        with self._xvb_artisti_lock:
+            self.tag_file[f] = tag
+            self._xvb_artisti_file[f] = firma + [artista]
+            self._xvb_artisti_mem[artista.casefold()] = artista
+            self._xvb_artisti_dirty += 1
+            salva = self._xvb_artisti_dirty >= 8
+        if salva:
+            self.salva_cache_artisti()
+        return artista
+
+    def salva_cache_artisti(self):
+        """Scrive l'indice in modo atomico, senza interrompere la riproduzione."""
+        with self._xvb_artisti_lock:
+            if not self._xvb_artisti_dirty:
+                return
+            try:
+                os.makedirs(CACHE_ARTISTI, exist_ok=True)
+                temporaneo = CACHE_ARTISTI_INDEX + ".tmp"
+                with open(temporaneo, "w", encoding="utf-8") as h:
+                    json.dump(self._xvb_artisti_file, h, ensure_ascii=False, separators=(",", ":"))
+                os.replace(temporaneo, CACHE_ARTISTI_INDEX)
+                self._xvb_artisti_dirty = 0
+            except Exception:
+                pass
+
+    def percorso_foto_artista(self, artista):
+        chiave = hashlib.sha256(artista.casefold().encode("utf-8")).hexdigest()
+        return os.path.join(CACHE_ARTISTI, chiave + ".jpg")
+
+    def scarica_foto_artista(self, artista):
+        """Ricerca TheAudioDB in background; cache locale e cache negativa."""
+        if not artista:
+            return None
+        os.makedirs(CACHE_ARTISTI, exist_ok=True)
+        destinazione = self.percorso_foto_artista(artista)
+        if os.path.isfile(destinazione) and os.path.getsize(destinazione) > 0:
+            return destinazione
+        mancata = destinazione + ".miss"
+        try:
+            if os.path.isfile(mancata) and time.time() - os.path.getmtime(mancata) < 7 * 86400:
+                return None
+        except OSError:
+            pass
+        try:
+            url = "https://www.theaudiodb.com/api/v1/json/123/search.php?s=" + quote(artista)
+            req = Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
+            with urlopen(req, timeout=12) as risposta:
+                dati = json.loads(risposta.read(2 * 1024 * 1024).decode("utf-8", "replace"))
+            artisti = dati.get("artists") or []
+            trovato = None
+            nome_cercato = " ".join(artista.casefold().split())
+            for voce in artisti:
+                nome = " ".join(str(voce.get("strArtist") or "").casefold().split())
+                if nome == nome_cercato:
+                    trovato = voce
+                    break
+            if trovato is None and len(artisti) == 1:
+                trovato = artisti[0]
+            if trovato is None:
+                open(mancata, "w").close()
+                return None
+            immagine = next((trovato.get(k) for k in (
+                "strArtistFanart", "strArtistFanart2", "strArtistFanart3",
+                "strArtistFanart4", "strArtistThumb", "strArtistBanner"
+            ) if trovato.get(k)), None)
+            if not immagine:
+                open(mancata, "w").close()
+                return None
+            req = Request(immagine, headers={"User-Agent": UA})
+            with urlopen(req, timeout=18) as risposta:
+                contenuto = risposta.read(15 * 1024 * 1024)
+            if not contenuto:
+                return None
+            if HA_PIL:
+                import io
+                with Image.open(io.BytesIO(contenuto)) as originale:
+                    im = originale.convert("RGB")
+                    im.thumbnail((1600, 1000), Image.LANCZOS)
+                    im.save(destinazione, "JPEG", quality=88, optimize=True)
+            else:
+                with open(destinazione, "wb") as h:
+                    h.write(contenuto)
+            try:
+                os.remove(mancata)
+            except OSError:
+                pass
+            return destinazione if os.path.isfile(destinazione) else None
+        except Exception:
+            return None
+
+    def richiedi_foto_artisti(self, corrente=None):
+        """Precarica le foto in un thread: nessuna scansione/tag sul thread Tk."""
+        if not HA_PIL or not HA_TAG or not corrente or not os.path.isabs(corrente):
+            return
+        if getattr(self, "_xvb_artisti_in_corso", False):
+            return
+        self._xvb_artisti_in_corso = True
+
+        def lavora():
+            try:
+                voci = list(getattr(self, "canali", []) or [])
+                file_audio = [f for _n, f, _i in voci
+                              if os.path.isabs(f) and os.path.splitext(f)[1][1:].lower() in AUDIO]
+                if corrente in file_audio:
+                    i = file_audio.index(corrente)
+                    file_audio = file_audio[i:] + file_audio[:i]
+                else:
+                    file_audio.insert(0, corrente)
+                visti = set()
+                richieste = 0
+                for f in file_audio:
+                    artista = self.artista_del_file(f)
+                    chiave = artista.casefold()
+                    if not artista or chiave in visti:
+                        continue
+                    visti.add(chiave)
+                    # Una foto gia' presente non genera rete, attese o ridisegni.
+                    destinazione = self.percorso_foto_artista(artista)
+                    if os.path.isfile(destinazione) and os.path.getsize(destinazione) > 0:
+                        continue
+                    foto = self.scarica_foto_artista(artista)
+                    if foto:
+                        def aggiorna(a=artista, p=foto):
+                            corrente_attuale = self.file_in_onda or ""
+                            if (corrente_attuale and os.path.isabs(corrente_attuale)
+                                    and os.path.splitext(corrente_attuale)[1][1:].lower() in AUDIO
+                                    and self.artista_del_file(corrente_attuale).casefold() == a.casefold()
+                                    and os.path.isfile(p)):
+                                self.sfondo_su = True
+                                if self.sfondo_file != p:
+                                    self.sfondo_file = p
+                                    self.sfondo_misura = None
+                                self.rifai_sfondo()
+                        try:
+                            self.root.after(0, aggiorna)
+                        except Exception:
+                            pass
+                    richieste += 1
+                    # Massimo 30 richieste per lotto; pausa conforme al servizio.
+                    time.sleep(2.1)
+                    if richieste and richieste % 30 == 0:
+                        self.salva_cache_artisti()
+                        time.sleep(5)
+            except Exception:
+                pass
+            finally:
+                self.salva_cache_artisti()
+                self._xvb_artisti_in_corso = False
+
+        threading.Thread(target=lavora, name="XVB-foto-artisti", daemon=True).start()
+
     def sfondo_giusto(self):
-        """Mentre suona un indirizzo con la copertina scelta: quella; se no
-        (e da fermi) lo schermo di XVB."""
+        """Foto artista per la musica; in attesa usa la cover del brano."""
         u = self.file_in_onda or self.cfg.get("canale") or ""
-        if u and not os.path.isabs(u) and not getattr(self, "fermato", None) \
-                and self.nome_in_onda and os.path.isfile(copertina_url(u)):
-            return copertina_url(u)
+        if u and not getattr(self, "fermato", None) and self.nome_in_onda:
+            if os.path.isabs(u) and os.path.splitext(u)[1][1:].lower() in AUDIO:
+                artista = self.artista_del_file(u)
+                if artista:
+                    foto = self.percorso_foto_artista(artista)
+                    if os.path.isfile(foto) and os.path.getsize(foto) > 0:
+                        return foto
+                cover = anteprima_di(u)
+                if cover and os.path.isfile(cover):
+                    return cover
+            elif not os.path.isabs(u) and os.path.isfile(copertina_url(u)):
+                return copertina_url(u)
         return os.path.join(QUI, "icone", "screen.png")
 
     def mostra_sfondo(self, si):
@@ -9920,9 +10307,9 @@ class TV(object):
             giusto = self.sfondo_giusto()
             if giusto != self.sfondo_file:
                 self.sfondo_file, self.sfondo_misura = giusto, None
-            self.sfondo_misura = None
+            # Non invalidare la misura se l'immagine e' gia' quella giusta:
+            # evita ridisegni inutili e lampeggi durante la riproduzione.
             self.rifai_sfondo()
-
             for t in (300, 1500):
                 self.root.after(t, lambda: self.sfondo_su and self.rifai_sfondo())
         else:
@@ -9962,11 +10349,18 @@ class TV(object):
         if (ow, oh, self.sfondo_file) == self.sfondo_misura:
             return
         try:
-            im = Image.open(self.sfondo_file).convert("RGBA")
-            k = min(ow / float(im.width), oh / float(im.height))
-            im = im.resize((max(1, int(im.width * k)), max(1, int(im.height * k))), Image.LANCZOS)
-            tela = Image.new("RGBA", (ow, oh), (0, 0, 0, 255))
-            tela.alpha_composite(im, ((ow - im.width) // 2, (oh - im.height) // 2))
+            chiave = (self.sfondo_file, ow, oh)
+            tela = self._xvb_render_cache.get(chiave)
+            if tela is None:
+                im = Image.open(self.sfondo_file).convert("RGBA")
+                k = min(ow / float(im.width), oh / float(im.height))
+                im = im.resize((max(1, int(im.width * k)), max(1, int(im.height * k))), Image.LANCZOS)
+                tela = Image.new("RGBA", (ow, oh), (0, 0, 0, 255))
+                tela.alpha_composite(im, ((ow - im.width) // 2, (oh - im.height) // 2))
+                # Cache limitata: evita crescita RAM con librerie molto grandi.
+                if len(self._xvb_render_cache) >= 8:
+                    self._xvb_render_cache.pop(next(iter(self._xvb_render_cache)))
+                self._xvb_render_cache[chiave] = tela
             self.ov_sfondo = mpv.ImageOverlay(self.mpv, OV_SFONDO, tela, pos=(0, 0))
             self.sfondo_misura = (ow, oh, self.sfondo_file)
         except Exception:
@@ -10223,10 +10617,14 @@ class TV(object):
         return any(t.get("type") == "video" and not t.get("albumart") for t in tracce)
 
     def ha_immagine(self):
-        """Quello che suona ha qualcosa da vedere: un video o la copertina
-        (per mpv e' una traccia video anche lei). Si chiede una volta per
-        cosa che suona, poi si ricorda."""
+        """I file audio usano lo sfondo XVB (foto artista o cover), non la
+        traccia album-art interna di mpv. I video mantengono il loro video."""
         k = self.file_in_onda or self.cfg.get("canale") or ""
+        if os.path.isabs(k) and os.path.splitext(k)[1][1:].lower() in AUDIO:
+            if not hasattr(self, "con_immagine"):
+                self.con_immagine = {}
+            self.con_immagine[k] = False
+            return False
         if not hasattr(self, "con_immagine"):
             self.con_immagine = {}
         if k not in self.con_immagine:
@@ -10248,8 +10646,14 @@ class TV(object):
             immagine = self.ha_immagine()
             if self.sfondo_su and immagine:
                 self.root.after(0, self.mostra_sfondo, False)
-            elif not immagine and (not self.sfondo_su or self.sfondo_file != self.sfondo_giusto()):
-                self.root.after(0, self.mostra_sfondo, True)
+            elif not immagine:
+                locale_audio = (os.path.isabs(self.file_in_onda or "")
+                                and os.path.splitext(self.file_in_onda or "")[1][1:].lower() in AUDIO)
+                # Per la musica non ricalcolare lo sfondo a ogni aggiornamento
+                # della progress: lo decide il brano avviato e lo aggiorna il
+                # callback quando arriva la foto artista.
+                if not self.sfondo_su or (not locale_audio and self.sfondo_file != self.sfondo_giusto()):
+                    self.root.after(0, self.mostra_sfondo, True)
             if self.file_in_onda and getattr(self, "riprendi_da", 0.0):
 
 
@@ -10729,6 +11133,7 @@ class TV(object):
         self.cfg["url_aperti"] = []
 
     def chiudi(self):
+        self.salva_cache_artisti()
         self.via_i_provvisori()
         try:
             if self.porta is not None:
