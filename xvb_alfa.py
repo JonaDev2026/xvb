@@ -1916,6 +1916,7 @@ LOGO_L, LOGO_A = 72, 56
 COLONNA = LOGO_L
 CACHE_ANTEPRIME = os.path.join(CASA, ".cache", "xvb", "anteprime")
 CACHE_VINILI = os.path.join(CASA, ".cache", "xvb", "vinili")
+CACHE_ARTISTI = os.path.join(CASA, ".cache", "xvb", "artisti")
 
 
 def copertina_dentro(f):
@@ -6030,6 +6031,8 @@ class TV(object):
             self.cfg["recenti"] = ([f] + [x for x in self.cfg.get("recenti", []) if x != f])[:12]
         self.file_in_onda = f
         self._lista_in_onda = None
+        if os.path.isabs(f) and os.path.splitext(f)[1][1:].lower() in AUDIO:
+            self.richiedi_foto_artisti(f)
         self.nome = self.nome_in_onda = nome or os.path.splitext(os.path.basename(f))[0]
         self.ide_in_onda = None
         dvd = f.startswith("dvd://")
@@ -10092,13 +10095,148 @@ class TV(object):
             self.et_orologio.config(text=ora)
         self.root.after(500, self.aggiorna_linea)
 
+    def artista_del_file(self, f):
+        """Artista del brano, prima dai tag gia' letti e poi dal percorso."""
+        if not f or not os.path.isabs(f) or os.path.splitext(f)[1][1:].lower() not in AUDIO:
+            return ""
+        tag = self.tag_file.get(f)
+        if not tag:
+            tag = tag_di(f, self.tag_cache)
+            self.tag_file[f] = tag
+        artista = (tag[1] if tag and len(tag) > 1 else "").strip()
+        if not artista:
+            _titolo, artista, _album, _anno = dal_percorso(f, self.cfg.get("cartelle", []))
+        return str(artista or "").strip()
+
+    def percorso_foto_artista(self, artista):
+        chiave = hashlib.sha256(artista.casefold().encode("utf-8")).hexdigest()
+        return os.path.join(CACHE_ARTISTI, chiave + ".jpg")
+
+    def scarica_foto_artista(self, artista):
+        """Ricerca TheAudioDB in background; cache locale e cache negativa."""
+        if not artista:
+            return None
+        os.makedirs(CACHE_ARTISTI, exist_ok=True)
+        destinazione = self.percorso_foto_artista(artista)
+        if os.path.isfile(destinazione) and os.path.getsize(destinazione) > 0:
+            return destinazione
+        mancata = destinazione + ".miss"
+        try:
+            if os.path.isfile(mancata) and time.time() - os.path.getmtime(mancata) < 7 * 86400:
+                return None
+        except OSError:
+            pass
+        try:
+            url = "https://www.theaudiodb.com/api/v1/json/123/search.php?s=" + quote(artista)
+            req = Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
+            with urlopen(req, timeout=12) as risposta:
+                dati = json.loads(risposta.read(2 * 1024 * 1024).decode("utf-8", "replace"))
+            artisti = dati.get("artists") or []
+            trovato = None
+            nome_cercato = " ".join(artista.casefold().split())
+            for voce in artisti:
+                nome = " ".join(str(voce.get("strArtist") or "").casefold().split())
+                if nome == nome_cercato:
+                    trovato = voce
+                    break
+            if trovato is None and len(artisti) == 1:
+                trovato = artisti[0]
+            if trovato is None:
+                open(mancata, "w").close()
+                return None
+            immagine = next((trovato.get(k) for k in (
+                "strArtistFanart", "strArtistFanart2", "strArtistFanart3",
+                "strArtistFanart4", "strArtistThumb", "strArtistBanner"
+            ) if trovato.get(k)), None)
+            if not immagine:
+                open(mancata, "w").close()
+                return None
+            req = Request(immagine, headers={"User-Agent": UA})
+            with urlopen(req, timeout=18) as risposta:
+                contenuto = risposta.read(15 * 1024 * 1024)
+            if not contenuto:
+                return None
+            if HA_PIL:
+                import io
+                with Image.open(io.BytesIO(contenuto)) as originale:
+                    im = originale.convert("RGB")
+                    im.thumbnail((1600, 1000), Image.LANCZOS)
+                    im.save(destinazione, "JPEG", quality=88, optimize=True)
+            else:
+                with open(destinazione, "wb") as h:
+                    h.write(contenuto)
+            try:
+                os.remove(mancata)
+            except OSError:
+                pass
+            return destinazione if os.path.isfile(destinazione) else None
+        except Exception:
+            return None
+
+    def richiedi_foto_artisti(self, corrente=None):
+        """Scansiona la raccolta partendo dal brano avviato, 30 file per lotto."""
+        if not HA_PIL or not HA_TAG or not corrente or not os.path.isabs(corrente):
+            return
+        if getattr(self, "_xvb_artisti_in_corso", False):
+            return
+        voci = list(getattr(self, "canali", []) or [])
+        file_audio = [f for _n, f, _i in voci
+                      if os.path.isabs(f) and os.path.splitext(f)[1][1:].lower() in AUDIO]
+        if corrente not in file_audio:
+            file_audio.insert(0, corrente)
+        else:
+            i = file_audio.index(corrente)
+            file_audio = file_audio[i:] + file_audio[:i]
+        # Un brano per artista: evita richieste duplicate nella stessa scansione.
+        ordinati, visti = [], set()
+        for f in file_audio:
+            artista = self.artista_del_file(f)
+            chiave = artista.casefold()
+            if artista and chiave not in visti:
+                visti.add(chiave)
+                ordinati.append((f, artista))
+        if not ordinati:
+            return
+        self._xvb_artisti_in_corso = True
+
+        def lavora():
+            try:
+                for inizio in range(0, len(ordinati), 30):
+                    lotto = ordinati[inizio:inizio + 30]
+                    for f, artista in lotto:
+                        foto = self.scarica_foto_artista(artista)
+                        if foto:
+                            def aggiorna(a=artista, p=foto):
+                                if self.file_in_onda and self.artista_del_file(self.file_in_onda).casefold() == a.casefold():
+                                    self.mostra_sfondo(True)
+                            try:
+                                self.root.after(0, aggiorna)
+                            except Exception:
+                                pass
+                        # Il servizio gratuito consente circa 30 richieste/minuto.
+                        time.sleep(2.1)
+                    if inizio + 30 < len(ordinati):
+                        time.sleep(5)
+            finally:
+                self._xvb_artisti_in_corso = False
+
+        threading.Thread(target=lavora, name="XVB-foto-artisti", daemon=True).start()
+
     def sfondo_giusto(self):
-        """Mentre suona un indirizzo con la copertina scelta: quella; se no
-        (e da fermi) lo schermo di XVB."""
+        """Foto artista per la musica; in attesa usa la cover del brano."""
         u = self.file_in_onda or self.cfg.get("canale") or ""
-        if u and not os.path.isabs(u) and not getattr(self, "fermato", None) \
-                and self.nome_in_onda and os.path.isfile(copertina_url(u)):
-            return copertina_url(u)
+        if u and not getattr(self, "fermato", None) and self.nome_in_onda:
+            if os.path.isabs(u) and os.path.splitext(u)[1][1:].lower() in AUDIO:
+                artista = self.artista_del_file(u)
+                if artista:
+                    foto = self.percorso_foto_artista(artista)
+                    if os.path.isfile(foto) and os.path.getsize(foto) > 0:
+                        return foto
+                cover = anteprima_di(u)
+                if cover and os.path.isfile(cover):
+                    return cover
+            elif not os.path.isabs(u) and os.path.isfile(copertina_url(u)):
+                return copertina_url(u)
         return os.path.join(QUI, "icone", "screen.png")
 
     def mostra_sfondo(self, si):
