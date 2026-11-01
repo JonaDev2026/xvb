@@ -5287,8 +5287,10 @@ class TV(object):
         di configurazione - liste sparite, o che stanno gia' in playlists/ -
         si tolgono da soli."""
         fuori = liste_in_cartella()
-        for _nome, dentro in categorie():
-            fuori += dentro
+        for nome, dentro in categorie():
+            # Esclude la cartella dei preferiti dal conteggio e dalle liste IPTV/M3U
+            if nome.lower() != PREFERITI.lower():
+                fuori += dentro
         buone = []
         for d in self.cfg.get("liste", []):
             if (not d.startswith("http") and os.path.isfile(d)
@@ -8676,8 +8678,8 @@ class TV(object):
         return self.si_nasconde()
 
     def mostra_barra(self, si):
-        if getattr(self, "mai_partito", False):
-            si = False
+        #if getattr(self, "mai_partito", False):
+          #  si = False
         self.barra_visibile = si
         if getattr(self, "pip", False):
             self.barra.place_forget()
