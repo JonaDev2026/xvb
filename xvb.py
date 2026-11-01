@@ -240,7 +240,7 @@ def avvia_mpris(app):
     threading.Thread(target=GLib.MainLoop().run, daemon=True).start()
     return m
 
-VERSIONE = "4.3.5"
+VERSIONE = "4.3.6"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"
@@ -7373,7 +7373,9 @@ class TV(object):
             url = self.file_in_onda
 
             if os.path.splitext(url)[1][1:].lower() in AUDIO:
-                return 0
+                if url not in self.anteprime:
+                    self.copertina_onda(url)
+                return POSTER_H if self.anteprime.get(url) else 0
             src = poster_film(url) or self.anteprime.get(url) or self.info.get(url, {}).get("poster")
             return POSTER_H if src else 0
 
@@ -7402,6 +7404,29 @@ class TV(object):
         self.scarica_poster(src, f)
         return 0
 
+    def copertina_onda(self, url):
+        """In un thread: la copertina del brano in onda, se non c'e' ancora;
+        poi il riquadro dell'anteprima si apre."""
+        cerca = self.__dict__.setdefault("_copertina_in_corso", set())
+        if url in cerca:
+            return
+        cerca.add(url)
+
+        def lavora():
+            try:
+                f = anteprima_di(url)
+            except Exception:
+                f = None
+
+            def fine():
+                cerca.discard(url)
+                self.anteprime[url] = f
+                self.loghi_img.pop(url, None)
+                if self.file_in_onda == url:
+                    self.poster_scaricato()
+            self.root.after(0, fine)
+        threading.Thread(target=lavora, daemon=True).start()
+
     def poster_scaricato(self):
         self.applica_poster()
         self.elenco.ridisegna_colonna()
@@ -7416,7 +7441,8 @@ class TV(object):
         self.applica_poster()
 
     def poster_di(self, iid, w, h):
-        """Mostra l'anteprima per i canali TV o per i video locali in riproduzione (mai per la musica)."""
+        """Mostra l'anteprima per i canali TV, per i video locali e per la musica
+        (con la sua copertina) in riproduzione."""
         try:
             nome, url, ide = self.visti[int(iid)]
         except (ValueError, IndexError):
@@ -7425,6 +7451,9 @@ class TV(object):
         if os.path.isabs(url):
 
             if os.path.splitext(url)[1][1:].lower() in AUDIO:
+                if self.poster_attivo() or url == self.file_in_onda:
+                    src = self.anteprime.get(url)
+                    return (self.poster_pronto(src, w, h) if src else None), ""
                 return None, ""
 
 
