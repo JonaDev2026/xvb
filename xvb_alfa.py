@@ -10207,8 +10207,18 @@ class TV(object):
                         foto = self.scarica_foto_artista(artista)
                         if foto:
                             def aggiorna(a=artista, p=foto):
-                                if self.file_in_onda and self.artista_del_file(self.file_in_onda).casefold() == a.casefold():
-                                    self.mostra_sfondo(True)
+                                corrente = self.file_in_onda or ""
+                                if (corrente and os.path.isabs(corrente)
+                                        and os.path.splitext(corrente)[1][1:].lower() in AUDIO
+                                        and self.artista_del_file(corrente).casefold() == a.casefold()
+                                        and os.path.isfile(p) and os.path.getsize(p) > 0):
+                                    # Applica direttamente la foto appena scaricata:
+                                    # non ricalcolare la cover e non passare dal cambio
+                                    # stato che puo' nascondere/mostrare l'overlay.
+                                    self.sfondo_su = True
+                                    self.sfondo_file = p
+                                    self.sfondo_misura = None
+                                    self.rifai_sfondo()
                             try:
                                 self.root.after(0, aggiorna)
                             except Exception:
@@ -10582,8 +10592,14 @@ class TV(object):
             immagine = self.ha_immagine()
             if self.sfondo_su and immagine:
                 self.root.after(0, self.mostra_sfondo, False)
-            elif not immagine and (not self.sfondo_su or self.sfondo_file != self.sfondo_giusto()):
-                self.root.after(0, self.mostra_sfondo, True)
+            elif not immagine:
+                locale_audio = (os.path.isabs(self.file_in_onda or "")
+                                and os.path.splitext(self.file_in_onda or "")[1][1:].lower() in AUDIO)
+                # Per la musica non ricalcolare lo sfondo a ogni aggiornamento
+                # della progress: lo decide il brano avviato e lo aggiorna il
+                # callback quando arriva la foto artista.
+                if not self.sfondo_su or (not locale_audio and self.sfondo_file != self.sfondo_giusto()):
+                    self.root.after(0, self.mostra_sfondo, True)
             if self.file_in_onda and getattr(self, "riprendi_da", 0.0):
 
 
