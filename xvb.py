@@ -240,7 +240,7 @@ def avvia_mpris(app):
     threading.Thread(target=GLib.MainLoop().run, daemon=True).start()
     return m
 
-VERSIONE = "4.3.3"
+VERSIONE = "4.3.4"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"
@@ -1499,6 +1499,12 @@ def lingua_sistema():
     return "en"
 
 
+for _l, _t in (("it", "Nuova playlist..."), ("es", "Nueva lista..."),
+               ("fr", "Nouvelle liste..."), ("de", "Neue Playlist..."),
+               ("pt", "Nova playlist..."), ("ru", "Новый плейлист...")):
+    TESTI[_l]["New playlist..."] = _t
+
+
 def _(testo):
     """Il testo nella lingua scelta; se manca, resta l'inglese."""
     return TESTI.get(LINGUA, {}).get(testo, testo)
@@ -1514,7 +1520,7 @@ IN_RIPRODUZIONE = "#42414d"
 PREFERITI = "favorite"
 
 
-PREFERITI_ACCESI = False
+PREFERITI_ACCESI = True
 PREF_IPTV = "iptv"
 PREF_MUSICA = "music"
 PREF_VIDEO = "video"
@@ -1795,9 +1801,20 @@ def leggi_lista(f, solo_cache=False):
     return [tuple(c) for c in dati.get("canali", [])]
 
 
+def _cat_vuota(d):
+    return "MyPlaylist" if os.path.basename(os.path.dirname(d)) == PREFERITI else "Altri"
+
+
+def nome_vista(d):
+    if os.path.basename(os.path.dirname(d)) == PREFERITI:
+        n = os.path.splitext(os.path.basename(d))[0]
+        return {PREF_IPTV: "IPTV", PREF_MUSICA: _("Music"), PREF_VIDEO: _("Video")}.get(n, n)
+    return nome_di(d)
+
+
 def categorie_m3u(f, solo_cache=True):
     dati = _dati_lista(f, solo_cache=solo_cache)
-    return {url: (categoria or "Altri") for url, categoria in dati.get("categorie", {}).items()}
+    return {url: (categoria or _cat_vuota(f)) for url, categoria in dati.get("categorie", {}).items()}
 
 
 LOGHI = {}
@@ -2719,6 +2736,19 @@ def file_preferiti(tipo=PREF_IPTV):
     return os.path.join(cartella_liste_in_uso(), PREFERITI, nome + ".m3u")
 
 
+def leggi_preferiti_cat(tipo=PREF_IPTV):
+    """Come leggi_preferiti, ma con la playlist: (nome, url, ide, playlist)."""
+    f = file_preferiti(tipo)
+    if not os.path.isfile(f):
+        return []
+    try:
+        canali = leggi_lista(f)
+        cat = categorie_m3u(f)
+    except Exception:
+        return []
+    return [(n, u, i, cat.get(u, "MyPlaylist")) for n, u, i in canali]
+
+
 def leggi_preferiti(tipo=PREF_IPTV):
     f = file_preferiti(tipo)
     if not os.path.isfile(f):
@@ -2745,11 +2775,14 @@ def scrivi_preferiti(canali, tipo=PREF_IPTV):
     os.makedirs(os.path.dirname(f), exist_ok=True)
     with open(f, "w", encoding="utf-8") as o:
         o.write("#EXTM3U\n")
-        for nome, url, ide in canali:
+        for voce in canali:
+            nome, url, ide = voce[0], voce[1], voce[2]
+            cat = voce[3] if len(voce) > 3 else ""
             lic = (' license-type="clearkey" license-details="%s"' % CHIAVI[url]
                    if url in CHIAVI else "")
+            gt = (' group-title="%s"' % cat.replace('"', "'")) if cat else ""
             o.write("#EXTINF:-1%s,%s\n%s\n" % (
-                (' tvg-id="%s"' % ide if ide else "") + lic, nome, url))
+                (' tvg-id="%s"' % ide if ide else "") + lic + gt, nome, url))
 
 
 CACHE_EPG = os.path.join(CASA, ".cache", "xvb", "epg")
@@ -5319,6 +5352,14 @@ class TV(object):
 
         def riga(padre, d):
             f = immagine_lista(d)
+            if os.path.basename(os.path.dirname(d)) == PREFERITI:
+                ico = {PREF_MUSICA: "music", PREF_VIDEO: "player"}.get(
+                    os.path.splitext(os.path.basename(d))[0])
+                for est in (".png", ".jpg", ".jpeg", ".gif"):
+                    g = ico and os.path.join(QUI, "icone", ico + est)
+                    if g and os.path.isfile(g):
+                        f = g
+                        break
             if f and f not in self.img_liste:
                 im = carica_logo(f, PUNTO, PUNTO, RIDOTTE)
                 if im is not None:
@@ -5335,8 +5376,9 @@ class TV(object):
                 img = self.globi[colore]
             chiave_playlist = "m3u-playlist:" + d
             iid = self.el_liste.insert(
-                padre, "end", text=" " + nome_di(d),
-                image=img, values=("\u2715",),
+                padre, "end", text=" " + nome_vista(d),
+                image=img,
+                values=("" if os.path.basename(os.path.dirname(d)) == PREFERITI else "\u2715",),
                 open=aperta_di(chiave_playlist, False),
                 tags=("usata",) if d == adesso else ())
             self.iid_di[d] = iid
@@ -5398,12 +5440,14 @@ class TV(object):
 
         def aggiungi_categorie_playlist(d, iid_playlist):
             dati_cache = _cache_lista_valida(d)
-            mappa = ({url: (categoria or "Altri")
+            mappa = ({url: (categoria or _cat_vuota(d))
                       for url, categoria in dati_cache.get("categorie", {}).items()}
                      if dati_cache else {})
             self._mappa_categorie_m3u[d] = mappa
             nomi = sorted(set(mappa.values()), key=str.casefold)
             for nome_categoria in nomi:
+                extra_x = ({"values": ("\u2715",)}
+                           if os.path.basename(os.path.dirname(d)) == PREFERITI else {})
                 colore = PALLINI[indice_colore_categoria[0] % len(PALLINI)]
                 indice_colore_categoria[0] += 1
                 self._colore_categoria_m3u[(d, nome_categoria)] = colore
@@ -5413,7 +5457,7 @@ class TV(object):
                     iid_playlist, "end",
                     text=" " + nome_categoria,
                     image=self.icona_cartella(colore, aperta_categoria),
-                    open=aperta_categoria,
+                    open=aperta_categoria, **extra_x,
                     tags=("usata",) if getattr(self, "_categoria_m3u_attiva", None) == (d, nome_categoria) else ("sotto",))
                 self.cartella_di[iid_categoria] = colore
                 self.chiave_di[iid_categoria] = (
@@ -5615,7 +5659,7 @@ class TV(object):
             aperta = aperta_di("cat:" + nome, any(d == adesso for d in dentro))
 
             padre = self.el_liste.insert("" if nome == PREFERITI else cartella_m3u, "end",
-                                         text=" " + nome,
+                                         text=" " + (_("Favorite") if nome == PREFERITI else nome),
                                          image=self.icona_cartella(colore, aperta),
                                          open=aperta)
             self.cartella_di[padre] = colore
@@ -5897,7 +5941,7 @@ class TV(object):
                 tuple(c) for c in dati_cache.get("canali", [])
             ]
             categorie = {
-                url: (categoria or "Altri")
+                url: (categoria or _cat_vuota(dove))
                 for url, categoria in dati_cache.get("categorie", {}).items()
             }
             self._xvb_carica_completato(
@@ -5952,6 +5996,9 @@ class TV(object):
         self.scrivi(
             _("%s - %d channels") % (nome_di(dove), len(canali))
         )
+        if any(os.path.isabs(c[1]) for c in canali):
+            threading.Thread(target=self.anteprime_lista, args=(dove, list(canali)),
+                             daemon=True).start()
 
         ultimo = self.cfg.get("canale")
         if ultimo:
@@ -5963,6 +6010,24 @@ class TV(object):
                             self.ricorda_canale(n, u, i)
                     )
                     break
+
+    def anteprime_lista(self, dove, canali):
+        """In un thread: copertine e poster dei file locali di una lista
+        (i preferiti musica e video), che dopo il riavvio non ci sono ancora;
+        poi la lista si ridisegna, se e' ancora quella."""
+        if self.cfg.get("segno", "logo") != "logo":
+            return
+        fatte = 0
+        for _n, f, _i in canali:
+            if not os.path.isabs(f) or f in self.anteprime:
+                continue
+            if self.cfg.get("lista") != dove or self.media_in_uso is not None:
+                return
+            self.anteprime[f] = anteprima_di(f)
+            self.loghi_img.pop(f, None)
+            fatte += 1
+        if fatte and self.cfg.get("lista") == dove and self.media_in_uso is None:
+            self.root.after(0, self.filtra)
 
     def ricorda_canale(self, nome, url, ide):
         """L'ultimo canale visto, pronto ma fermo: selezionato nella lista,
@@ -6463,8 +6528,16 @@ class TV(object):
         iid = self.el_liste.identify_row(ev.y)
         if not iid:
             return
-        if iid in self.iid_epg or iid in self.iid_di.values():
-            self.tendina.apri(ev.x_root, ev.y_root, [(_("Rename..."), lambda: self.rinomina(iid))])
+        if iid in getattr(self, "iid_categoria_m3u", {}):
+            d, cat = self.iid_categoria_m3u[iid]
+            if os.path.basename(os.path.dirname(d)) == PREFERITI:
+                self.tendina.apri(ev.x_root, ev.y_root, [
+                    (_("Rename..."), lambda: self.rinomina_playlist_pref(d, cat)),
+                    (_("Delete"), lambda: self.togli_playlist_pref(d, cat))])
+        elif iid in self.iid_epg or iid in self.iid_di.values():
+            dl = next((x for x, i in self.iid_di.items() if i == iid), "")
+            if os.path.basename(os.path.dirname(dl)) != PREFERITI:
+                self.tendina.apri(ev.x_root, ev.y_root, [(_("Rename..."), lambda: self.rinomina(iid))])
         elif iid in getattr(self, "iid_url", {}):
             cat, u = self.iid_url[iid]
             voci = [(_("Rename..."), lambda: self.rinomina_url(u))]
@@ -6732,6 +6805,11 @@ class TV(object):
 
     def togli_riga(self, iid):
         """Cosa c'e' su quella riga, e come si toglie."""
+        if iid in getattr(self, "iid_categoria_m3u", {}):
+            d, cat = self.iid_categoria_m3u[iid]
+            if os.path.basename(os.path.dirname(d)) == PREFERITI:
+                self.togli_playlist_pref(d, cat)
+            return
         nome = self.el_liste.item(iid, "text").strip()
         if iid in self.iid_epg:
             if self.conferma(_("Remove %s") % nome, _("The guide will be removed from the list.")):
@@ -6912,7 +6990,7 @@ class TV(object):
                 if categoria and categoria[0] == self.cfg.get("lista"):
                     filtrati = [
                         c for c in filtrati
-                        if mappa.get(c[1], "Altri") == categoria[1]
+                        if mappa.get(c[1], _cat_vuota(categoria[0])) == categoria[1]
                     ]
 
                 risultato = (filtrati, posti, None)
@@ -6998,7 +7076,7 @@ class TV(object):
                 categoria_attiva[0], {})
             self.visti = [
                 c for c in self.visti
-                if mappa.get(c[1], "Altri") == categoria_attiva[1]
+                if mappa.get(c[1], _cat_vuota(categoria_attiva[0])) == categoria_attiva[1]
             ]
 
         token = getattr(self, "_render_token", 0) + 1
@@ -7566,13 +7644,16 @@ class TV(object):
         if not self.nome_in_onda or not self.cuore_possibile(url):
             return
         media = tipo_preferiti(url)
-        pref = leggi_preferiti(media)
+        pref = leggi_preferiti_cat(media)
         if self.e_preferito(pref, url, self.nome_in_onda):
             pref = [c for c in pref if not (c[1] == url or
                     nome_piatto(c[0]) == nome_piatto(self.nome_in_onda))]
             self.scrivi(_("%s removed from favorites") % self.nome_in_onda)
         else:
-            pref.append((self.nome_in_onda, url, self.ide_in_onda))
+            playlist = self.scegli_playlist_preferiti(media, self.nome_in_onda)
+            if playlist is None:
+                return
+            pref.append((self.nome_in_onda, url, self.ide_in_onda, playlist))
             self.scrivi(_("%s added to favorites") % self.nome_in_onda)
         try:
             scrivi_preferiti(pref, media)
@@ -7580,7 +7661,16 @@ class TV(object):
             self.scrivi(_("cannot write favorites: %s") % e, errore=True)
             return
         self.icona_preferito()
+        self.rifai_dopo_preferiti(media)
+
+    def rifai_dopo_preferiti(self, media):
+        """Dopo aver scritto un file dei preferiti: si rilegge subito (se no
+        le playlist nell'albero restano quelle di prima) e si rifa' l'albero."""
         f = file_preferiti(media)
+        try:
+            leggi_lista(f)
+        except Exception:
+            pass
         if self.cfg.get("lista") == f:
             if os.path.isfile(f):
                 self.rifai_albero()
@@ -7590,12 +7680,98 @@ class TV(object):
         else:
             self.rifai_albero()
 
+    def scegli_playlist_preferiti(self, media, nome):
+        """Dove mettere il preferito: una delle playlist del suo tipo (iptv,
+        music o video), o una nuova. None se si annulla."""
+        f = file_preferiti(media)
+        esistenti = []
+        if os.path.isfile(f):
+            try:
+                esistenti = sorted(set(categorie_m3u(f).values()), key=str.casefold)
+            except Exception:
+                esistenti = []
+        ultima = self.cfg.get("ultima_playlist_pref", {}).get(media)
+        nuova = "\x00nuova"
+        scelta = tk.StringVar(value=ultima if ultima in esistenti
+                              else (esistenti[0] if esistenti else nuova))
+
+        def corpo(dentro):
+            tk.Label(dentro, text=_("Favorite"), bg=PANNELLO, fg=TESTO, anchor="w",
+                     font=(CARATTERE, 11, "bold", STILE_CARATTERE)).pack(fill="x")
+            tk.Label(dentro, text=nome, bg=PANNELLO, fg=GRIGIO, anchor="w",
+                     justify="left", wraplength=360).pack(fill="x", pady=(2, 0))
+            if esistenti:
+                tk.Label(dentro, text=_("Save in:"), bg=PANNELLO, fg=GRIGIO, anchor="w"
+                         ).pack(fill="x", pady=(10, 2))
+                for n in esistenti + [None]:
+                    tk.Radiobutton(dentro, text=n or _("New playlist..."), variable=scelta,
+                                   value=n or nuova, anchor="w",
+                                   bg=PANNELLO, fg=TESTO, selectcolor=CERCA, bd=0,
+                                   activebackground=PANNELLO, activeforeground="#ffffff",
+                                   highlightthickness=0, cursor="hand2").pack(fill="x")
+        f_dlg = Finestrella(self.root, _("Favorite"), corpo, chiedi=_("Name:"),
+                            valore="" if esistenti else "MyPlaylist")
+
+        def digita(e):
+            if e.keysym not in ("Return", "KP_Enter", "Escape", "Tab"):
+                scelta.set(nuova)
+        f_dlg.casella.bind("<Key>", digita)
+        self.root.wait_window(f_dlg)
+        if f_dlg.risposta is None:
+            return None
+        if scelta.get() == nuova:
+            n = f_dlg.risposta.strip().replace('"', "'") or "MyPlaylist"
+            n = next((e for e in esistenti if e.casefold() == n.casefold()), n)
+        else:
+            n = scelta.get()
+        self.cfg.setdefault("ultima_playlist_pref", {})[media] = n
+        scrivi_config(self.cfg)
+        return n
+
+    def rinomina_playlist_pref(self, d, cat):
+        media = os.path.splitext(os.path.basename(d))[0]
+        nome = self.chiedi(_("Rename..."), _("Name:"), cat)
+        if not nome or not nome.strip() or nome.strip() == cat:
+            return
+        nome = nome.strip().replace('"', "'")
+        pref = leggi_preferiti_cat(media)
+        nome = next((e for e in {v[3] for v in pref}
+                     if e != cat and e.casefold() == nome.casefold()), nome)
+        pref = [(v[0], v[1], v[2], nome if v[3] == cat else v[3]) for v in pref]
+        try:
+            scrivi_preferiti(pref, media)
+        except Exception as e:
+            self.scrivi(_("cannot write favorites: %s") % e, errore=True)
+            return
+        if getattr(self, "_categoria_m3u_attiva", None) == (d, cat):
+            self._categoria_m3u_attiva = (d, nome)
+        ultime = self.cfg.get("ultima_playlist_pref", {})
+        if ultime.get(media) == cat:
+            ultime[media] = nome
+            scrivi_config(self.cfg)
+        self.rifai_dopo_preferiti(media)
+
+    def togli_playlist_pref(self, d, cat):
+        media = os.path.splitext(os.path.basename(d))[0]
+        if not self.conferma_via(cat, _("The playlist will be removed from the list.")):
+            return
+        pref = [v for v in leggi_preferiti_cat(media) if v[3] != cat]
+        try:
+            scrivi_preferiti(pref, media)
+        except Exception as e:
+            self.scrivi(_("cannot write favorites: %s") % e, errore=True)
+            return
+        if getattr(self, "_categoria_m3u_attiva", None) == (d, cat):
+            self._categoria_m3u_attiva = None
+        self.icona_preferito()
+        self.rifai_dopo_preferiti(media)
+
     def e_preferito(self, pref, url, nome):
         """Un canale e' fra i preferiti se c'e' con lo stesso indirizzo, o
         con lo stesso nome (stesso canale preso da un'altra lista)."""
         piatto = nome_piatto(nome)
-        return any(u == url or (piatto and nome_piatto(n) == piatto)
-                   for n, u, _i in pref)
+        return any(v[1] == url or (piatto and nome_piatto(v[0]) == piatto)
+                   for v in pref)
 
     def cuore_possibile(self, url):
         """Il cuore solo per quello che si ha davvero: i file sul disco e i
