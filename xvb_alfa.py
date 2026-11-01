@@ -10553,10 +10553,14 @@ class TV(object):
         return any(t.get("type") == "video" and not t.get("albumart") for t in tracce)
 
     def ha_immagine(self):
-        """Quello che suona ha qualcosa da vedere: un video o la copertina
-        (per mpv e' una traccia video anche lei). Si chiede una volta per
-        cosa che suona, poi si ricorda."""
+        """I file audio usano lo sfondo XVB (foto artista o cover), non la
+        traccia album-art interna di mpv. I video mantengono il loro video."""
         k = self.file_in_onda or self.cfg.get("canale") or ""
+        if os.path.isabs(k) and os.path.splitext(k)[1][1:].lower() in AUDIO:
+            if not hasattr(self, "con_immagine"):
+                self.con_immagine = {}
+            self.con_immagine[k] = False
+            return False
         if not hasattr(self, "con_immagine"):
             self.con_immagine = {}
         if k not in self.con_immagine:
