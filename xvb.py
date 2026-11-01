@@ -1542,7 +1542,7 @@ SCALA_FILE = ("#ff5257", "#30d158", "#ff7f11", "#42a0ff",
 FONDO = "#1c1b22"
 PANNELLO = "#1c1b22"
 BARRA = PANNELLO
-STATO = "#42414d"
+STATO = "#121217"
 TASTO = "#2c2c2c"
 SCELTO = "#0071e3"
 ZEBRA = "#2b2a33"
@@ -5281,18 +5281,31 @@ class TV(object):
     def rifai_albero(self):
         """Solo la barra delle liste, senza aprirne nessuna."""
         self.liste = self.tutte_le_liste()
-        if not getattr(self, "_cache_liste_avviata", False):
-            self._cache_liste_avviata = True
+        if not hasattr(self, "_cache_liste_tentate"):
+            self._cache_liste_tentate = set()
+            self._cache_liste_in_corso = False
+        if (not self._cache_liste_in_corso
+                and any(d not in self._cache_liste_tentate for d in self.liste)):
+            self._cache_liste_in_corso = True
             def prepara_cache_liste():
-                for sorgente_lista in tuple(self.liste):
-                    try:
-                        leggi_lista(sorgente_lista)
-                    except Exception:
-                        pass
                 try:
-                    self.root.after(0, self.rifai_albero)
-                except Exception:
-                    pass
+                    while True:
+                        lavoro = [d for d in tuple(self.liste)
+                                  if d not in self._cache_liste_tentate]
+                        if not lavoro:
+                            break
+                        for sorgente_lista in lavoro:
+                            self._cache_liste_tentate.add(sorgente_lista)
+                            try:
+                                leggi_lista(sorgente_lista)
+                            except Exception:
+                                pass
+                        try:
+                            self.root.after(0, self.rifai_albero)
+                        except Exception:
+                            pass
+                finally:
+                    self._cache_liste_in_corso = False
             threading.Thread(target=prepara_cache_liste, daemon=True).start()
         self.el_liste.delete(*self.el_liste.get_children())
         self.iid_di = {}
