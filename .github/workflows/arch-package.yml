@@ -1,0 +1,112 @@
+name: Build Arch package
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to package (for example v4.3.6)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: arch-package-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - name: Check out workflow
+        uses: actions/checkout@v4
+
+      - name: Check out Arch packaging branch
+        uses: actions/checkout@v4
+        with:
+          ref: arch-packaging
+          path: arch-repo
+          persist-credentials: true
+
+      - name: Validate release and calculate source checksum
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="$RELEASE_TAG"
+          VERSION="${TAG#v}"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9.-]+)?$ ]]; then
+            echo "::error::Invalid release tag: $TAG"
+            exit 1
+          fi
+
+          ARCHIVE="$RUNNER_TEMP/xvb-$VERSION.tar.gz"
+          curl --fail --location --retry 3 \
+            "https://github.com/$GITHUB_REPOSITORY/archive/refs/tags/$TAG.tar.gz" \
+            --output "$ARCHIVE"
+          SHA256="$(sha256sum "$ARCHIVE" | cut -d ' ' -f 1)"
+
+          python3 - "$GITHUB_WORKSPACE/arch-repo/packaging/arch/PKGBUILD" "$VERSION" "$SHA256" <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+
+          path = Path(sys.argv[1])
+          version, checksum = sys.argv[2], sys.argv[3]
+          text = path.read_text(encoding="utf-8")
+          text, n_version = re.subn(r"(?m)^pkgver=.*$", f"pkgver={version}", text, count=1)
+          text, n_sum = re.subn(r"(?m)^sha256sums=\('[^']*'\)$",
+                               f"sha256sums=('{checksum}')", text, count=1)
+          if n_version != 1 or n_sum != 1:
+              raise SystemExit("PKGBUILD does not contain the expected pkgver/sha256sums fields")
+          path.write_text(text, encoding="utf-8")
+          PY
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Build package in Arch Linux
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE/arch-repo/packaging/arch:/build" \
+            archlinux:base-devel \
+            bash -euo pipefail -c '
+              pacman -Syu --needed --noconfirm \
+                python tk mpv python-mpv python-pillow python-mutagen librsvg fontconfig
+              useradd --create-home builder
+              chown -R builder:builder /build
+              runuser -u builder -- bash -lc \
+                "cd /build && makepkg --printsrcinfo > .SRCINFO && makepkg --cleanbuild --noconfirm --nodeps"
+            '
+
+      - name: Commit updated Arch recipe
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C arch-repo config user.name "github-actions[bot]"
+          git -C arch-repo config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C arch-repo add packaging/arch/PKGBUILD packaging/arch/.SRCINFO
+          if ! git -C arch-repo diff --cached --quiet; then
+            git -C arch-repo commit -m "chore(arch): update package to ${{ steps.version.outputs.version }}"
+            git -C arch-repo push origin HEAD:arch-packaging
+          fi
+
+      - name: Attach Arch package to GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          PACKAGE="$(find "$GITHUB_WORKSPACE/arch-repo/packaging/arch" -maxdepth 1 -type f -name '*.pkg.tar.zst' -print -quit)"
+          if [[ -z "$PACKAGE" ]]; then
+            echo "::error::Arch package was not produced"
+            exit 1
+          fi
+          gh release upload "$RELEASE_TAG" "$PACKAGE" --repo "$GITHUB_REPOSITORY" --clobber
