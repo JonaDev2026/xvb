@@ -1915,6 +1915,7 @@ RIGA_ELENCO = 64
 LOGO_L, LOGO_A = 72, 56
 COLONNA = LOGO_L
 CACHE_ANTEPRIME = os.path.join(CASA, ".cache", "xvb", "anteprime")
+CACHE_VINILI = os.path.join(CASA, ".cache", "xvb", "vinili")
 
 
 def copertina_dentro(f):
@@ -2525,9 +2526,24 @@ def disco_frame(base, larga, alta, angolo=0.0, colore=None):
 
 
 def disco_vinile(f, larga, alta, colore=None):
-    """Il vinile fermo, come immagine Tk. None se la copertina non si legge."""
+    """Carica il vinile dalla cache su disco o lo genera una sola volta."""
     try:
-        return ImageTk.PhotoImage(disco_frame(disco_base(f, alta * 3), larga, alta, 0.0, colore))
+        stat = os.stat(f)
+        chiave = "%s|%s|%s|%s|%s|%s" % (
+            os.path.abspath(f), stat.st_mtime_ns, stat.st_size,
+            colore or "", larga, alta
+        )
+        nome = hashlib.md5(chiave.encode("utf-8")).hexdigest() + ".png"
+        percorso = os.path.join(CACHE_VINILI, nome)
+
+        if not os.path.isfile(percorso) or os.path.getsize(percorso) == 0:
+            os.makedirs(CACHE_VINILI, exist_ok=True)
+            immagine = disco_frame(
+                disco_base(f, alta * 3), larga, alta, 0.0, colore
+            )
+            immagine.save(percorso, "PNG")
+
+        return ImageTk.PhotoImage(Image.open(percorso).convert("RGBA"))
     except Exception:
         return None
 
@@ -6509,7 +6525,7 @@ class TV(object):
                             if n.startswith(".") or not e_media(n):
                                 continue
                             batch.append((os.path.splitext(n)[0], os.path.join(dove, n), None))
-                            if len(batch) >= 100:
+                            if len(batch) >= 30:
                                 pronto = batch
                                 batch = []
                                 inviati = True
@@ -7493,7 +7509,7 @@ class TV(object):
         except (ValueError, IndexError):
             return None
         if self.media_in_uso or self.reg_in_uso or os.path.isabs(url):
-            if not os.path.isabs(url) or os.path.splitext(url)[1][1:].lower() in AUDIO:
+            if not os.path.isabs(url):
                 return None
             pos = self.cfg.get("posizioni", {}).get(url)
             if not pos:
@@ -7596,8 +7612,30 @@ class TV(object):
                 nuovi = True
         if nuovi:
             scrivi_tag(self.tag_cache)
-            if self.media_in_uso == chiave:
+
+        if self.media_in_uso == chiave:
+            if chiave[0] == "cartella" and not self.cfg.get("shuffle"):
+                def chiave_titolo(canale):
+                    nome, f, _ide = canale
+                    tag = self.tag_file.get(f, ("", "", "", ""))
+                    info = self.info.get(f, {})
+                    titolo = (
+                        (tag[0] if tag else "")
+                        or info.get("titolo", "")
+                        or nome
+                    )
+                    return str(titolo).strip().casefold()
+
+                ordinati = sorted(canali, key=chiave_titolo)
+                self.root.after(
+                    0,
+                    lambda k=chiave, lista=ordinati:
+                        self._applica_ordine_titolo(k, lista)
+                )
+            elif nuovi:
                 self.root.after(0, self.filtra)
+
+            if nuovi:
                 self.root.after(0, self.scrivi_riga)
 
 
@@ -7617,6 +7655,15 @@ class TV(object):
 
             if fatte and self.media_in_uso == chiave:
                 self.root.after(0, self.filtra)
+
+    def _applica_ordine_titolo(self, chiave, ordinati):
+        """Applica l'ordine alfabetico per titolo dopo la lettura dei tag."""
+        if self.media_in_uso != chiave or self.cfg.get("shuffle"):
+            return
+        self.canali = list(ordinati)
+        self.ordine_vero = list(ordinati)
+        self.filtra()
+        self.scrivi_riga()
 
     def colore_canale(self, nome, url):
         """Il colore del canale: quello preso dal suo logo, se lo si ha;
