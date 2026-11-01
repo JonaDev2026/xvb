@@ -10116,24 +10116,27 @@ class TV(object):
             firma = [int(getattr(st, "st_mtime_ns", st.st_mtime * 1e9)), int(st.st_size)]
         except OSError:
             return ""
+        # Il lock protegge solo i dizionari: mai tenerlo durante letture tag o disco.
         with self._xvb_artisti_lock:
             voce = self._xvb_artisti_file.get(f)
             if isinstance(voce, list) and len(voce) == 3 and voce[:2] == firma:
                 return str(voce[2] or "")
             tag = self.tag_file.get(f)
-            if not tag:
-                tag = tag_di(f, self.tag_cache)
-                self.tag_file[f] = tag
-            artista = (tag[1] if tag and len(tag) > 1 else "").strip()
-            if not artista:
-                _titolo, artista, _album, _anno = dal_percorso(f, self.cfg.get("cartelle", []))
-            artista = str(artista or "").strip()
+        if not tag:
+            tag = tag_di(f, self.tag_cache)
+        artista = (tag[1] if tag and len(tag) > 1 else "").strip()
+        if not artista:
+            _titolo, artista, _album, _anno = dal_percorso(f, self.cfg.get("cartelle", []))
+        artista = str(artista or "").strip()
+        with self._xvb_artisti_lock:
+            self.tag_file[f] = tag
             self._xvb_artisti_file[f] = firma + [artista]
             self._xvb_artisti_mem[artista.casefold()] = artista
             self._xvb_artisti_dirty += 1
-            if self._xvb_artisti_dirty >= 8:
-                self.salva_cache_artisti()
-            return artista
+            salva = self._xvb_artisti_dirty >= 8
+        if salva:
+            self.salva_cache_artisti()
+        return artista
 
     def salva_cache_artisti(self):
         """Scrive l'indice in modo atomico, senza interrompere la riproduzione."""
