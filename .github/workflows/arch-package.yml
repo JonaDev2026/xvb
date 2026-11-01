@@ -83,7 +83,7 @@ jobs:
               useradd --create-home builder
               chown -R builder:builder /build
               runuser -u builder -- bash -lc \
-                "cd /build && makepkg --printsrcinfo > .SRCINFO && makepkg --cleanbuild --noconfirm --nodeps"
+                "cd /build && makepkg --printsrcinfo > .SRCINFO && makepkg --cleanbuild --noconfirm"
             '
 
       - name: Commit updated Arch recipe
