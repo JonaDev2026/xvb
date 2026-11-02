@@ -350,7 +350,7 @@ def avvia_mpris(app):
     threading.Thread(target=GLib.MainLoop().run, daemon=True).start()
     return m
 
-VERSIONE = "4.3.7"
+VERSIONE = "4.3.8"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"
@@ -2793,10 +2793,10 @@ class Elenco(tk.Text):
         self.poster_onda_h = 0
         self.poster_di = None
         self.poster_lbl = []
-        self.doppio = None
+        self.singolo = None
         self.config(yscrollcommand=lambda *a: self.ridisegna_colonna())
         self.bind("<Configure>", lambda e: self.ridisegna_colonna(), add="+")
-        self.colonna.bind("<Button-1>", lambda e: self.clic_y(e.y))
+        self.colonna.bind("<Button-1>", lambda e: self.clic_y(e.y, attiva=True))
         self.colonna.bind("<Button-4>", lambda e: self.yview_scroll(-3, "units"))
         self.colonna.bind("<Button-5>", lambda e: self.yview_scroll(3, "units"))
         self.colonna.bind("<MouseWheel>", lambda e: self.yview_scroll(-3 if e.delta > 0 else 3, "units"))
@@ -3147,8 +3147,8 @@ class Elenco(tk.Text):
                 c.create_image(COLONNA // 2, (y_logo + y1) // 2, image=img,
                                tags=("lg_" + iid,))
 
-    def clic_y(self, y):
-        """Un clic nella colonna dei loghi vale come sulla sua voce."""
+    def clic_y(self, y, attiva=False):
+        """Clic singolo sulla colonna dei loghi."""
         self.focus_set()
         try:
             r = int(self.index("@%d,%d" % (COLONNA + 5, y)).split(".")[0])
@@ -3157,8 +3157,9 @@ class Elenco(tk.Text):
         i = (r - 1) // 3
         if 0 <= i < len(self.voci):
             self.selection_set(self.voci[i])
+            if attiva and self.singolo:
+                self.singolo()
         return "break"
-
 
     def clic(self, ev):
         self.focus_set()
@@ -3169,6 +3170,8 @@ class Elenco(tk.Text):
         i = (r - 1) // 3
         if 0 <= i < len(self.voci):
             self.selection_set(self.voci[i])
+            if self.singolo:
+                self.singolo()
         return "break"
 
     def sposta(self, dove):
@@ -3743,9 +3746,8 @@ class TV(object):
         scrivi_config(self.cfg)
         self.elenco.prog_di = self.progresso_di
         self.elenco.poster_di = self.poster_di
-        self.elenco.doppio = self.parti
+        self.elenco.singolo = self.parti
         self.poster_tk, self.poster_pil = {}, {}
-        self.elenco.colonna.bind("<Double-Button-1>", lambda e: self.parti())
         self.elenco.tag_configure("onda", background=IN_ONDA,
                                   foreground=TESTO_ONDA)
         self.elenco.bind("<<TreeviewSelect>>", lambda e: self.non_sul_verde(
@@ -3753,7 +3755,6 @@ class TV(object):
 
         self.elenco.column("#0", width=200, stretch=True)
         self.elenco.pack(fill="both", expand=True, padx=2, pady=(0, 8))
-        self.elenco.bind("<Double-Button-1>", lambda e: self.parti())
         self.elenco.bind("<Button-3>", self.menu_elenco)
         self.elenco.colonna.bind("<Button-3>", self.menu_elenco)
         self.elenco.bind("<Return>", lambda e: self.parti())
@@ -6778,9 +6779,27 @@ class TV(object):
 
     def parti(self):
         s = self.elenco.selection()
-        if s:
-            nome, url, ide = self.visti[int(s[0])]
-            self.apri(nome, url, ide)
+        if not s:
+            return
+
+        nome, url, ide = self.visti[int(s[0])]
+
+        fermato = getattr(self, "fermato", None)
+        if fermato and fermato[2] == url:
+            self.pausa()
+            return
+
+        corrente = self.file_in_onda or self.cfg.get("canale")
+
+        if corrente == url:
+            try:
+                if self.mpv.pause:
+                    self.pausa()
+            except Exception:
+                pass
+            return
+
+        self.apri(nome, url, ide)
 
     def segna_in_onda(self, url):
         """La riga di quello che si sta guardando: fondo argento fisso
@@ -7749,9 +7768,7 @@ class TV(object):
                                 (pos[0] + im.width) / k, (pos[1] + im.height) / k)
 
     def clic_video(self):
-        """Un clic sul video (lo riceve mpv, non Tk): sui comandi disegnati
-        da mpv fa quello del bottone; in PiP, se e' sul tasto disegnato da
-        mpv, si torna alla finestra normale."""
+        """Clic sul video: Pausa/Play; preserva comandi overlay e PiP."""
         if (self.barra_in_overlay() and not self.barra_visibile
                 and not getattr(self, "mai_partito", False)):
             try:
@@ -7761,18 +7778,23 @@ class TV(object):
                     self.disegna_ov(forza=True)
             except tk.TclError:
                 pass
+
         if self.clic_ov():
             return
+
         r = getattr(self, "pip_ov_riquadro", None)
-        if not (self.pip and getattr(self, "pip_ov", None) is not None and r):
+        if self.pip:
+            if getattr(self, "pip_ov", None) is not None and r:
+                try:
+                    x = self.root.winfo_pointerx() - self.video.winfo_rootx()
+                    y = self.root.winfo_pointery() - self.video.winfo_rooty()
+                except tk.TclError:
+                    return
+                if r[0] - 4 <= x <= r[2] + 4 and r[1] - 4 <= y <= r[3] + 4:
+                    self.esci_pip()
             return
-        try:
-            x = self.root.winfo_pointerx() - self.video.winfo_rootx()
-            y = self.root.winfo_pointery() - self.video.winfo_rooty()
-        except tk.TclError:
-            return
-        if r[0] - 4 <= x <= r[2] + 4 and r[1] - 4 <= y <= r[3] + 4:
-            self.esci_pip()
+
+        self.pausa()
 
     def schermo_intero(self, ev=None, acceso=None):
         self.pieno = (not self.pieno) if acceso is None else acceso
