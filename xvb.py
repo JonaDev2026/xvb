@@ -4148,7 +4148,10 @@ class TV(object):
 
 
         self.video.bind("<Configure>", lambda e: self.rifai_sfondo_poi())
-        self.mostra_sfondo(True)
+        self.root.bind("<Map>", lambda e: e.widget is self.root and not getattr(
+            self, "_finestra_vista", None) and setattr(self, "_finestra_vista", time.time()),
+            add="+")
+        self.mostra_sfondo(True, dissolvi=True, attesa=0)
         self.mpv.observe_property("paused-for-cache", self._buffer)
         self.mpv.observe_property("time-pos", self._va)
 
@@ -6269,7 +6272,8 @@ class TV(object):
 
     def altezza_poster_onda(self):
         """Riserva lo spazio in alto solo per i video in riproduzione (esclude l'audio)."""
-        if (self.cfg.get("poster_epg", False) or not HA_PIL or self.reg_in_uso):
+        if (self.cfg.get("poster_epg", False) or not HA_PIL or self.reg_in_uso
+                or getattr(self, "fermato", None)):
             return 0
 
 
@@ -7431,9 +7435,10 @@ class TV(object):
         except Exception:
             pass
         self.file_in_onda = None
+        self.segna_in_onda(None)
         self.attesa_da = 0.0
         self.mostra_carico(False)
-        self.mostra_sfondo(True)
+        self.mostra_sfondo(True, dissolvi=True)
         self.faccia(self.b_pausa, "play", _("Resume"))
         self.et_formato.config(text="")
         self.icona_preferito()
@@ -9668,9 +9673,11 @@ class TV(object):
                 return copertina_url(u)
         return os.path.join(QUI, "icone", "screen.png")
 
-    def mostra_sfondo(self, si):
+    def mostra_sfondo(self, si, dissolvi=False, attesa=300):
         """L'immagine di sfondo del lettore: si vede finche' non parte un
-        canale, e torna quando non c'e' piu' niente che va."""
+        canale, e torna quando non c'e' piu' niente che va. Con dissolvi (lo
+        stop, l'avvio) resta nero per l'attesa (mezzo secondo) e poi lo sfondo
+        compare piano piano, appena la finestra e' disegnata."""
         cambia = getattr(self, "sfondo_su", None) != si
         self.sfondo_su = si
         if cambia and hasattr(self, "timer_barra"):
@@ -9679,13 +9686,109 @@ class TV(object):
             giusto = self.sfondo_giusto()
             if giusto != self.sfondo_file:
                 self.sfondo_file, self.sfondo_misura = giusto, None
+            if dissolvi:
+                self.dissolvi_avvia(attesa)
+                return
+            self.dissolvi_ferma()
             # Non invalidare la misura se l'immagine e' gia' quella giusta:
             # evita ridisegni inutili e lampeggi durante la riproduzione.
             self.rifai_sfondo()
             for t in (300, 1500):
                 self.root.after(t, lambda: self.sfondo_su and self.rifai_sfondo())
         else:
+            self.dissolvi_ferma()
             self.togli_sfondo()
+
+    def dissolvi_avvia(self, attesa=300):
+        """Sfondo spento, dopo l'attesa (millisecondi) parte la dissolvenza."""
+        self.dissolvi_ferma()
+        self._dissolvi_att = True
+        self.togli_sfondo()
+        self._dissolvi_id = self.root.after(attesa, self._dissolvi_passo)
+
+    def dissolvi_ferma(self):
+        i = getattr(self, "_dissolvi_id", None)
+        if i:
+            try:
+                self.root.after_cancel(i)
+            except Exception:
+                pass
+        if getattr(self, "_dissolvi_att", False):
+            self.sfondo_misura = None
+        self._dissolvi_id = None
+        self._dissolvi_att = False
+        self._dissolvi_t0 = None
+        self._dissolvi_w0 = None
+
+    def _dissolvi_passo(self):
+        self._dissolvi_id = None
+        if not (self.sfondo_su and getattr(self, "_dissolvi_att", False)):
+            return
+        adesso = time.time()
+        if getattr(self, "_dissolvi_t0", None) is None:
+            # Si parte solo con la finestra disegnata (all'avvio mpv non ha
+            # ancora la sua misura); dopo 5 secondi si mostra lo sfondo e basta.
+            try:
+                pronta = (int(self.mpv.osd_width or 0) >= 2
+                          and int(self.mpv.osd_height or 0) >= 2)
+            except Exception:
+                pronta = False
+            # La finestra deve essere davvero a schermo da un secondo:
+            # il gestore delle finestre ci mette un po' a mostrarla.
+            visto = getattr(self, "_finestra_vista", None)
+            if visto is None and self.root.winfo_viewable():
+                visto = self._finestra_vista = adesso
+            pronta = pronta and visto is not None and adesso - visto >= 1.0
+            if not getattr(self, "_dissolvi_w0", None):
+                self._dissolvi_w0 = adesso
+            if not pronta:
+                if adesso - self._dissolvi_w0 > 5.0:
+                    self.dissolvi_ferma()
+                    self.rifai_sfondo()
+                else:
+                    self._dissolvi_id = self.root.after(50, self._dissolvi_passo)
+                return
+            self._dissolvi_t0 = adesso
+        t = min(1.0, (adesso - self._dissolvi_t0) / 1.2)
+        if t >= 1.0:
+            self._dissolvi_att = False
+            self._dissolvi_t0 = None
+            self.sfondo_misura = None
+            self.rifai_sfondo()
+            return
+        self._dissolvi_frame(t * t * (3 - 2 * t))
+        self._dissolvi_id = self.root.after(50, self._dissolvi_passo)
+
+    def _dissolvi_frame(self, k):
+        """Un fotogramma della dissolvenza: lo sfondo mescolato al nero."""
+        if not HA_PIL or not os.path.isfile(self.sfondo_file):
+            return
+        try:
+            ow, oh = int(self.mpv.osd_width or 0), int(self.mpv.osd_height or 0)
+        except Exception:
+            return
+        if ow < 2 or oh < 2:
+            return
+        try:
+            chiave = (self.sfondo_file, ow, oh)
+            tela = self._xvb_render_cache.get(chiave)
+            if tela is None:
+                im = Image.open(self.sfondo_file).convert("RGBA")
+                kk = min(ow / float(im.width), oh / float(im.height))
+                im = im.resize((max(1, int(im.width * kk)), max(1, int(im.height * kk))), Image.LANCZOS)
+                tela = Image.new("RGBA", (ow, oh), (0, 0, 0, 255))
+                tela.alpha_composite(im, ((ow - im.width) // 2, (oh - im.height) // 2))
+                if len(self._xvb_render_cache) >= 8:
+                    self._xvb_render_cache.pop(next(iter(self._xvb_render_cache)))
+                self._xvb_render_cache[chiave] = tela
+            quadro = Image.blend(Image.new("RGBA", (ow, oh), (0, 0, 0, 255)), tela,
+                                 max(0.0, min(1.0, k)))
+            if getattr(self, "ov_sfondo", None) is None:
+                self.ov_sfondo = mpv.ImageOverlay(self.mpv, OV_SFONDO, quadro, pos=(0, 0))
+            else:
+                self.ov_sfondo.update(quadro)
+        except Exception:
+            pass
 
     def rialza_sfondo(self):
         """Lo sfondo sopra a tutto nel riquadro del video, finestra di mpv
@@ -9710,7 +9813,8 @@ class TV(object):
         """Lo sfondo (screen.png o la copertina scelta) disegnato da mpv,
         adattato al riquadro e con le proporzioni tenute, sotto alla barra:
         cosi' i comandi sono sempre quelli di mpv, anche da fermi."""
-        if not self.sfondo_su or not os.path.isfile(self.sfondo_file) or not HA_PIL:
+        if (not self.sfondo_su or not os.path.isfile(self.sfondo_file) or not HA_PIL
+                or getattr(self, "_dissolvi_att", False)):
             return
         try:
             ow, oh = int(self.mpv.osd_width or 0), int(self.mpv.osd_height or 0)
@@ -10055,16 +10159,16 @@ class TV(object):
     def _va(self, _nome, pos):
         # Il callback del tempo gestisce anche il loop A-B.
         if pos is not None:
-            if (self.loop_ab_in_corso
-                    and self.loop_ab_file == self.file_in_onda
+            if (self.loop_ab_file == self.file_in_onda
                     and self.loop_ab_a is not None
                     and self.loop_ab_b is not None):
                 try:
                     posizione = float(pos)
                     if posizione >= self.loop_ab_b:
-                        self.loop_ab_in_corso = False
-                        self.mpv.command("seek", "%.3f" % self.loop_ab_a, "absolute")
-                    elif posizione <= self.loop_ab_a + 1.0:
+                        if self.loop_ab_in_corso:
+                            self.loop_ab_in_corso = False
+                            self.mpv.command("seek", "%.3f" % self.loop_ab_a, "absolute")
+                    else:
                         self.loop_ab_in_corso = True
                 except Exception:
                     self.loop_ab_in_corso = False
