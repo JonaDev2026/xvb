@@ -179,7 +179,8 @@ MPRIS_PLAYER = "org.mpris.MediaPlayer2.Player"
 MPRIS_PROP = "org.freedesktop.DBus.Properties"
 
 
-OV_SFONDO, OV_BARRA, OV_PIP, OV_MENU, OV_EPG = 60, 61, 62, 63, 64
+OV_SFONDO, OV_BARRA, OV_PIP, OV_MENU, OV_EPG = 59, 60, 61, 62, 64
+OV_HUD = 63
 
 
 def premoltiplica(im):
@@ -3529,7 +3530,7 @@ class TV(object):
                   "rec", "rec_stop",
                   "volume", "volume_high",
                   "volume_low", "volume_off", "muto", "pieno", "prima", "dopo",
-                  "aperto", "chiuso", "setting", "epg", "shuffle", "stop", "pip"):
+                  "aperto", "chiuso", "setting", "epg", "shuffle", "stop", "pip", "timer"):
             p = os.path.join(QUI, "icone", n + ".png")
             if os.path.isfile(p):
                 if HA_PIL:
@@ -3898,9 +3899,7 @@ class TV(object):
         self.et_formato.pack(side="left", fill="y")
 
         self.et_recdot = tk.Label(self.riga_stato, bg=STATO, bd=0)
-        self.et_recdot.pack(side="left", fill="y", padx=(10, 0))
         self.et_rec = tk.Label(self.riga_stato, text="", bg=STATO, fg="#ff453a")
-        self.et_rec.pack(side="left", fill="y")
 
 
         font_stato = tkfont.Font(root=self.root, font="TkDefaultFont")
@@ -4161,7 +4160,7 @@ class TV(object):
         self.mai_partito = True
         self.root.after(100, self.posa_barra)
         try:
-            self.mpv.overlay_ids.update((OV_SFONDO, OV_BARRA, OV_PIP, OV_MENU, OV_EPG))
+            self.mpv.overlay_ids.update((OV_SFONDO, OV_BARRA, OV_PIP, OV_MENU, OV_EPG, OV_HUD))
         except Exception:
             pass
         self.attesa_da, self.salti = 0.0, 0
@@ -7416,23 +7415,28 @@ class TV(object):
             self.timer_spegnimento = None
             self.scrivi(_("cannot set sleep timer"), errore=True)
             return
+        self.timer_fine = time.time() + int(minuti) * 60
+        self.hud_disegna()
         self.scrivi(_("sleep timer set: %d min") % int(minuti))
 
     def annulla_timer_spegnimento(self, silenzioso=False):
         """Annulla il timer, se presente."""
         identificativo = getattr(self, "timer_spegnimento", None)
         self.timer_spegnimento = None
+        self.timer_fine = None
         if identificativo:
             try:
                 self.root.after_cancel(identificativo)
             except (tk.TclError, RuntimeError):
                 pass
+        self.hud_disegna()
         if not silenzioso:
             self.scrivi(_("sleep timer cancelled"))
 
     def scade_timer_spegnimento(self):
         """Scaduto il tempo: ferma il contenuto, lasciando XVB aperto."""
         self.timer_spegnimento = None
+        self.timer_fine = None
         self.ferma()
         self.scrivi(_("sleep timer expired"))
 
@@ -7766,6 +7770,96 @@ class TV(object):
         self.pip_ov, self.pip_ov_misura = ov, (vw, vh, ow)
         self.pip_ov_riquadro = (pos[0] / k, pos[1] / k,
                                 (pos[0] + im.width) / k, (pos[1] + im.height) / k)
+
+    def hud_giro(self):
+        self._hud_id = None
+        self.hud_disegna()
+
+    def hud_disegna(self):
+        """In alto a destra sul video, disegnati da mpv: il timer di
+        spegnimento (arancione, col tempo che resta) e il REC (rosso, col
+        pallino che pulsa). Niente da mostrare: l'overlay sparisce."""
+        if not HA_PIL:
+            return
+        ora = time.time()
+        righe = []
+        fine = getattr(self, "timer_fine", None)
+        if fine:
+            resto = max(0, int(math.ceil(fine - ora)))
+            h, r = divmod(resto, 3600)
+            righe.append(("timer", "%d:%02d:%02d" % (h, r // 60, r % 60) if h
+                          else "%02d:%02d" % (r // 60, r % 60)))
+        registrando = bool(getattr(self, "registrando", ""))
+        if registrando:
+            righe.append(("rec", getattr(self, "rec_testo", "") or "REC"))
+        ov = getattr(self, "hud_ov", None)
+        if not righe:
+            if ov is not None:
+                try:
+                    self.mpv.overlay_remove(OV_HUD)
+                except Exception:
+                    pass
+            self.hud_ov = self.hud_chiave = None
+            return
+        if not getattr(self, "_hud_id", None):
+            self._hud_id = self.root.after(250, self.hud_giro)
+        try:
+            vw, vh = self.video.winfo_width(), self.video.winfo_height()
+            ow = int(self.mpv.osd_width or 0)
+        except Exception:
+            return
+        if vw < 2:
+            return
+        k = (ow / vw) if (ow > 0 and vw > 0) else 1.0
+        margine = 10 + (38 if getattr(self, "pip_ov", None) is not None else 0)
+        chiave = (vw, vh, ow, margine, tuple(righe), self.fase_rec if registrando else None)
+        if chiave == getattr(self, "hud_chiave", None) and ov is not None:
+            return
+        try:
+            from PIL import ImageDraw, ImageFont
+            try:
+                font = ImageFont.truetype(percorso_google_sans("Bold"), max(8, round(15 * k)))
+            except Exception:
+                font = ImageFont.load_default()
+            misura = ImageDraw.Draw(Image.new("RGBA", (4, 4)))
+            alta, bordo, lato_ic, vuoto, tra = (round(28 * k), round(11 * k), round(16 * k),
+                                                round(7 * k), round(6 * k))
+            colori = {"timer": (255, 159, 10), "rec": (255, 69, 58)}
+            misure = []
+            for tipo, testo in righe:
+                bb = misura.textbbox((0, 0), testo, font=font)
+                misure.append((bb, bordo + lato_ic + vuoto + (bb[2] - bb[0]) + bordo))
+            largo = max(m[1] for m in misure)
+            im = Image.new("RGBA", (largo, len(righe) * alta + (len(righe) - 1) * tra), (0, 0, 0, 0))
+            d = ImageDraw.Draw(im)
+            for i, ((tipo, testo), (bb, lr)) in enumerate(zip(righe, misure)):
+                x0, y0 = largo - lr, i * (alta + tra)
+                c = colori[tipo]
+                d.rounded_rectangle([x0, y0, largo - 1, y0 + alta - 1], radius=alta // 2,
+                                    fill=(0, 0, 0, 120))
+                cx, cy = x0 + bordo + lato_ic // 2, y0 + alta // 2
+                if tipo == "rec":
+                    t = 0.5 + 0.5 * math.cos(2 * math.pi * self.fase_rec / 12)
+                    r = max(3, round(5 * k))
+                    d.ellipse([cx - r, cy - r, cx + r, cy + r],
+                              fill=c + (int(255 * (0.3 + 0.7 * t)),))
+                elif "timer" in self.icone_pil:
+                    ic = self.icone_pil["timer"].copy()
+                    ic.thumbnail((lato_ic, lato_ic), Image.LANCZOS)
+                    col = Image.new("RGBA", ic.size, c + (255,))
+                    col.putalpha(ic.getchannel("A"))
+                    im.alpha_composite(col, (cx - ic.width // 2, cy - ic.height // 2))
+                d.text((x0 + bordo + lato_ic + vuoto - bb[0], y0 + (alta - (bb[3] - bb[1])) // 2 - bb[1]),
+                       testo, font=font, fill=c + (255,))
+            pos = (max(0, round(vw * k) - im.width - round(margine * k)), round(10 * k))
+            im = premoltiplica(im)
+            if ov is None:
+                ov = mpv.ImageOverlay(self.mpv, OV_HUD, im, pos=pos)
+            else:
+                ov.update(im, pos=pos)
+        except Exception:
+            return
+        self.hud_ov, self.hud_chiave = ov, chiave
 
     def clic_video(self):
         """Clic sul video: Pausa/Play; preserva comandi overlay e PiP."""
@@ -10296,10 +10390,10 @@ class TV(object):
     def pulsa_rec(self):
         """Il pallino rosso accanto a REC si accende e si spegne piano,
         finche' si registra."""
-        if not self.registrando or not self.dot_rec:
+        if not self.registrando:
             return
-        self.et_recdot.config(image=self.dot_rec[self.fase_rec])
-        self.fase_rec = (self.fase_rec + 1) % len(self.dot_rec)
+        self.fase_rec = (self.fase_rec + 1) % 12
+        self.hud_disegna()
         self.root.after(100, self.pulsa_rec)
 
     def mostra_rec(self):
@@ -10307,16 +10401,16 @@ class TV(object):
         ferma se e' pianificata. Vuoto se non si registra."""
         if not self.registrando:
             t = ""
-            self.et_recdot.config(image="")
         else:
             durata = int(time.time() - self.inizio_rec)
             ore, resto = divmod(durata, 3600)
             cronometro = "%d:%02d:%02d" % (ore, resto // 60, resto % 60) if ore else \
                          "%02d:%02d" % (resto // 60, resto % 60)
-            t = " REC " + cronometro
+            t = "REC " + cronometro
             if self.fine_rec:
                 t += "  " + _("until %s") % time.strftime("%H:%M", time.localtime(self.fine_rec))
-        self.et_rec.config(text=t)
+        self.rec_testo = t
+        self.hud_disegna()
 
     def pianifica(self):
         """Dal menu: ora di inizio e di fine per registrare il canale in
