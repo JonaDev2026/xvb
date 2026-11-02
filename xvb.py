@@ -351,7 +351,7 @@ def avvia_mpris(app):
     threading.Thread(target=GLib.MainLoop().run, daemon=True).start()
     return m
 
-VERSIONE = "4.3.8"
+VERSIONE = "4.3.9"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"
@@ -384,6 +384,16 @@ PUNTO = 24
 
 
 from traduzioni import LINGUE, TESTI, lingua_sistema
+
+for _l, _voci in (
+        ("it", ("Taglia", "Copia", "Incolla", "Seleziona tutto", "Buffer", "Minimo", "Basso", "Standard", "Alto")),
+        ("es", ("Cortar", "Copiar", "Pegar", "Seleccionar todo", "B\u00fafer", "M\u00ednimo", "Bajo", "Est\u00e1ndar", "Alto")),
+        ("fr", ("Couper", "Copier", "Coller", "Tout s\u00e9lectionner", "Tampon", "Minimal", "Bas", "Standard", "\u00c9lev\u00e9")),
+        ("de", ("Ausschneiden", "Kopieren", "Einf\u00fcgen", "Alles ausw\u00e4hlen", "Puffer", "Minimal", "Niedrig", "Standard", "Hoch")),
+        ("pt", ("Recortar", "Copiar", "Colar", "Selecionar tudo", "Buffer", "M\u00ednimo", "Baixo", "Padr\u00e3o", "Alto")),
+        ("ru", ("\u0412\u044b\u0440\u0435\u0437\u0430\u0442\u044c", "\u041a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u0442\u044c", "\u0412\u0441\u0442\u0430\u0432\u0438\u0442\u044c", "\u0412\u044b\u0434\u0435\u043b\u0438\u0442\u044c \u0432\u0441\u0451", "\u0411\u0443\u0444\u0435\u0440", "\u041c\u0438\u043d\u0438\u043c\u0430\u043b\u044c\u043d\u044b\u0439", "\u041d\u0438\u0437\u043a\u0438\u0439", "\u0421\u0442\u0430\u043d\u0434\u0430\u0440\u0442\u043d\u044b\u0439", "\u0412\u044b\u0441\u043e\u043a\u0438\u0439"))):
+    for _k, _t in zip(("Cut", "Copy", "Paste", "Select all", "Buffer", "Minimal", "Low", "Standard", "High"), _voci):
+        TESTI[_l].setdefault(_k, _t)
 
 LINGUA = "en"
 
@@ -489,6 +499,9 @@ def e_una_lista(f):
     return "#EXTM3U" in testa or "#EXTINF" in testa
 
 
+LISTE_NASCOSTE = set()
+
+
 def liste_in(cartella):
     """Le liste dentro a una cartella, qualunque nome abbiano, con o senza
     estensione: basta che dentro siano m3u."""
@@ -496,7 +509,8 @@ def liste_in(cartella):
     try:
         for n in sorted(os.listdir(cartella)):
             f = os.path.join(cartella, n)
-            if not n.startswith(".") and os.path.isfile(f) and e_una_lista(f):
+            if (not n.startswith(".") and os.path.isfile(f) and e_una_lista(f)
+                    and os.path.abspath(f) not in LISTE_NASCOSTE):
                 fuori.append(f)
     except Exception:
         pass
@@ -529,6 +543,13 @@ def categorie():
                 fuori.append((n, dentro))
     return fuori
 
+
+# Il buffer di mpv: (chiave, nome, MiB avanti, MiB indietro, secondi avanti,
+# secondi da riempire prima di ripartire). "standard" e' quello di sempre.
+BUFFER = (("minimal", "Minimal", 48, 16, 10, 5),
+          ("low", "Low", 128, 32, 20, 10),
+          ("standard", "Standard", 512, 128, 30, 15),
+          ("high", "High", 1024, 256, 60, 15))
 
 CATEGORIE_URL = (("podcast", "Podcast"), ("musica", "Music"), ("radio", "Radio"),
                  ("cam", "IP cam"), ("film", "Film"), ("video", "Video"))
@@ -3416,6 +3437,7 @@ def sfoglia(root, titolo, da, file_=True, tipi=None):
 class TV(object):
     def __init__(self, lista=None, da_aprire=None, porta=None):
         self.cfg = leggi_config()
+        LISTE_NASCOSTE.update(os.path.abspath(x) for x in self.cfg.get("liste_nascoste", []))
         global LINGUA
 
 
@@ -3593,6 +3615,7 @@ class TV(object):
         self.root.config(menu=self.barra_menu)
         self.menu_cima = {}
         self.tendina = Tendina(self.root)
+        self.root.bind_class("Entry", "<Button-3>", self.menu_testo)
 
 
         self.menu("Media", lambda: [
@@ -3709,7 +3732,12 @@ class TV(object):
             None,
             (_("Language"), None)] + [
             (("*  " if codice == LINGUA else "   ") + nome,
-             lambda c=codice: self.cambia_lingua(c)) for codice, nome in LINGUE])
+             lambda c=codice: self.cambia_lingua(c)) for codice, nome in LINGUE] + [
+            None,
+            (_("Buffer"), None)] + [
+            (("*  " if k == self.buffer_attuale()[0] else "   ") + "%s  (%s)" % (
+                _(n), "%d MiB" % mx if mx < 1024 else "%d GiB" % (mx // 1024)),
+             lambda k=k: self.metti_buffer(k)) for k, n, mx, _b, _a, _w in BUFFER])
         self.menu("Help", lambda: [
             (_("About XVB..."), self.informazioni),
             None,
@@ -4042,10 +4070,10 @@ class TV(object):
         self.mpv = mpv.MPV(
             wid=str(self.video.winfo_id()),
             cache="yes",
-            demuxer_max_bytes="512MiB",
-            demuxer_max_back_bytes="128MiB",
-            demuxer_readahead_secs=30,
-            cache_pause_wait=15,
+            demuxer_max_bytes="%dMiB" % self.buffer_attuale()[2],
+            demuxer_max_back_bytes="%dMiB" % self.buffer_attuale()[3],
+            demuxer_readahead_secs=self.buffer_attuale()[4],
+            cache_pause_wait=self.buffer_attuale()[5],
             network_timeout=60,
             ytdl=False,
             hwdec="auto-safe",
@@ -5592,6 +5620,11 @@ class TV(object):
 
     def aggiungi(self, dove):
         dove = os.path.abspath(dove)
+        if dove in LISTE_NASCOSTE:
+            LISTE_NASCOSTE.discard(dove)
+            self.cfg["liste_nascoste"] = [x for x in self.cfg.get("liste_nascoste", [])
+                                          if os.path.abspath(x) != dove]
+            scrivi_config(self.cfg)
         if dove not in self.tutte_le_liste():
             self.cfg.setdefault("liste", []).append(dove)
             scrivi_config(self.cfg)
@@ -5972,23 +6005,26 @@ class TV(object):
                 if self.conferma(_("Remove %s") % nome, _("The playlist will be removed from the list.")):
                     self.togli_lista_url(d)
                 return
-            if not self.conferma(_("Delete %s") % nome,
-                                 _("The file %s will be deleted from disk. This cannot be undone.") % d):
-                return
-            try:
-                os.remove(d)
-                cartella = os.path.dirname(d)
-                if os.path.basename(cartella) == PREFERITI and not os.listdir(cartella):
-                    os.rmdir(cartella)
-            except Exception as e:
-                self.scrivi(_("cannot delete %s: %s") % (nome, e), errore=True)
-                return
-            self.cfg["liste"] = [x for x in self.cfg.get("liste", []) if x != d]
-            if self.cfg.get("lista") == d:
-                self.cfg.pop("lista", None)
-            scrivi_config(self.cfg)
-            self.rifai_liste()
+            if self.conferma(_("Remove %s") % nome, _("The playlist will be removed from the list.")):
+                self.nascondi_lista(d)
             return
+
+    def nascondi_lista(self, d):
+        """Toglie una lista dall'elenco. Il file sul disco non si tocca mai:
+        se sta in playlists/ si ricorda di non mostrarla, e per rimetterla
+        basta aggiungerla di nuovo (Add file)."""
+        d = os.path.abspath(d)
+        if d in self.cfg.get("liste", []):
+            self.cfg["liste"] = [x for x in self.cfg["liste"] if x != d]
+        else:
+            nascoste = self.cfg.setdefault("liste_nascoste", [])
+            if d not in nascoste:
+                nascoste.append(d)
+            LISTE_NASCOSTE.add(d)
+        if self.cfg.get("lista") == d:
+            self.cfg.pop("lista", None)
+        scrivi_config(self.cfg)
+        self.rifai_liste()
 
     def togli_lista(self):
         """Toglie la lista selezionata. Il file sul disco non si tocca."""
@@ -5997,7 +6033,7 @@ class TV(object):
             self.scrivi(_("select the playlist to remove first"))
             return
         if dove not in self.cfg.get("liste", []):
-            self.scrivi(_("this one lives in playlists/: remove it by moving the file"))
+            self.nascondi_lista(dove)
             return
         self.cfg["liste"] = [d for d in self.cfg.get("liste", []) if d != dove]
         if self.cfg.get("lista") == dove:
@@ -8841,6 +8877,65 @@ class TV(object):
         except Exception as e:
             self.scrivi(_("cannot take a screenshot: %s") % e, errore=True)
         self.root.after(3000, self.scrivi_riga)
+
+    def menu_testo(self, ev):
+        """Tasto destro in una casella di testo: Cut, Copy, Paste, Select all."""
+        w = ev.widget
+        try:
+            stato = str(w.cget("state"))
+        except Exception:
+            return None
+        if stato == "disabled":
+            return None
+        w.focus_set()
+        scrivibile = stato != "readonly"
+        try:
+            selezione = bool(w.selection_present())
+        except Exception:
+            selezione = False
+        try:
+            negli_appunti = bool(self.root.clipboard_get())
+        except tk.TclError:
+            negli_appunti = False
+        m = tk.Menu(w, tearoff=0, **self.stile_menu)
+        m.add_command(label=_("Cut"), command=lambda: w.event_generate("<<Cut>>"),
+                      state="normal" if selezione and scrivibile else "disabled")
+        m.add_command(label=_("Copy"), command=lambda: w.event_generate("<<Copy>>"),
+                      state="normal" if selezione else "disabled")
+        m.add_command(label=_("Paste"), command=lambda: w.event_generate("<<Paste>>"),
+                      state="normal" if negli_appunti and scrivibile else "disabled")
+        m.add_separator()
+        m.add_command(label=_("Select all"),
+                      command=lambda: (w.select_range(0, "end"), w.icursor("end")))
+        self._menu_testo = m
+        try:
+            m.tk_popup(ev.x_root, ev.y_root)
+        finally:
+            m.grab_release()
+        return "break"
+
+    def buffer_attuale(self):
+        for voce in BUFFER:
+            if voce[0] == self.cfg.get("buffer", "standard"):
+                return voce
+        return BUFFER[2]
+
+    def metti_buffer(self, chiave):
+        """Il buffer di mpv, anche mentre suona: per chi ha poca RAM."""
+        for voce in BUFFER:
+            if voce[0] != chiave:
+                continue
+            try:
+                self.mpv.demuxer_max_bytes = voce[2] * 1048576
+                self.mpv.demuxer_max_back_bytes = voce[3] * 1048576
+                self.mpv.demuxer_readahead_secs = voce[4]
+                self.mpv.cache_pause_wait = voce[5]
+            except Exception:
+                pass
+            self.cfg["buffer"] = chiave
+            scrivi_config(self.cfg)
+            self.scrivi("%s: %s" % (_("Buffer"), _(voce[1])))
+            return
 
     def sempre_in_cima(self):
         self.cfg["in_cima"] = not self.cfg.get("in_cima")
