@@ -1,4 +1,3 @@
-
 #!/bin/sh
 set -e
 
@@ -8,7 +7,7 @@ cd "$QUI"
 VER="${1:-$(sed -n 's/^VERSIONE = "\(.*\)"/\1/p' xvb.py)}"
 [ -n "$VER" ] || VER=1.0
 
-# File e cartelle obbligatori
+# Controllo dei file necessari
 for f in xvb.py traduzioni.py icone icon.png fonts; do
     [ -e "$f" ] || {
         echo "ERRORE: manca $f in $QUI"
@@ -16,7 +15,7 @@ for f in xvb.py traduzioni.py icone icon.png fonts; do
     }
 done
 
-# Icone obbligatorie
+# Le icone delle categorie Podcast e Cam-IP sono risorse obbligatorie.
 for f in icone/mic.png icone/cam.png icone/tv.png icone/m3u.png; do
     [ -f "$f" ] || {
         echo "ERRORE: manca l'icona $f"
@@ -24,7 +23,7 @@ for f in icone/mic.png icone/cam.png icone/tv.png icone/m3u.png; do
     }
 done
 
-# Font obbligatori
+# Controllo dei font Google Sans
 for f in \
     fonts/static/GoogleSans-Regular.ttf \
     fonts/static/GoogleSans-Bold.ttf
@@ -34,9 +33,6 @@ do
         exit 1
     }
 done
-
-# Verifica sintassi Python
-python3 -m py_compile xvb.py traduzioni.py
 
 D="$(mktemp -d)"
 trap 'rm -rf "$D"' EXIT
@@ -49,15 +45,13 @@ mkdir -p "$D/DEBIAN" \
          "$D/usr/share/pixmaps" \
          "$D/usr/share/metainfo"
 
-# Applicazione e traduzioni
+# Applicazione, traduzioni e risorse
 cp xvb.py "$D/usr/lib/xvb/"
 cp traduzioni.py "$D/usr/lib/xvb/"
-
-# Risorse
 cp -a icone "$D/usr/lib/xvb/"
 cp -a fonts "$D/usr/lib/xvb/"
 
-# Icone di sistema
+# Icone
 cp icon.png "$D/usr/share/icons/hicolor/512x512/apps/xvb.png"
 cp icon.png "$D/usr/share/pixmaps/xvb.png"
 
@@ -70,9 +64,7 @@ cat > "$D/usr/bin/xvb" <<'FINE'
 exec /usr/lib/xvb/xvb /usr/lib/xvb/xvb.py "$@"
 FINE
 
-chmod 755 "$D/usr/bin/xvb"
-
-# Desktop file
+# Desktop File
 cat > "$D/usr/share/applications/xvb.desktop" <<'FINE'
 [Desktop Entry]
 Version=1.0
@@ -119,7 +111,7 @@ cat > "$D/usr/share/metainfo/xvb.metainfo.xml" <<FINE
 </component>
 FINE
 
-# Triggers Debian
+# Triggers
 cat > "$D/DEBIAN/triggers" <<'FINE'
 activate-noawait update-desktop-database
 activate-noawait gtk-update-icon-cache
@@ -145,15 +137,12 @@ Description: Media player for videos, music, discs and IPTV
  XMLTV guide, recording), built on libmpv.
 FINE
 
-chmod -R go-w "$D"
-chmod 755 "$D"
+# Normalizzazione dei permessi nel pacchetto
+find "$D" -type d -exec chmod 755 {} +
+find "$D" -type f -exec chmod 644 {} +
+chmod 755 "$D/usr/bin/xvb"
 
+# Creazione DEB
 dpkg-deb --build --root-owner-group "$D" "$QUI/xvb_${VER}_all.deb"
 
-echo
-echo "Pacchetto Debian creato:"
-echo "$QUI/xvb_${VER}_all.deb"
-echo "Versione: $VER"
-echo "Traduzioni: incluse"
-echo "Credenziali personali: escluse"
-
+echo "Fatto: xvb_${VER}_all.deb"
