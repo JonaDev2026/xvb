@@ -1,3 +1,4 @@
+
 #!/bin/sh
 set -e
 
@@ -7,15 +8,15 @@ cd "$QUI"
 VER="${1:-$(sed -n 's/^VERSIONE = "\(.*\)"/\1/p' xvb.py)}"
 [ -n "$VER" ] || VER=1.0
 
-# Controllo dei file necessari
-for f in xvb.py icone icon.png fonts; do
+# File e cartelle obbligatori
+for f in xvb.py traduzioni.py icone icon.png fonts; do
     [ -e "$f" ] || {
         echo "ERRORE: manca $f in $QUI"
         exit 1
     }
 done
 
-# Le icone delle categorie Podcast e Cam-IP sono risorse obbligatorie.
+# Icone obbligatorie
 for f in icone/mic.png icone/cam.png icone/tv.png icone/m3u.png; do
     [ -f "$f" ] || {
         echo "ERRORE: manca l'icona $f"
@@ -23,17 +24,19 @@ for f in icone/mic.png icone/cam.png icone/tv.png icone/m3u.png; do
     }
 done
 
-# Controllo dei font Google Sans
+# Font obbligatori
 for f in \
     fonts/static/GoogleSans-Regular.ttf \
-    fonts/static/GoogleSans-Bold.ttf \
-    
+    fonts/static/GoogleSans-Bold.ttf
 do
     [ -f "$f" ] || {
         echo "ERRORE: manca il font $f"
         exit 1
     }
 done
+
+# Verifica sintassi Python
+python3 -m py_compile xvb.py traduzioni.py
 
 D="$(mktemp -d)"
 trap 'rm -rf "$D"' EXIT
@@ -46,12 +49,15 @@ mkdir -p "$D/DEBIAN" \
          "$D/usr/share/pixmaps" \
          "$D/usr/share/metainfo"
 
-# Applicazione e risorse
+# Applicazione e traduzioni
 cp xvb.py "$D/usr/lib/xvb/"
+cp traduzioni.py "$D/usr/lib/xvb/"
+
+# Risorse
 cp -a icone "$D/usr/lib/xvb/"
 cp -a fonts "$D/usr/lib/xvb/"
 
-# Icone
+# Icone di sistema
 cp icon.png "$D/usr/share/icons/hicolor/512x512/apps/xvb.png"
 cp icon.png "$D/usr/share/pixmaps/xvb.png"
 
@@ -66,7 +72,7 @@ FINE
 
 chmod 755 "$D/usr/bin/xvb"
 
-# Desktop File
+# Desktop file
 cat > "$D/usr/share/applications/xvb.desktop" <<'FINE'
 [Desktop Entry]
 Version=1.0
@@ -113,7 +119,7 @@ cat > "$D/usr/share/metainfo/xvb.metainfo.xml" <<FINE
 </component>
 FINE
 
-# Triggers
+# Triggers Debian
 cat > "$D/DEBIAN/triggers" <<'FINE'
 activate-noawait update-desktop-database
 activate-noawait gtk-update-icon-cache
@@ -144,5 +150,10 @@ chmod 755 "$D"
 
 dpkg-deb --build --root-owner-group "$D" "$QUI/xvb_${VER}_all.deb"
 
-echo "Fatto: xvb_${VER}_all.deb"
+echo
+echo "Pacchetto Debian creato:"
+echo "$QUI/xvb_${VER}_all.deb"
+echo "Versione: $VER"
+echo "Traduzioni: incluse"
+echo "Credenziali personali: escluse"
 

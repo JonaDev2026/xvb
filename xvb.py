@@ -11,6 +11,114 @@ import sys
 import threading
 import time
 
+import logging
+from logging.handlers import RotatingFileHandler
+
+
+_XVB_LOGGER = logging.getLogger("xvb")
+
+
+class _XVBFiltroSicurezza(logging.Filter):
+    """Oscura credenziali e token nei messaggi del log."""
+
+    _parametri = re.compile(
+        r"(?i)(password|passwd|username|user|token|"
+        r"api[_-]?key|authorization|secret)=([^&\\s]+)"
+    )
+    _autenticazione = re.compile(
+        r"(?i)(https?://)[^/@\\s:]+:[^/@\\s]+@"
+    )
+
+    def filter(self, record):
+        try:
+            testo = record.getMessage()
+            testo = self._parametri.sub(r"\\1=[REDACTED]", testo)
+            testo = self._autenticazione.sub(r"\\1[REDACTED]@", testo)
+            record.msg = testo
+            record.args = ()
+        except Exception:
+            pass
+        return True
+
+
+def _xvb_eccezione(exc_type, exc_value, exc_traceback):
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+
+    _XVB_LOGGER.critical(
+        "Eccezione non gestita",
+        exc_info=(exc_type, exc_value, exc_traceback)
+    )
+
+
+def _xvb_eccezione_thread(args):
+    _XVB_LOGGER.error(
+        "Eccezione non gestita nel thread %s",
+        getattr(args.thread, "name", "sconosciuto"),
+        exc_info=(args.exc_type, args.exc_value, args.exc_traceback)
+    )
+
+
+def _xvb_eccezione_tk(exc_type, exc_value, exc_traceback):
+    _XVB_LOGGER.error(
+        "Errore in un callback Tkinter",
+        exc_info=(exc_type, exc_value, exc_traceback)
+    )
+
+
+def configura_logging():
+    """Configura il registro degli errori di XVB."""
+
+    if _XVB_LOGGER.handlers:
+        return
+
+    _XVB_LOGGER.setLevel(logging.INFO)
+    _XVB_LOGGER.propagate = False
+
+    filtro = _XVBFiltroSicurezza()
+
+    percorsi = (
+        os.path.join(CASA, ".local", "state", "xvb"),
+        os.path.join(CASA, ".cache", "xvb"),
+    )
+
+    for cartella in percorsi:
+        try:
+            os.makedirs(cartella, exist_ok=True)
+            percorso = os.path.join(cartella, "xvb.log")
+
+            gestore = RotatingFileHandler(
+                percorso,
+                maxBytes=2 * 1024 * 1024,
+                backupCount=3,
+                encoding="utf-8"
+            )
+            gestore.setFormatter(logging.Formatter(
+                "%(asctime)s | %(levelname)s | %(threadName)s | %(message)s"
+            ))
+            gestore.addFilter(filtro)
+            _XVB_LOGGER.addHandler(gestore)
+
+            _XVB_LOGGER.info("XVB %s avviato", VERSIONE)
+
+            sys.excepthook = _xvb_eccezione
+
+            if hasattr(threading, "excepthook"):
+                threading.excepthook = _xvb_eccezione_thread
+
+            return
+
+        except OSError:
+            continue
+
+    gestore = logging.StreamHandler(sys.stderr)
+    gestore.addFilter(filtro)
+    _XVB_LOGGER.addHandler(gestore)
+    _XVB_LOGGER.error("Impossibile creare il file di log su disco")
+
+
+
 
 _FONT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
 _FONT_STATIC_DIR = os.path.join(_FONT_DIR, "static")
@@ -39,7 +147,9 @@ import tkinter as tk
 from tkinter import filedialog, ttk
 import tkinter.font as tkfont
 import xml.etree.ElementTree as ET
-from urllib.parse import quote, urljoin, urlparse
+from urllib.parse import quote, urljoin, urlparse, urlencode
+import io
+import zipfile
 from urllib.request import Request, urlopen
 import tkinter.font as tkfont
 
@@ -240,7 +350,7 @@ def avvia_mpris(app):
     threading.Thread(target=GLib.MainLoop().run, daemon=True).start()
     return m
 
-VERSIONE = "4.3.6"
+VERSIONE = "4.3.7"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"
@@ -272,1240 +382,9 @@ CARTELLE_VECCHIE = tuple(c for c in (os.path.join(QUI, "lists"),
 PUNTO = 24
 
 
-LINGUE = (("en", "English"), ("it", "Italiano"), ("es", "Español"), ("fr", "Français"),
-          ("de", "Deutsch"), ("pt", "Português"), ("ru", "Русский"))
+from traduzioni import LINGUE, TESTI, lingua_sistema
+
 LINGUA = "en"
-TESTI = {
-    "it": {
-        "Picture in picture": "Immagine nell'immagine",
-        "Audio CD": "CD audio",
-        "Track %d": "Traccia %d",
-        "Set logo...": "Imposta logo...",
-        "Remove logo": "Togli logo",
-        "Set color...": "Imposta colore...",
-        "Remove color": "Togli colore",
-        "Choose a color": "Scegli un colore",
-        "Discs": "Dischi",
-        "This DVD is protected and can't be recorded": "Questo DVD è protetto e non si può registrare",
-        "Set cover...": "Imposta copertina...",
-        "Remove cover": "Togli copertina",
-        "Choose an image": "Scegli un'immagine",
-        "Radio": "Radio",
-        "Podcast": "Podcast",
-        "Music": "Musica",
-        "IP cam": "Cam-IP",
-        "Film": "Film",
-        "Temporary": "Provvisori",
-        "Save in:": "Salva in:",
-        "Move to %s": "Sposta in %s",
-        "Rename...": "Rinomina...",
-        "cannot rename %s: %s": "non riesco a rinominare %s: %s",
-        "Opened URLs": "URL aperti",
-        "The addresses will be removed from the list.": "Gli indirizzi vengono tolti dall'elenco.",
-        "Open URL...": "Apri URL...",
-        "Address of the stream or file:": "Indirizzo dello stream o del file:",
-        "Load subtitles...": "Carica sottotitoli...",
-        "Subtitle delay +100 ms": "Ritardo sottotitoli +100 ms",
-        "Subtitle delay -100 ms": "Ritardo sottotitoli -100 ms",
-        "Subtitles larger": "Sottotitoli più grandi",
-        "Subtitles smaller": "Sottotitoli più piccoli",
-        "Reset subtitles": "Azzera sottotitoli",
-        "subtitles: %s": "sottotitoli: %s",
-        "subtitle delay %+.1fs": "ritardo sottotitoli %+.1fs",
-        "subtitle size %d%%": "sottotitoli al %d%%",
-        "nothing is playing": "non c'è niente in riproduzione",
-        "Recent": "Recenti",
-        "Clear recent": "Svuota recenti",
-        "No repeat": "Non ripetere",
-        "Repeat one": "Ripeti il file",
-        "Repeat all": "Ripeti tutto",
-        "Previous chapter": "Capitolo precedente", "Next chapter": "Capitolo successivo", "Chapter %d": "Capitolo %d", "Chapters": "Capitoli",
-        "until %s": "fino alle %s",
-        "Delete": "Elimina",
-        "Delete %s": "Elimina %s",
-        "The guide will be removed from the list.": "La guida verrà tolta dall'elenco.",
-        "%d recording(s) will be deleted from disk. This cannot be undone.": "%d registrazione/i verranno cancellate dal disco. Non si può annullare.",
-        "The playlist will be removed from the list.": "La playlist verrà tolta dall'elenco.",
-        "The file %s will be deleted from disk. This cannot be undone.": "Il file %s verrà cancellato dal disco. Non si può annullare.",
-        "cannot delete %s: %s": "non riesco a cancellare %s: %s",
-        "%s - %d recordings": "%s - %d registrazioni",
-        "Recordings": "Registrazioni",
-        "Video": "Video",
-        "Speed x%g": "Velocità x%g",
-        "Aspect %s": "Proporzioni %s",
-        "Fill screen (crop)": "Riempi lo schermo (taglia)",
-        "Deinterlace": "Deinterlaccia", "Hardware decoding": "Decodifica hardware",
-        "Brightness +": "Luminosità +",
-        "Brightness -": "Luminosità -",
-        "Contrast +": "Contrasto +",
-        "Contrast -": "Contrasto -",
-        "Saturation +": "Saturazione +",
-        "Saturation -": "Saturazione -",
-        "Reset picture": "Azzera immagine",
-        "Screenshot": "Istantanea",
-        "Always on top": "Sempre in primo piano",
-        "Track: %s": "Traccia: %s",
-        "Subtitles off": "Sottotitoli spenti",
-        "Subtitles: %s": "Sottotitoli: %s",
-        "Volume boost +50%": "Volume extra +50%",
-        "Normalize loudness": "Normalizza il volume",
-        "speed x%g": "velocità x%g",
-        "brightness": "luminosità",
-        "contrast": "contrasto",
-        "saturation": "saturazione",
-        "screenshot saved in %s": "istantanea salvata in %s",
-        "cannot take a screenshot: %s": "istantanea non riuscita: %s",
-        "Programme guide": "Guida programmi",
-        "no guide data for this playlist": "nessun programma in guida per questa playlist",
-        "OK": "OK",
-        "Cancel": "Annulla",
-        "MIT license": "Licenza MIT",
-        "URL of the playlist (m3u):": "Url della playlist (m3u):",
-        "Name:": "Nome:",
-        "About": "Info",
-        "About XVB...": "Informazioni su XVB...",
-        "Version": "Versione",
-        "new version %s available": "nuova versione %s disponibile",
-        "new version %s available: Help > Download": "nuova versione %s disponibile: Aiuto > Scarica",
-        "Check for updates": "Cerca aggiornamenti",
-        "Donate": "Dona",
-        "Download %s": "Scarica la %s",
-        "Up to date": "Aggiornata",
-        "cannot check for updates: %s": "non riesco a controllare gli aggiornamenti: %s",
-        "up to date (%s)": "aggiornata (%s)",
-        "Remove %s": "Rimuovi %s",
-        "removed %s": "rimossa %s",
-        "%s is already there": "%s c'è già",
-        "Record": "Registra",
-        "Stop": "Ferma",
-        "Record now": "Registra ora",
-        "Stop recording": "Ferma registrazione",
-        "Schedule...": "Pianifica...",
-        "Cancel schedule": "Annulla pianificazione",
-        "Open recordings folder": "Apri cartella registrazioni",
-        "cannot record: %s": "non riesco a registrare: %s",
-        "saved %s": "salvato %s",
-        "REC until %s": "REC fino alle %s",
-        "open the channel to record first": "prima apri il canale da registrare",
-        "Schedule": "Pianifica",
-        "Start (HH:MM):": "Inizio (HH:MM):",
-        "End (HH:MM):": "Fine (HH:MM):",
-        "time must be HH:MM": "l'ora va scritta HH:MM",
-        "scheduled: %s from %s to %s": "pianificato: %s dalle %s alle %s",
-        "schedule cancelled": "pianificazione annullata",
-        "Delay +100 ms": "Ritardo +100 ms", "Delay -100 ms": "Ritardo -100 ms", "Reset delay": "Azzera ritardo",
-        "audio delay %+.1fs": "ritardo audio %+.1fs",
-        "guide loaded: %d channels, %d programmes": "guida caricata: %d canali, %d programmi",
-        "not in the guide": "non in guida",
-        "Search": "Cerca",
-        "File": "File", "Playlists": "Playlist",
-        "ready": "pronto",
-        "unnamed": "senza nome",
-        "single quality": "una sola qualita'",
-        "missing icons: %s": "icone mancanti: %s",
-        "no playlist: put one in playlists/": "nessuna playlist: mettine una in playlists/",
-        "loading %s...": "carico %s...",
-        "cannot read %s: %s": "non riesco a leggere %s: %s",
-        "This DVD can't be played": "Questo DVD non si puo' riprodurre",
-        "Media": "Media",
-        "Playback": "Riproduzione",
-        "IPTV": "IPTV",
-        "Help": "Aiuto",
-        "Play / Pause": "Play / Pausa",
-        "Back 10 s": "Indietro 10 s",
-        "Forward 10 s": "Avanti 10 s",
-        "Previous": "Precedente",
-        "Next": "Successivo",
-        "Add playlist URL": "Aggiungi URL playlist",
-        "Open playlists folder": "Apri cartella playlist",
-        "Reload playlists": "Ricarica playlist",
-        "Add guide URL": "Aggiungi URL guida",
-        "Reload guide": "Ricarica guida",
-        "Recording": "Registrazione",
-        "Show list": "Mostra elenco",
-        "Hide list": "Nascondi elenco",
-        "Show sidebar": "Mostra barra laterale",
-        "Hide sidebar": "Nascondi barra laterale",
-        "%s - %d channels": "%s - %d canali",
-        "Choose a playlist": "Scegli una playlist",
-        "All files": "Tutti i file",
-        "Open file...": "Apri file...", "Choose a file": "Scegli un file",
-        "Media files": "File multimediali", "Open folder...": "Apri cartella...",
-        "Download posters and covers": "Scarica poster e copertine",
-        "Film titles and genres": "Titoli e generi dei film",
-        "Download film titles and genres again in the new language?":
-            "Riscaricare titoli e generi dei film nella nuova lingua?",
-        "Download": "Scarica",
-        "open a folder of films or music first": "apri prima una cartella di film o musica",
-        "downloading posters and covers... %d/%d": "scarico poster e copertine... %d/%d",
-        "%d posters and covers downloaded": "%d tra poster e copertine scaricati",
-        "Choose a folder": "Scegli una cartella", "Imported media": "Media importati",
-        "Open": "Apri", "%s - %d files": "%s - %d file",
-        "The folder will be removed from the list. Files are not touched.":
-            "La cartella viene tolta dall'elenco. I file non si toccano.",
-        "The imported files will be removed from the list. Files are not touched.":
-            "I file importati vengono tolti dall'elenco. I file non si toccano.",
-        "%s does not look like an m3u playlist": "%s non sembra una playlist m3u",
-        "select the playlist to remove first": "prima seleziona la playlist da togliere",
-        "this one lives in playlists/: remove it by moving the file":
-            "questa sta in playlists/: si toglie spostando il file",
-        "%s removed from favorites": "%s tolto dai preferiti",
-        "%s added to favorites": "%s nei preferiti",
-        "cannot write favorites: %s": "non riesco a scrivere i preferiti: %s",
-        "looking for %s qualities...": "cerco le qualita' di %s...",
-        "TV guide": "Guida TV",
-        "URL or file of the guide (XMLTV, .gz is fine):":
-            "Url o file della guida (XMLTV, va bene anche .gz):",
-        "loading the guide...": "carico la guida...",
-        "guide not loaded: %s": "guida non caricata: %s",
-        "no TV guide set": "nessuna guida impostata",
-        "%s is not responding, nor are the next ones": "%s non risponde, e nemmeno i successivi",
-        "%s is not responding: skipping to the next": "%s non risponde: passo al prossimo",
-        "cannot open %s: %s": "non riesco ad aprire %s: %s",
-        "Pause": "Pausa", "Resume": "Riprendi", "Favorite": "Preferito",
-        "Fullscreen": "Schermo intero", "quality": "qualita'", "Mute": "Muto",
-        "Logos": "Loghi", "Dots": "Pallini", "Border": "Bordo",
-        "Unmute": "Audio", "Switch": "Scambia", "Shuffle": "Casuale",
-        "Open folder": "Apri cartella", "Reload": "Ricarica", "Add URL": "Aggiungi url",
-        "Remove": "Rimuovi", "View": "Vista", "Hide channels": "Nascondi canali",
-        "Show channels": "Mostra canali", "Hide playlists": "Nascondi playlist",
-        "Show playlists": "Mostra playlist", "Language": "Lingua",
-    },
-    "es": {
-        "Picture in picture": "Imagen en imagen",
-        "Audio CD": "CD de audio",
-        "Track %d": "Pista %d",
-        "Set logo...": "Poner logo...",
-        "Remove logo": "Quitar logo",
-        "Discs": "Discos",
-        "This DVD is protected and can't be recorded": "Este DVD está protegido y no se puede grabar",
-        "Set cover...": "Poner portada...",
-        "Remove cover": "Quitar portada",
-        "Choose an image": "Elige una imagen",
-        "Radio": "Radio",
-        "Podcast": "Podcast",
-        "Music": "Música",
-        "IP cam": "Cámaras IP",
-        "Film": "Películas",
-        "Temporary": "Temporales",
-        "Save in:": "Guardar en:",
-        "Move to %s": "Mover a %s",
-        "Rename...": "Renombrar...",
-        "cannot rename %s: %s": "no puedo renombrar %s: %s",
-        "Opened URLs": "URL abiertas",
-        "The addresses will be removed from the list.": "Las direcciones se quitarán de la lista.",
-        "Open URL...": "Abrir URL...",
-        "Address of the stream or file:": "Dirección del stream o del archivo:",
-        "Load subtitles...": "Cargar subtítulos...",
-        "Subtitle delay +100 ms": "Retraso de subtítulos +100 ms",
-        "Subtitle delay -100 ms": "Retraso de subtítulos -100 ms",
-        "Subtitles larger": "Subtítulos más grandes",
-        "Subtitles smaller": "Subtítulos más pequeños",
-        "Reset subtitles": "Restablecer subtítulos",
-        "subtitles: %s": "subtítulos: %s",
-        "subtitle delay %+.1fs": "retraso de subtítulos %+.1fs",
-        "subtitle size %d%%": "subtítulos al %d%%",
-        "nothing is playing": "no se está reproduciendo nada",
-        "Recent": "Recientes",
-        "Clear recent": "Borrar recientes",
-        "No repeat": "Sin repetir",
-        "Repeat one": "Repetir uno",
-        "Repeat all": "Repetir todo",
-        "Previous chapter": "Capítulo anterior", "Next chapter": "Capítulo siguiente", "Chapter %d": "Capítulo %d", "Chapters": "Capítulos",
-        "until %s": "hasta las %s",
-        "Delete": "Eliminar",
-        "Delete %s": "Eliminar %s",
-        "The guide will be removed from the list.": "La guía se quitará de la lista.",
-        "%d recording(s) will be deleted from disk. This cannot be undone.": "%d grabación/es se borrarán del disco. No se puede deshacer.",
-        "The playlist will be removed from the list.": "La lista se quitará del elenco.",
-        "The file %s will be deleted from disk. This cannot be undone.": "El archivo %s se borrará del disco. No se puede deshacer.",
-        "cannot delete %s: %s": "no puedo borrar %s: %s",
-        "%s - %d recordings": "%s - %d grabaciones",
-        "Recordings": "Grabaciones",
-        "Video": "Vídeo",
-        "Speed x%g": "Velocidad x%g",
-        "Aspect %s": "Proporción %s",
-        "Fill screen (crop)": "Llenar pantalla (recortar)",
-        "Deinterlace": "Desentrelazar", "Hardware decoding": "Decodificación por hardware",
-        "Brightness +": "Brillo +",
-        "Brightness -": "Brillo -",
-        "Contrast +": "Contraste +",
-        "Contrast -": "Contraste -",
-        "Saturation +": "Saturación +",
-        "Saturation -": "Saturación -",
-        "Reset picture": "Restablecer imagen",
-        "Screenshot": "Captura",
-        "Always on top": "Siempre encima",
-        "Track: %s": "Pista: %s",
-        "Subtitles off": "Subtítulos desactivados",
-        "Subtitles: %s": "Subtítulos: %s",
-        "Volume boost +50%": "Volumen extra +50%",
-        "Normalize loudness": "Normalizar volumen",
-        "speed x%g": "velocidad x%g",
-        "brightness": "brillo",
-        "contrast": "contraste",
-        "saturation": "saturación",
-        "screenshot saved in %s": "captura guardada en %s",
-        "cannot take a screenshot: %s": "no se pudo capturar: %s",
-        "Programme guide": "Guía de programas",
-        "no guide data for this playlist": "sin programas en la guía para esta lista",
-        "OK": "OK",
-        "Cancel": "Cancelar",
-        "MIT license": "Licencia MIT",
-        "URL of the playlist (m3u):": "URL de la lista (m3u):",
-        "Name:": "Nombre:",
-        "About": "Acerca de",
-        "About XVB...": "Acerca de XVB...",
-        "Version": "Versión",
-        "new version %s available": "nueva versión %s disponible",
-        "new version %s available: Help > Download": "nueva versión %s disponible: Ayuda > Descargar",
-        "Check for updates": "Buscar actualizaciones",
-        "Donate": "Donar",
-        "Download %s": "Descargar la %s",
-        "Up to date": "Actualizada",
-        "cannot check for updates: %s": "no puedo comprobar actualizaciones: %s",
-        "up to date (%s)": "actualizada (%s)",
-        "Remove %s": "Quitar %s",
-        "removed %s": "quitada %s",
-        "%s is already there": "%s ya está",
-        "Record": "Grabar",
-        "Stop": "Parar",
-        "Record now": "Grabar ahora",
-        "Stop recording": "Parar grabación",
-        "Schedule...": "Programar...",
-        "Cancel schedule": "Cancelar programación",
-        "Open recordings folder": "Abrir carpeta de grabaciones",
-        "cannot record: %s": "no puedo grabar: %s",
-        "saved %s": "guardado %s",
-        "REC until %s": "REC hasta las %s",
-        "open the channel to record first": "abre primero el canal a grabar",
-        "Schedule": "Programar",
-        "Start (HH:MM):": "Inicio (HH:MM):",
-        "End (HH:MM):": "Fin (HH:MM):",
-        "time must be HH:MM": "la hora debe ser HH:MM",
-        "scheduled: %s from %s to %s": "programado: %s de %s a %s",
-        "schedule cancelled": "programación cancelada",
-        "Delay +100 ms": "Retardo +100 ms", "Delay -100 ms": "Retardo -100 ms", "Reset delay": "Quitar retardo",
-        "audio delay %+.1fs": "retardo de audio %+.1fs",
-        "guide loaded: %d channels, %d programmes": "guía cargada: %d canales, %d programas",
-        "not in the guide": "no está en la guía",
-        "Search": "Buscar",
-        "File": "Archivo", "Playlists": "Listas",
-        "ready": "listo",
-        "unnamed": "sin nombre",
-        "single quality": "una sola calidad",
-        "missing icons: %s": "faltan iconos: %s",
-        "no playlist: put one in playlists/": "ninguna lista: pon una en playlists/",
-        "loading %s...": "cargando %s...",
-        "cannot read %s: %s": "no puedo leer %s: %s",
-        "This DVD can't be played": "Este DVD no se puede reproducir",
-        "Media": "Medios",
-        "Playback": "Reproducción",
-        "IPTV": "IPTV",
-        "Help": "Ayuda",
-        "Play / Pause": "Reproducir / Pausa",
-        "Back 10 s": "Atrás 10 s",
-        "Forward 10 s": "Adelante 10 s",
-        "Previous": "Anterior",
-        "Next": "Siguiente",
-        "Add playlist URL": "Añadir URL de lista",
-        "Open playlists folder": "Abrir carpeta de listas",
-        "Reload playlists": "Recargar listas",
-        "Add guide URL": "Añadir URL de guía",
-        "Reload guide": "Recargar guía",
-        "Recording": "Grabación",
-        "Show list": "Mostrar lista",
-        "Hide list": "Ocultar lista",
-        "Show sidebar": "Mostrar barra lateral",
-        "Hide sidebar": "Ocultar barra lateral",
-        "%s - %d channels": "%s - %d canales",
-        "Choose a playlist": "Elige una lista",
-        "All files": "Todos los archivos",
-        "Open file...": "Abrir archivo...", "Choose a file": "Elige un archivo",
-        "Media files": "Archivos multimedia", "Open folder...": "Abrir carpeta...",
-        "Download posters and covers": "Descargar pósters y portadas",
-        "Film titles and genres": "Títulos y géneros de películas",
-        "Download film titles and genres again in the new language?":
-            "¿Descargar de nuevo títulos y géneros en el nuevo idioma?",
-        "Download": "Descargar",
-        "open a folder of films or music first": "abre primero una carpeta de películas o música",
-        "downloading posters and covers... %d/%d": "descargando pósters y portadas... %d/%d",
-        "%d posters and covers downloaded": "%d pósters y portadas descargados",
-        "Choose a folder": "Elige una carpeta", "Imported media": "Medios importados",
-        "Open": "Abrir", "%s - %d files": "%s - %d archivos",
-        "The folder will be removed from the list. Files are not touched.":
-            "La carpeta se quita de la lista. Los archivos no se tocan.",
-        "The imported files will be removed from the list. Files are not touched.":
-            "Los archivos importados se quitan de la lista. Los archivos no se tocan.",
-        "%s does not look like an m3u playlist": "%s no parece una lista m3u",
-        "select the playlist to remove first": "primero selecciona la lista a quitar",
-        "this one lives in playlists/: remove it by moving the file":
-            "esta está en playlists/: se quita moviendo el archivo",
-        "%s removed from favorites": "%s quitado de favoritos",
-        "%s added to favorites": "%s añadido a favoritos",
-        "cannot write favorites: %s": "no puedo guardar los favoritos: %s",
-        "looking for %s qualities...": "buscando las calidades de %s...",
-        "TV guide": "Guía TV",
-        "URL or file of the guide (XMLTV, .gz is fine):":
-            "URL o archivo de la guía (XMLTV, también .gz):",
-        "loading the guide...": "cargando la guía...",
-        "guide not loaded: %s": "guía no cargada: %s",
-        "no TV guide set": "ninguna guía configurada",
-        "%s is not responding, nor are the next ones": "%s no responde, ni los siguientes",
-        "%s is not responding: skipping to the next": "%s no responde: paso al siguiente",
-        "cannot open %s: %s": "no puedo abrir %s: %s",
-        "Pause": "Pausa", "Resume": "Reanudar", "Favorite": "Favorito",
-        "Fullscreen": "Pantalla completa", "quality": "calidad", "Mute": "Silencio",
-        "Logos": "Logos", "Dots": "Puntos", "Border": "Borde",
-        "Unmute": "Sonido", "Switch": "Cambiar", "Shuffle": "Aleatorio",
-        "Open folder": "Abrir carpeta", "Reload": "Recargar", "Add URL": "Añadir URL",
-        "Remove": "Quitar", "View": "Vista", "Hide channels": "Ocultar canales",
-        "Show channels": "Mostrar canales", "Hide playlists": "Ocultar listas",
-        "Show playlists": "Mostrar listas", "Language": "Idioma",
-    },
-    "fr": {
-        "Picture in picture": "Image dans l'image",
-        "Audio CD": "CD audio",
-        "Track %d": "Piste %d",
-        "Set logo...": "Choisir le logo...",
-        "Remove logo": "Retirer le logo",
-        "Discs": "Disques",
-        "This DVD is protected and can't be recorded": "Ce DVD est protégé et ne peut pas être enregistré",
-        "Set cover...": "Choisir la pochette...",
-        "Remove cover": "Retirer la pochette",
-        "Choose an image": "Choisir une image",
-        "Radio": "Radio",
-        "Podcast": "Podcasts",
-        "Music": "Musique",
-        "IP cam": "Caméras IP",
-        "Film": "Films",
-        "Temporary": "Temporaires",
-        "Save in:": "Enregistrer dans :",
-        "Move to %s": "Déplacer vers %s",
-        "Rename...": "Renommer...",
-        "cannot rename %s: %s": "impossible de renommer %s : %s",
-        "Opened URLs": "URL ouvertes",
-        "The addresses will be removed from the list.": "Les adresses seront retirées de la liste.",
-        "Open URL...": "Ouvrir une URL...",
-        "Address of the stream or file:": "Adresse du flux ou du fichier :",
-        "Load subtitles...": "Charger des sous-titres...",
-        "Subtitle delay +100 ms": "Décalage sous-titres +100 ms",
-        "Subtitle delay -100 ms": "Décalage sous-titres -100 ms",
-        "Subtitles larger": "Sous-titres plus grands",
-        "Subtitles smaller": "Sous-titres plus petits",
-        "Reset subtitles": "Réinitialiser les sous-titres",
-        "subtitles: %s": "sous-titres : %s",
-        "subtitle delay %+.1fs": "décalage des sous-titres %+.1fs",
-        "subtitle size %d%%": "sous-titres à %d%%",
-        "nothing is playing": "rien n'est en lecture",
-        "Recent": "Récents",
-        "Clear recent": "Effacer les récents",
-        "No repeat": "Ne pas répéter",
-        "Repeat one": "Répéter un",
-        "Repeat all": "Répéter tout",
-        "Previous chapter": "Chapitre précédent", "Next chapter": "Chapitre suivant", "Chapter %d": "Chapitre %d", "Chapters": "Chapitres",
-        "until %s": "jusqu'à %s",
-        "Delete": "Supprimer",
-        "Delete %s": "Supprimer %s",
-        "The guide will be removed from the list.": "Le guide sera retiré de la liste.",
-        "%d recording(s) will be deleted from disk. This cannot be undone.": "%d enregistrement(s) seront supprimés du disque. Irréversible.",
-        "The playlist will be removed from the list.": "La liste sera retirée.",
-        "The file %s will be deleted from disk. This cannot be undone.": "Le fichier %s sera supprimé du disque. Irréversible.",
-        "cannot delete %s: %s": "impossible de supprimer %s : %s",
-        "%s - %d recordings": "%s - %d enregistrements",
-        "Recordings": "Enregistrements",
-        "Video": "Vidéo",
-        "Speed x%g": "Vitesse x%g",
-        "Aspect %s": "Format %s",
-        "Fill screen (crop)": "Remplir l'écran (rogner)",
-        "Deinterlace": "Désentrelacer", "Hardware decoding": "Décodage matériel",
-        "Brightness +": "Luminosité +",
-        "Brightness -": "Luminosité -",
-        "Contrast +": "Contraste +",
-        "Contrast -": "Contraste -",
-        "Saturation +": "Saturation +",
-        "Saturation -": "Saturation -",
-        "Reset picture": "Réinitialiser l'image",
-        "Screenshot": "Capture d'écran",
-        "Always on top": "Toujours au premier plan",
-        "Track: %s": "Piste : %s",
-        "Subtitles off": "Sous-titres désactivés",
-        "Subtitles: %s": "Sous-titres : %s",
-        "Volume boost +50%": "Volume extra +50%",
-        "Normalize loudness": "Normaliser le volume",
-        "speed x%g": "vitesse x%g",
-        "brightness": "luminosité",
-        "contrast": "contraste",
-        "saturation": "saturation",
-        "screenshot saved in %s": "capture enregistrée dans %s",
-        "cannot take a screenshot: %s": "capture impossible : %s",
-        "Programme guide": "Grille des programmes",
-        "no guide data for this playlist": "aucun programme dans le guide pour cette liste",
-        "OK": "OK",
-        "Cancel": "Annuler",
-        "MIT license": "Licence MIT",
-        "URL of the playlist (m3u):": "URL de la liste (m3u) :",
-        "Name:": "Nom :",
-        "About": "À propos",
-        "About XVB...": "À propos de XVB...",
-        "Version": "Version",
-        "new version %s available": "nouvelle version %s disponible",
-        "new version %s available: Help > Download": "nouvelle version %s disponible : Aide > Télécharger",
-        "Check for updates": "Rechercher des mises à jour",
-        "Donate": "Faire un don",
-        "Download %s": "Télécharger la %s",
-        "Up to date": "À jour",
-        "cannot check for updates: %s": "impossible de vérifier les mises à jour : %s",
-        "up to date (%s)": "à jour (%s)",
-        "Remove %s": "Retirer %s",
-        "removed %s": "%s retiré",
-        "%s is already there": "%s est déjà là",
-        "Record": "Enregistrer",
-        "Stop": "Arrêter",
-        "Record now": "Enregistrer maintenant",
-        "Stop recording": "Arrêter l'enregistrement",
-        "Schedule...": "Programmer...",
-        "Cancel schedule": "Annuler la programmation",
-        "Open recordings folder": "Ouvrir le dossier des enregistrements",
-        "cannot record: %s": "impossible d'enregistrer : %s",
-        "saved %s": "enregistré %s",
-        "REC until %s": "REC jusqu'à %s",
-        "open the channel to record first": "ouvre d'abord la chaîne à enregistrer",
-        "Schedule": "Programmer",
-        "Start (HH:MM):": "Début (HH:MM) :",
-        "End (HH:MM):": "Fin (HH:MM) :",
-        "time must be HH:MM": "l'heure doit être HH:MM",
-        "scheduled: %s from %s to %s": "programmé : %s de %s à %s",
-        "schedule cancelled": "programmation annulée",
-        "Delay +100 ms": "Retard +100 ms", "Delay -100 ms": "Retard -100 ms", "Reset delay": "Remettre à zéro",
-        "audio delay %+.1fs": "retard audio %+.1fs",
-        "guide loaded: %d channels, %d programmes": "guide chargé : %d chaînes, %d programmes",
-        "not in the guide": "absent du guide",
-        "Search": "Rechercher",
-        "File": "Fichier", "Playlists": "Listes",
-        "ready": "prêt",
-        "unnamed": "sans nom",
-        "single quality": "une seule qualité",
-        "missing icons: %s": "icônes manquantes : %s",
-        "no playlist: put one in playlists/": "aucune liste : mets-en une dans playlists/",
-        "loading %s...": "chargement de %s...",
-        "cannot read %s: %s": "impossible de lire %s : %s",
-        "This DVD can't be played": "Ce DVD ne peut pas être lu",
-        "Media": "Médias",
-        "Playback": "Lecture",
-        "IPTV": "IPTV",
-        "Help": "Aide",
-        "Play / Pause": "Lecture / Pause",
-        "Back 10 s": "Reculer de 10 s",
-        "Forward 10 s": "Avancer de 10 s",
-        "Previous": "Précédent",
-        "Next": "Suivant",
-        "Add playlist URL": "Ajouter une URL de liste",
-        "Open playlists folder": "Ouvrir le dossier des listes",
-        "Reload playlists": "Recharger les listes",
-        "Add guide URL": "Ajouter une URL de guide",
-        "Reload guide": "Recharger le guide",
-        "Recording": "Enregistrement",
-        "Show list": "Afficher la liste",
-        "Hide list": "Masquer la liste",
-        "Show sidebar": "Afficher la barre latérale",
-        "Hide sidebar": "Masquer la barre latérale",
-        "%s - %d channels": "%s - %d chaînes",
-        "Choose a playlist": "Choisir une liste",
-        "All files": "Tous les fichiers",
-        "Open file...": "Ouvrir un fichier...", "Choose a file": "Choisir un fichier",
-        "Media files": "Fichiers multimédias", "Open folder...": "Ouvrir un dossier...",
-        "Download posters and covers": "Télécharger affiches et pochettes",
-        "Film titles and genres": "Titres et genres des films",
-        "Download film titles and genres again in the new language?":
-            "Télécharger à nouveau titres et genres dans la nouvelle langue ?",
-        "Download": "Télécharger",
-        "open a folder of films or music first": "ouvrez d'abord un dossier de films ou de musique",
-        "downloading posters and covers... %d/%d": "téléchargement des affiches et pochettes... %d/%d",
-        "%d posters and covers downloaded": "%d affiches et pochettes téléchargées",
-        "Choose a folder": "Choisir un dossier", "Imported media": "Médias importés",
-        "Open": "Ouvrir", "%s - %d files": "%s - %d fichiers",
-        "The folder will be removed from the list. Files are not touched.":
-            "Le dossier est retiré de la liste. Les fichiers ne sont pas touchés.",
-        "The imported files will be removed from the list. Files are not touched.":
-            "Les fichiers importés sont retirés de la liste. Les fichiers ne sont pas touchés.",
-        "%s does not look like an m3u playlist": "%s ne ressemble pas à une liste m3u",
-        "select the playlist to remove first": "sélectionne d'abord la liste à retirer",
-        "this one lives in playlists/: remove it by moving the file":
-            "celle-ci est dans playlists/ : on la retire en déplaçant le fichier",
-        "%s removed from favorites": "%s retiré des favoris",
-        "%s added to favorites": "%s ajouté aux favoris",
-        "cannot write favorites: %s": "impossible d'écrire les favoris : %s",
-        "looking for %s qualities...": "recherche des qualités de %s...",
-        "TV guide": "Guide TV",
-        "URL or file of the guide (XMLTV, .gz is fine):":
-            "URL ou fichier du guide (XMLTV, .gz accepté) :",
-        "loading the guide...": "chargement du guide...",
-        "guide not loaded: %s": "guide non chargé : %s",
-        "no TV guide set": "aucun guide défini",
-        "%s is not responding, nor are the next ones": "%s ne répond pas, ni les suivantes",
-        "%s is not responding: skipping to the next": "%s ne répond pas : passage à la suivante",
-        "cannot open %s: %s": "impossible d'ouvrir %s : %s",
-        "Pause": "Pause", "Resume": "Reprendre", "Favorite": "Favori",
-        "Fullscreen": "Plein écran", "quality": "qualité", "Mute": "Muet",
-        "Logos": "Logos", "Dots": "Points", "Border": "Bordure",
-        "Unmute": "Son", "Switch": "Basculer", "Shuffle": "Aléatoire",
-        "Open folder": "Ouvrir le dossier", "Reload": "Recharger", "Add URL": "Ajouter une URL",
-        "Remove": "Retirer", "View": "Affichage", "Hide channels": "Masquer les chaînes",
-        "Show channels": "Afficher les chaînes", "Hide playlists": "Masquer les listes",
-        "Show playlists": "Afficher les listes", "Language": "Langue",
-    },
-    "de": {
-        "Picture in picture": "Bild-in-Bild",
-        "Audio CD": "Audio-CD",
-        "Track %d": "Titel %d",
-        "Set logo...": "Logo festlegen...",
-        "Remove logo": "Logo entfernen",
-        "Discs": "Datenträger",
-        "This DVD is protected and can't be recorded": "Diese DVD ist geschützt und kann nicht aufgenommen werden",
-        "Set cover...": "Cover festlegen...",
-        "Remove cover": "Cover entfernen",
-        "Choose an image": "Bild wählen",
-        "Radio": "Radio",
-        "Podcast": "Podcasts",
-        "Music": "Musik",
-        "IP cam": "IP-Kameras",
-        "Film": "Filme",
-        "Temporary": "Temporär",
-        "Save in:": "Speichern in:",
-        "Move to %s": "Verschieben nach %s",
-        "Rename...": "Umbenennen...",
-        "cannot rename %s: %s": "%s kann nicht umbenannt werden: %s",
-        "Opened URLs": "Geöffnete URLs",
-        "The addresses will be removed from the list.": "Die Adressen werden aus der Liste entfernt.",
-        "Open URL...": "URL öffnen...",
-        "Address of the stream or file:": "Adresse des Streams oder der Datei:",
-        "Load subtitles...": "Untertitel laden...",
-        "Subtitle delay +100 ms": "Untertitel-Verzögerung +100 ms",
-        "Subtitle delay -100 ms": "Untertitel-Verzögerung -100 ms",
-        "Subtitles larger": "Untertitel größer",
-        "Subtitles smaller": "Untertitel kleiner",
-        "Reset subtitles": "Untertitel zurücksetzen",
-        "subtitles: %s": "Untertitel: %s",
-        "subtitle delay %+.1fs": "Untertitel-Verzögerung %+.1fs",
-        "subtitle size %d%%": "Untertitel %d%%",
-        "nothing is playing": "es wird nichts abgespielt",
-        "Recent": "Zuletzt geöffnet",
-        "Clear recent": "Liste leeren",
-        "No repeat": "Nicht wiederholen",
-        "Repeat one": "Eins wiederholen",
-        "Repeat all": "Alle wiederholen",
-        "Previous chapter": "Vorheriges Kapitel", "Next chapter": "Nächstes Kapitel", "Chapter %d": "Kapitel %d", "Chapters": "Kapitel",
-        "until %s": "bis %s",
-        "Delete": "Löschen",
-        "Delete %s": "%s löschen",
-        "The guide will be removed from the list.": "Der Programmführer wird aus der Liste entfernt.",
-        "%d recording(s) will be deleted from disk. This cannot be undone.": "%d Aufnahme(n) werden von der Festplatte gelöscht. Das kann nicht rückgängig gemacht werden.",
-        "The playlist will be removed from the list.": "Die Playlist wird aus der Liste entfernt.",
-        "The file %s will be deleted from disk. This cannot be undone.": "Die Datei %s wird von der Festplatte gelöscht. Das kann nicht rückgängig gemacht werden.",
-        "cannot delete %s: %s": "%s kann nicht gelöscht werden: %s",
-        "%s - %d recordings": "%s - %d Aufnahmen",
-        "Recordings": "Aufnahmen",
-        "Video": "Video",
-        "Speed x%g": "Geschwindigkeit x%g",
-        "Aspect %s": "Seitenverhältnis %s",
-        "Fill screen (crop)": "Bild füllen (zuschneiden)",
-        "Deinterlace": "Deinterlacing", "Hardware decoding": "Hardware-Dekodierung",
-        "Brightness +": "Helligkeit +",
-        "Brightness -": "Helligkeit -",
-        "Contrast +": "Kontrast +",
-        "Contrast -": "Kontrast -",
-        "Saturation +": "Sättigung +",
-        "Saturation -": "Sättigung -",
-        "Reset picture": "Bild zurücksetzen",
-        "Screenshot": "Bildschirmfoto",
-        "Always on top": "Immer im Vordergrund",
-        "Track: %s": "Tonspur: %s",
-        "Subtitles off": "Untertitel aus",
-        "Subtitles: %s": "Untertitel: %s",
-        "Volume boost +50%": "Lautstärke +50%",
-        "Normalize loudness": "Lautstärke angleichen",
-        "speed x%g": "Geschwindigkeit x%g",
-        "brightness": "Helligkeit",
-        "contrast": "Kontrast",
-        "saturation": "Sättigung",
-        "screenshot saved in %s": "Bildschirmfoto gespeichert in %s",
-        "cannot take a screenshot: %s": "Bildschirmfoto nicht möglich: %s",
-        "Programme guide": "Programmübersicht",
-        "no guide data for this playlist": "keine Programmdaten für diese Playlist",
-        "OK": "OK",
-        "Cancel": "Abbrechen",
-        "MIT license": "MIT-Lizenz",
-        "URL of the playlist (m3u):": "URL der Playlist (m3u):",
-        "Name:": "Name:",
-        "About": "Über",
-        "About XVB...": "Über XVB...",
-        "Version": "Version",
-        "new version %s available": "neue Version %s verfügbar",
-        "new version %s available: Help > Download": "neue Version %s verfügbar: Hilfe > Herunterladen",
-        "Check for updates": "Nach Updates suchen",
-        "Donate": "Spenden",
-        "Download %s": "%s herunterladen",
-        "Up to date": "Aktuell",
-        "cannot check for updates: %s": "Suche nach Updates nicht möglich: %s",
-        "up to date (%s)": "aktuell (%s)",
-        "Remove %s": "%s entfernen",
-        "removed %s": "%s entfernt",
-        "%s is already there": "%s ist schon vorhanden",
-        "Record": "Aufnehmen",
-        "Stop": "Stopp",
-        "Record now": "Jetzt aufnehmen",
-        "Stop recording": "Aufnahme beenden",
-        "Schedule...": "Planen...",
-        "Cancel schedule": "Planung abbrechen",
-        "Open recordings folder": "Aufnahmeordner öffnen",
-        "cannot record: %s": "Aufnahme nicht möglich: %s",
-        "saved %s": "%s gespeichert",
-        "REC until %s": "REC bis %s",
-        "open the channel to record first": "öffne zuerst den Sender, der aufgenommen werden soll",
-        "Schedule": "Planen",
-        "Start (HH:MM):": "Beginn (HH:MM):",
-        "End (HH:MM):": "Ende (HH:MM):",
-        "time must be HH:MM": "die Zeit muss HH:MM sein",
-        "scheduled: %s from %s to %s": "geplant: %s von %s bis %s",
-        "schedule cancelled": "Planung abgebrochen",
-        "Delay +100 ms": "Verzögerung +100 ms",
-        "Delay -100 ms": "Verzögerung -100 ms",
-        "Reset delay": "Verzögerung zurücksetzen",
-        "audio delay %+.1fs": "Tonverzögerung %+.1fs",
-        "guide loaded: %d channels, %d programmes": "Programmführer geladen: %d Sender, %d Sendungen",
-        "not in the guide": "nicht im Programmführer",
-        "Search": "Suchen",
-        "File": "Datei",
-        "Playlists": "Playlists",
-        "ready": "bereit",
-        "unnamed": "ohne Namen",
-        "single quality": "nur eine Qualität",
-        "missing icons: %s": "fehlende Symbole: %s",
-        "no playlist: put one in playlists/": "keine Playlist: lege eine in playlists/ ab",
-        "loading %s...": "lade %s...",
-        "cannot read %s: %s": "%s kann nicht gelesen werden: %s",
-        "This DVD can't be played": "Diese DVD kann nicht abgespielt werden",
-        "Media": "Medien",
-        "Playback": "Wiedergabe",
-        "IPTV": "IPTV",
-        "Help": "Hilfe",
-        "Play / Pause": "Abspielen / Pause",
-        "Back 10 s": "10 s zurück",
-        "Forward 10 s": "10 s vor",
-        "Previous": "Zurück",
-        "Next": "Weiter",
-        "Add playlist URL": "Playlist-URL hinzufügen",
-        "Open playlists folder": "Playlist-Ordner öffnen",
-        "Reload playlists": "Playlists neu laden",
-        "Add guide URL": "Programmführer-URL hinzufügen",
-        "Reload guide": "Programmführer neu laden",
-        "Recording": "Aufnahme",
-        "Show list": "Liste einblenden",
-        "Hide list": "Liste ausblenden",
-        "Show sidebar": "Seitenleiste einblenden",
-        "Hide sidebar": "Seitenleiste ausblenden",
-        "%s - %d channels": "%s - %d Sender",
-        "Choose a playlist": "Playlist wählen",
-        "All files": "Alle Dateien",
-        "Open file...": "Datei öffnen...",
-        "Choose a file": "Datei wählen",
-        "Media files": "Mediendateien",
-        "Open folder...": "Ordner öffnen...",
-        "Download posters and covers": "Poster und Cover herunterladen",
-        "Film titles and genres": "Filmtitel und Genres",
-        "Download film titles and genres again in the new language?": "Filmtitel und Genres in der neuen Sprache erneut herunterladen?",
-        "Download": "Herunterladen",
-        "open a folder of films or music first": "öffne zuerst einen Ordner mit Filmen oder Musik",
-        "downloading posters and covers... %d/%d": "lade Poster und Cover... %d/%d",
-        "%d posters and covers downloaded": "%d Poster und Cover heruntergeladen",
-        "Choose a folder": "Ordner wählen",
-        "Imported media": "Importierte Medien",
-        "Open": "Öffnen",
-        "%s - %d files": "%s - %d Dateien",
-        "The folder will be removed from the list. Files are not touched.": "Der Ordner wird aus der Liste entfernt. Die Dateien bleiben unberührt.",
-        "The imported files will be removed from the list. Files are not touched.": "Die importierten Dateien werden aus der Liste entfernt. Die Dateien bleiben unberührt.",
-        "%s does not look like an m3u playlist": "%s sieht nicht wie eine m3u-Playlist aus",
-        "select the playlist to remove first": "wähle zuerst die Playlist, die entfernt werden soll",
-        "this one lives in playlists/: remove it by moving the file": "diese liegt in playlists/: entferne sie, indem du die Datei verschiebst",
-        "%s removed from favorites": "%s aus den Favoriten entfernt",
-        "%s added to favorites": "%s zu den Favoriten hinzugefügt",
-        "cannot write favorites: %s": "Favoriten können nicht gespeichert werden: %s",
-        "looking for %s qualities...": "suche Qualitäten von %s...",
-        "TV guide": "TV-Programm",
-        "URL or file of the guide (XMLTV, .gz is fine):": "URL oder Datei des Programmführers (XMLTV, auch .gz):",
-        "loading the guide...": "lade den Programmführer...",
-        "guide not loaded: %s": "Programmführer nicht geladen: %s",
-        "no TV guide set": "kein Programmführer eingestellt",
-        "%s is not responding, nor are the next ones": "%s antwortet nicht, die nächsten auch nicht",
-        "%s is not responding: skipping to the next": "%s antwortet nicht: weiter zum nächsten",
-        "cannot open %s: %s": "%s kann nicht geöffnet werden: %s",
-        "Pause": "Pause",
-        "Resume": "Fortsetzen",
-        "Favorite": "Favorit",
-        "Fullscreen": "Vollbild",
-        "quality": "Qualität",
-        "Mute": "Stumm",
-        "Logos": "Logos",
-        "Dots": "Punkte",
-        "Border": "Rand",
-        "Unmute": "Ton an",
-        "Switch": "Wechseln",
-        "Shuffle": "Zufällig",
-        "Open folder": "Ordner öffnen",
-        "Reload": "Neu laden",
-        "Add URL": "URL hinzufügen",
-        "Remove": "Entfernen",
-        "View": "Ansicht",
-        "Hide channels": "Sender ausblenden",
-        "Show channels": "Sender einblenden",
-        "Hide playlists": "Playlists ausblenden",
-        "Show playlists": "Playlists einblenden",
-        "Language": "Sprache",
-    },
-    "pt": {
-        "Picture in picture": "Imagem em imagem",
-        "Audio CD": "CD de áudio",
-        "Track %d": "Faixa %d",
-        "Set logo...": "Definir logo...",
-        "Remove logo": "Remover logo",
-        "Discs": "Discos",
-        "This DVD is protected and can't be recorded": "Este DVD é protegido e não pode ser gravado",
-        "Set cover...": "Definir capa...",
-        "Remove cover": "Remover capa",
-        "Choose an image": "Escolha uma imagem",
-        "Radio": "Rádio",
-        "Podcast": "Podcasts",
-        "Music": "Música",
-        "IP cam": "Câmeras IP",
-        "Film": "Filmes",
-        "Temporary": "Temporários",
-        "Save in:": "Salvar em:",
-        "Move to %s": "Mover para %s",
-        "Rename...": "Renomear...",
-        "cannot rename %s: %s": "não foi possível renomear %s: %s",
-        "Opened URLs": "URLs abertas",
-        "The addresses will be removed from the list.": "Os endereços serão removidos da lista.",
-        "Open URL...": "Abrir URL...",
-        "Address of the stream or file:": "Endereço do stream ou do arquivo:",
-        "Load subtitles...": "Carregar legendas...",
-        "Subtitle delay +100 ms": "Atraso das legendas +100 ms",
-        "Subtitle delay -100 ms": "Atraso das legendas -100 ms",
-        "Subtitles larger": "Legendas maiores",
-        "Subtitles smaller": "Legendas menores",
-        "Reset subtitles": "Redefinir legendas",
-        "subtitles: %s": "legendas: %s",
-        "subtitle delay %+.1fs": "atraso das legendas %+.1fs",
-        "subtitle size %d%%": "legendas em %d%%",
-        "nothing is playing": "nada está sendo reproduzido",
-        "Recent": "Recentes",
-        "Clear recent": "Limpar recentes",
-        "No repeat": "Não repetir",
-        "Repeat one": "Repetir um",
-        "Repeat all": "Repetir todos",
-        "Previous chapter": "Capítulo anterior", "Next chapter": "Próximo capítulo", "Chapter %d": "Capítulo %d", "Chapters": "Capítulos",
-        "Audio": "Áudio",
-        "until %s": "até %s",
-        "Delete": "Excluir",
-        "Delete %s": "Excluir %s",
-        "The guide will be removed from the list.": "O guia será removido da lista.",
-        "%d recording(s) will be deleted from disk. This cannot be undone.": "%d gravação(ões) serão excluídas do disco. Isso não pode ser desfeito.",
-        "The playlist will be removed from the list.": "A playlist será removida da lista.",
-        "The file %s will be deleted from disk. This cannot be undone.": "O arquivo %s será excluído do disco. Isso não pode ser desfeito.",
-        "cannot delete %s: %s": "não foi possível excluir %s: %s",
-        "%s - %d recordings": "%s - %d gravações",
-        "Recordings": "Gravações",
-        "Video": "Vídeo",
-        "Speed x%g": "Velocidade x%g",
-        "Aspect %s": "Proporção %s",
-        "Fill screen (crop)": "Preencher a tela (cortar)",
-        "Deinterlace": "Desentrelaçar", "Hardware decoding": "Decodificação por hardware",
-        "Brightness +": "Brilho +",
-        "Brightness -": "Brilho -",
-        "Contrast +": "Contraste +",
-        "Contrast -": "Contraste -",
-        "Saturation +": "Saturação +",
-        "Saturation -": "Saturação -",
-        "Reset picture": "Redefinir imagem",
-        "Screenshot": "Captura de tela",
-        "Always on top": "Sempre no topo",
-        "Track: %s": "Faixa: %s",
-        "Subtitles off": "Legendas desativadas",
-        "Subtitles: %s": "Legendas: %s",
-        "Volume boost +50%": "Volume extra +50%",
-        "Normalize loudness": "Normalizar volume",
-        "speed x%g": "velocidade x%g",
-        "brightness": "brilho",
-        "contrast": "contraste",
-        "saturation": "saturação",
-        "screenshot saved in %s": "captura salva em %s",
-        "cannot take a screenshot: %s": "não foi possível capturar a tela: %s",
-        "Programme guide": "Guia de programação",
-        "no guide data for this playlist": "sem dados de guia para esta playlist",
-        "OK": "OK",
-        "Cancel": "Cancelar",
-        "MIT license": "Licença MIT",
-        "URL of the playlist (m3u):": "URL da playlist (m3u):",
-        "Name:": "Nome:",
-        "About": "Sobre",
-        "About XVB...": "Sobre o XVB...",
-        "Version": "Versão",
-        "new version %s available": "nova versão %s disponível",
-        "new version %s available: Help > Download": "nova versão %s disponível: Ajuda > Baixar",
-        "Check for updates": "Verificar atualizações",
-        "Donate": "Doar",
-        "Download %s": "Baixar %s",
-        "Up to date": "Atualizado",
-        "cannot check for updates: %s": "não foi possível verificar atualizações: %s",
-        "up to date (%s)": "atualizado (%s)",
-        "Remove %s": "Remover %s",
-        "removed %s": "%s removido",
-        "%s is already there": "%s já está na lista",
-        "Record": "Gravar",
-        "Stop": "Parar",
-        "Record now": "Gravar agora",
-        "Stop recording": "Parar gravação",
-        "Schedule...": "Agendar...",
-        "Cancel schedule": "Cancelar agendamento",
-        "Open recordings folder": "Abrir pasta de gravações",
-        "cannot record: %s": "não foi possível gravar: %s",
-        "saved %s": "%s salvo",
-        "REC until %s": "REC até %s",
-        "open the channel to record first": "abra primeiro o canal a ser gravado",
-        "Schedule": "Agendar",
-        "Start (HH:MM):": "Início (HH:MM):",
-        "End (HH:MM):": "Fim (HH:MM):",
-        "time must be HH:MM": "o horário deve ser HH:MM",
-        "scheduled: %s from %s to %s": "agendado: %s das %s às %s",
-        "schedule cancelled": "agendamento cancelado",
-        "Delay +100 ms": "Atraso +100 ms",
-        "Delay -100 ms": "Atraso -100 ms",
-        "Reset delay": "Redefinir atraso",
-        "audio delay %+.1fs": "atraso de áudio %+.1fs",
-        "guide loaded: %d channels, %d programmes": "guia carregado: %d canais, %d programas",
-        "not in the guide": "fora do guia",
-        "Search": "Buscar",
-        "File": "Arquivo",
-        "Playlists": "Playlists",
-        "ready": "pronto",
-        "unnamed": "sem nome",
-        "single quality": "qualidade única",
-        "missing icons: %s": "ícones ausentes: %s",
-        "no playlist: put one in playlists/": "nenhuma playlist: coloque uma em playlists/",
-        "loading %s...": "carregando %s...",
-        "cannot read %s: %s": "não foi possível ler %s: %s",
-        "This DVD can't be played": "Este DVD não pode ser reproduzido",
-        "Media": "Mídia",
-        "Playback": "Reprodução",
-        "IPTV": "IPTV",
-        "Help": "Ajuda",
-        "Play / Pause": "Reproduzir / Pausar",
-        "Back 10 s": "Voltar 10 s",
-        "Forward 10 s": "Avançar 10 s",
-        "Previous": "Anterior",
-        "Next": "Próximo",
-        "Add playlist URL": "Adicionar URL de playlist",
-        "Open playlists folder": "Abrir pasta de playlists",
-        "Reload playlists": "Recarregar playlists",
-        "Add guide URL": "Adicionar URL de guia",
-        "Reload guide": "Recarregar guia",
-        "Recording": "Gravação",
-        "Show list": "Mostrar lista",
-        "Hide list": "Ocultar lista",
-        "Show sidebar": "Mostrar barra lateral",
-        "Hide sidebar": "Ocultar barra lateral",
-        "%s - %d channels": "%s - %d canais",
-        "Choose a playlist": "Escolha uma playlist",
-        "All files": "Todos os arquivos",
-        "Open file...": "Abrir arquivo...",
-        "Choose a file": "Escolha um arquivo",
-        "Media files": "Arquivos de mídia",
-        "Open folder...": "Abrir pasta...",
-        "Download posters and covers": "Baixar pôsteres e capas",
-        "Film titles and genres": "Títulos e gêneros dos filmes",
-        "Download film titles and genres again in the new language?": "Baixar de novo títulos e gêneros dos filmes no novo idioma?",
-        "Download": "Baixar",
-        "open a folder of films or music first": "abra primeiro uma pasta de filmes ou músicas",
-        "downloading posters and covers... %d/%d": "baixando pôsteres e capas... %d/%d",
-        "%d posters and covers downloaded": "%d pôsteres e capas baixados",
-        "Choose a folder": "Escolha uma pasta",
-        "Imported media": "Mídia importada",
-        "Open": "Abrir",
-        "%s - %d files": "%s - %d arquivos",
-        "The folder will be removed from the list. Files are not touched.": "A pasta será removida da lista. Os arquivos não são alterados.",
-        "The imported files will be removed from the list. Files are not touched.": "Os arquivos importados serão removidos da lista. Os arquivos não são alterados.",
-        "%s does not look like an m3u playlist": "%s não parece uma playlist m3u",
-        "select the playlist to remove first": "selecione primeiro a playlist a remover",
-        "this one lives in playlists/: remove it by moving the file": "esta fica em playlists/: remova-a movendo o arquivo",
-        "%s removed from favorites": "%s removido dos favoritos",
-        "%s added to favorites": "%s adicionado aos favoritos",
-        "cannot write favorites: %s": "não foi possível salvar os favoritos: %s",
-        "looking for %s qualities...": "procurando qualidades de %s...",
-        "TV guide": "Guia de TV",
-        "URL or file of the guide (XMLTV, .gz is fine):": "URL ou arquivo do guia (XMLTV, .gz também serve):",
-        "loading the guide...": "carregando o guia...",
-        "guide not loaded: %s": "guia não carregado: %s",
-        "no TV guide set": "nenhum guia de TV definido",
-        "%s is not responding, nor are the next ones": "%s não responde, nem os próximos",
-        "%s is not responding: skipping to the next": "%s não responde: indo para o próximo",
-        "cannot open %s: %s": "não foi possível abrir %s: %s",
-        "Pause": "Pausar",
-        "Resume": "Continuar",
-        "Favorite": "Favorito",
-        "Fullscreen": "Tela cheia",
-        "quality": "qualidade",
-        "Mute": "Mudo",
-        "Logos": "Logos",
-        "Dots": "Pontos",
-        "Border": "Borda",
-        "Unmute": "Com som",
-        "Switch": "Alternar",
-        "Shuffle": "Aleatório",
-        "Open folder": "Abrir pasta",
-        "Reload": "Recarregar",
-        "Add URL": "Adicionar URL",
-        "Remove": "Remover",
-        "View": "Exibir",
-        "Hide channels": "Ocultar canais",
-        "Show channels": "Mostrar canais",
-        "Hide playlists": "Ocultar playlists",
-        "Show playlists": "Mostrar playlists",
-        "Language": "Idioma",
-    },
-    "ru": {
-        "Picture in picture": "Картинка в картинке",
-        "Audio CD": "Аудио-CD",
-        "Track %d": "Трек %d",
-        "Set logo...": "Задать логотип...",
-        "Remove logo": "Убрать логотип",
-        "Discs": "Диски",
-        "This DVD is protected and can't be recorded": "Этот DVD защищён, запись невозможна",
-        "Set cover...": "Задать обложку...",
-        "Remove cover": "Убрать обложку",
-        "Choose an image": "Выберите изображение",
-        "Radio": "Радио",
-        "Podcast": "Подкасты",
-        "Music": "Музыка",
-        "IP cam": "IP-камеры",
-        "Film": "Фильмы",
-        "Temporary": "Временные",
-        "Save in:": "Сохранить в:",
-        "Move to %s": "Переместить в %s",
-        "Rename...": "Переименовать...",
-        "cannot rename %s: %s": "не удалось переименовать %s: %s",
-        "Opened URLs": "Открытые URL",
-        "The addresses will be removed from the list.": "Адреса будут удалены из списка.",
-        "Open URL...": "Открыть URL...",
-        "Address of the stream or file:": "Адрес потока или файла:",
-        "Load subtitles...": "Загрузить субтитры...",
-        "Subtitle delay +100 ms": "Задержка субтитров +100 мс",
-        "Subtitle delay -100 ms": "Задержка субтитров -100 мс",
-        "Subtitles larger": "Субтитры крупнее",
-        "Subtitles smaller": "Субтитры мельче",
-        "Reset subtitles": "Сбросить субтитры",
-        "subtitles: %s": "субтитры: %s",
-        "subtitle delay %+.1fs": "задержка субтитров %+.1f с",
-        "subtitle size %d%%": "размер субтитров %d%%",
-        "nothing is playing": "ничего не воспроизводится",
-        "Recent": "Недавние",
-        "Clear recent": "Очистить недавние",
-        "No repeat": "Без повтора",
-        "Repeat one": "Повторять один",
-        "Repeat all": "Повторять все",
-        "Previous chapter": "Предыдущая глава", "Next chapter": "Следующая глава", "Chapter %d": "Глава %d", "Chapters": "Главы",
-        "Audio": "Аудио",
-        "until %s": "до %s",
-        "Delete": "Удалить",
-        "Delete %s": "Удалить %s",
-        "The guide will be removed from the list.": "Телегид будет удалён из списка.",
-        "%d recording(s) will be deleted from disk. This cannot be undone.": "Записей будет удалено с диска: %d. Это действие нельзя отменить.",
-        "The playlist will be removed from the list.": "Плейлист будет удалён из списка.",
-        "The file %s will be deleted from disk. This cannot be undone.": "Файл %s будет удалён с диска. Это действие нельзя отменить.",
-        "cannot delete %s: %s": "не удалось удалить %s: %s",
-        "%s - %d recordings": "%s - записей: %d",
-        "Recordings": "Записи",
-        "Video": "Видео",
-        "Speed x%g": "Скорость x%g",
-        "Aspect %s": "Пропорции %s",
-        "Fill screen (crop)": "Заполнить экран (обрезать)",
-        "Deinterlace": "Деинтерлейсинг", "Hardware decoding": "Аппаратное декодирование",
-        "Brightness +": "Яркость +",
-        "Brightness -": "Яркость -",
-        "Contrast +": "Контраст +",
-        "Contrast -": "Контраст -",
-        "Saturation +": "Насыщенность +",
-        "Saturation -": "Насыщенность -",
-        "Reset picture": "Сбросить изображение",
-        "Screenshot": "Снимок экрана",
-        "Always on top": "Поверх всех окон",
-        "Track: %s": "Дорожка: %s",
-        "Subtitles off": "Без субтитров",
-        "Subtitles: %s": "Субтитры: %s",
-        "Volume boost +50%": "Усиление громкости +50%",
-        "Normalize loudness": "Выравнивать громкость",
-        "speed x%g": "скорость x%g",
-        "brightness": "яркость",
-        "contrast": "контраст",
-        "saturation": "насыщенность",
-        "screenshot saved in %s": "снимок сохранён в %s",
-        "cannot take a screenshot: %s": "не удалось сделать снимок: %s",
-        "Programme guide": "Программа передач",
-        "no guide data for this playlist": "нет данных телегида для этого плейлиста",
-        "OK": "OK",
-        "Cancel": "Отмена",
-        "MIT license": "Лицензия MIT",
-        "URL of the playlist (m3u):": "URL плейлиста (m3u):",
-        "Name:": "Название:",
-        "About": "О программе",
-        "About XVB...": "О программе XVB...",
-        "Version": "Версия",
-        "new version %s available": "доступна новая версия %s",
-        "new version %s available: Help > Download": "доступна новая версия %s: Справка > Скачать",
-        "Check for updates": "Проверить обновления",
-        "Donate": "Поддержать",
-        "Download %s": "Скачать %s",
-        "Up to date": "Актуальная версия",
-        "cannot check for updates: %s": "не удалось проверить обновления: %s",
-        "up to date (%s)": "актуальная версия (%s)",
-        "Remove %s": "Удалить %s",
-        "removed %s": "удалено: %s",
-        "%s is already there": "%s уже есть",
-        "Record": "Запись",
-        "Stop": "Стоп",
-        "Record now": "Записать сейчас",
-        "Stop recording": "Остановить запись",
-        "Schedule...": "Запланировать...",
-        "Cancel schedule": "Отменить план",
-        "Open recordings folder": "Открыть папку записей",
-        "cannot record: %s": "не удалось записать: %s",
-        "saved %s": "сохранено: %s",
-        "REC until %s": "REC до %s",
-        "open the channel to record first": "сначала откройте канал для записи",
-        "Schedule": "Запланировать",
-        "Start (HH:MM):": "Начало (ЧЧ:ММ):",
-        "End (HH:MM):": "Конец (ЧЧ:ММ):",
-        "time must be HH:MM": "время должно быть в формате ЧЧ:ММ",
-        "scheduled: %s from %s to %s": "запланировано: %s с %s до %s",
-        "schedule cancelled": "план отменён",
-        "Delay +100 ms": "Задержка +100 мс",
-        "Delay -100 ms": "Задержка -100 мс",
-        "Reset delay": "Сбросить задержку",
-        "audio delay %+.1fs": "задержка звука %+.1f с",
-        "guide loaded: %d channels, %d programmes": "телегид загружен: каналов %d, передач %d",
-        "not in the guide": "нет в телегиде",
-        "Search": "Поиск",
-        "File": "Файл",
-        "Playlists": "Плейлисты",
-        "ready": "готово",
-        "unnamed": "без названия",
-        "single quality": "одно качество",
-        "missing icons: %s": "нет значков: %s",
-        "no playlist: put one in playlists/": "нет плейлиста: положите его в playlists/",
-        "loading %s...": "загрузка %s...",
-        "cannot read %s: %s": "не удалось прочитать %s: %s",
-        "This DVD can't be played": "Этот DVD не может быть воспроизведён",
-        "Media": "Медиа",
-        "Playback": "Плеер",
-        "IPTV": "IPTV",
-        "Help": "Справка",
-        "Play / Pause": "Пуск / Пауза",
-        "Back 10 s": "Назад 10 с",
-        "Forward 10 s": "Вперёд 10 с",
-        "Previous": "Предыдущий",
-        "Next": "Следующий",
-        "Add playlist URL": "Добавить URL плейлиста",
-        "Open playlists folder": "Открыть папку плейлистов",
-        "Reload playlists": "Обновить плейлисты",
-        "Add guide URL": "Добавить URL телегида",
-        "Reload guide": "Обновить телегид",
-        "Recording": "Запись",
-        "Show list": "Показать список",
-        "Hide list": "Скрыть список",
-        "Show sidebar": "Показать боковую панель",
-        "Hide sidebar": "Скрыть боковую панель",
-        "%s - %d channels": "%s - каналов: %d",
-        "Choose a playlist": "Выберите плейлист",
-        "All files": "Все файлы",
-        "Open file...": "Открыть файл...",
-        "Choose a file": "Выберите файл",
-        "Media files": "Медиафайлы",
-        "Open folder...": "Открыть папку...",
-        "Download posters and covers": "Скачать постеры и обложки",
-        "Film titles and genres": "Названия и жанры фильмов",
-        "Download film titles and genres again in the new language?": "Скачать названия и жанры фильмов заново на новом языке?",
-        "Download": "Скачать",
-        "open a folder of films or music first": "сначала откройте папку с фильмами или музыкой",
-        "downloading posters and covers... %d/%d": "загрузка постеров и обложек... %d/%d",
-        "%d posters and covers downloaded": "скачано постеров и обложек: %d",
-        "Choose a folder": "Выберите папку",
-        "Imported media": "Импортированные файлы",
-        "Open": "Открыть",
-        "%s - %d files": "%s - файлов: %d",
-        "The folder will be removed from the list. Files are not touched.": "Папка будет удалена из списка. Сами файлы не затрагиваются.",
-        "The imported files will be removed from the list. Files are not touched.": "Импортированные файлы будут удалены из списка. Сами файлы не затрагиваются.",
-        "%s does not look like an m3u playlist": "%s не похож на плейлист m3u",
-        "select the playlist to remove first": "сначала выберите плейлист для удаления",
-        "this one lives in playlists/: remove it by moving the file": "он лежит в playlists/: удалите его, переместив файл",
-        "%s removed from favorites": "%s удалён из избранного",
-        "%s added to favorites": "%s добавлен в избранное",
-        "cannot write favorites: %s": "не удалось сохранить избранное: %s",
-        "looking for %s qualities...": "поиск вариантов качества для %s...",
-        "TV guide": "Телегид",
-        "URL or file of the guide (XMLTV, .gz is fine):": "URL или файл телегида (XMLTV, можно .gz):",
-        "loading the guide...": "загрузка телегида...",
-        "guide not loaded: %s": "телегид не загружен: %s",
-        "no TV guide set": "телегид не задан",
-        "%s is not responding, nor are the next ones": "%s не отвечает, как и следующие",
-        "%s is not responding: skipping to the next": "%s не отвечает: переход к следующему",
-        "cannot open %s: %s": "не удалось открыть %s: %s",
-        "Pause": "Пауза",
-        "Resume": "Продолжить",
-        "Favorite": "Избранное",
-        "Fullscreen": "Полный экран",
-        "quality": "качество",
-        "Mute": "Без звука",
-        "Logos": "Логотипы",
-        "Dots": "Точки",
-        "Border": "Полоса",
-        "Unmute": "Со звуком",
-        "Switch": "Назад к каналу",
-        "Shuffle": "Перемешать",
-        "Open folder": "Открыть папку",
-        "Reload": "Обновить",
-        "Add URL": "Добавить URL",
-        "Remove": "Удалить",
-        "View": "Вид",
-        "Hide channels": "Скрыть каналы",
-        "Show channels": "Показать каналы",
-        "Hide playlists": "Скрыть плейлисты",
-        "Show playlists": "Показать плейлисты",
-        "Language": "Язык",
-    },
-}
-
-
-def lingua_sistema():
-    """La lingua del sistema, se XVB ce l'ha; se no l'inglese. Nell'ordine
-    in cui la cerca gettext: LANGUAGE (anche piu' d'una), LC_ALL,
-    LC_MESSAGES, LANG."""
-    for var in ("LANGUAGE", "LC_ALL", "LC_MESSAGES", "LANG"):
-        codici = [v.split(".")[0].split("@")[0].split("_")[0].lower()
-                  for v in os.environ.get(var, "").split(":")]
-        codici = [c for c in codici if c and c not in ("c", "posix")]
-        if not codici:
-            continue
-
-        return next((c for c in codici if c in dict(LINGUE)), "en")
-    return "en"
-
-
-for _l, _t in (("it", "Nuova playlist..."), ("es", "Nueva lista..."),
-               ("fr", "Nouvelle liste..."), ("de", "Neue Playlist..."),
-               ("pt", "Nova playlist..."), ("ru", "Новый плейлист...")):
-    TESTI[_l]["New playlist..."] = _t
-for _l, _t in (("it", "Preferiti"), ("es", "Favoritos"), ("fr", "Favoris"),
-               ("de", "Favoriten"), ("pt", "Favoritos"), ("ru", "Избранное")):
-    TESTI[_l]["Favorites"] = _t
 
 
 def _(testo):
@@ -4309,7 +3188,8 @@ class Finestrella(tk.Toplevel):
     che si e' scritto (None se si annulla); senza, e' solo da leggere."""
 
     def __init__(self, root, titolo, corpo, chiedi=None, valore="",
-                 ok=None, annulla=None, larga=420, domanda=False):
+                 ok=None, annulla=None, larga=420, domanda=False,
+                 maschera=False):
         tk.Toplevel.__init__(self, root, bg=PANNELLO)
         self.withdraw()
         self.title(titolo)
@@ -4322,7 +3202,9 @@ class Finestrella(tk.Toplevel):
         if chiedi is not None:
             tk.Label(dentro, text=chiedi, bg=PANNELLO, fg=GRIGIO, anchor="w"
                      ).pack(fill="x", pady=(10, 4))
-            self.casella = tk.Entry(dentro, bg=CERCA, fg=TESTO, insertbackground=ACCENTO,
+            self.casella = tk.Entry(dentro, bg=CERCA, fg=TESTO,
+                                    insertbackground=ACCENTO,
+                                    show="*" if maschera else "",
                                     relief="flat", bd=0, highlightthickness=1,
                                     highlightbackground=SCELTO, highlightcolor=ACCENTO,
                                     font=(CARATTERE, 10, STILE_CARATTERE), width=max(30, larga // 9))
@@ -4565,6 +3447,11 @@ class TV(object):
         self.inizio_rec = 0.0
         self.nuova, self.pagina_nuova = "", ""
         self.velocita = 1
+        self.loop_ab_a = None
+        self.loop_ab_b = None
+        self.loop_ab_file = None
+        self.loop_ab_in_corso = False
+        self.timer_spegnimento = None
         self.file_in_onda = None
         self.iid_reg, self.reg, self.reg_in_uso = {}, [], None
         self.iid_media, self.media_in_uso = {}, None
@@ -4595,6 +3482,7 @@ class TV(object):
         self.affanni = []
 
         self.root = tk.Tk(className="xvb")
+        self.root.report_callback_exception = _xvb_eccezione_tk
         imposta_font_globale(self.root)
         self.root.title("XVB v" + VERSIONE)
         self.root.after(500, self._giradisco)
@@ -4718,8 +3606,20 @@ class TV(object):
             (_("Play / Pause"), self.pausa),
             (_("Stop"), self.ferma),
             None,
+            (_("Sleep timer"), None),
+            (_("15 minutes"), lambda: self.imposta_timer_spegnimento(15)),
+            (_("30 minutes"), lambda: self.imposta_timer_spegnimento(30)),
+            (_("45 minutes"), lambda: self.imposta_timer_spegnimento(45)),
+            (_("60 minutes"), lambda: self.imposta_timer_spegnimento(60)),
+            (_("90 minutes"), lambda: self.imposta_timer_spegnimento(90)),
+            (_("Cancel sleep timer"), self.annulla_timer_spegnimento),
+            None,
             (_("Back 10 s"), lambda: self.avanza(-10)),
             (_("Forward 10 s"), lambda: self.avanza(+10)),
+            None,
+            (_("Set A (loop start)"), self.loop_ab_imposta_a),
+            (_("Set B (loop end)"), self.loop_ab_imposta_b),
+            (_("Clear A-B loop"), self.loop_ab_azzera),
             None,
             (_("Previous"), lambda: self.salta(-1)),
             (_("Next"), lambda: self.salta(+1)),
@@ -4760,6 +3660,7 @@ class TV(object):
              lambda i=t["id"]: self.metti_traccia("sid", i))
             for t in self.tracce("sub")] + [
             (_("Load subtitles..."), self.carica_sottotitoli if self.file_in_onda else None),
+            (_("Search subtitles online..."), self.cerca_sottotitoli_online if self.file_in_onda else None),
             (_("Subtitle delay +100 ms"), lambda: self.ritardo_sottotitoli(+0.1)),
             (_("Subtitle delay -100 ms"), lambda: self.ritardo_sottotitoli(-0.1)),
             (_("Subtitles larger"), lambda: self.scala_sottotitoli(+0.1)),
@@ -4767,6 +3668,8 @@ class TV(object):
             (_("Reset subtitles"), self.azzera_sottotitoli)] + [None] + [
             (("*  " if self.cfg.get("boost") else "   ") + _("Volume boost +50%"), self.boost),
             (("*  " if self.cfg.get("normalizza") else "   ") + _("Normalize loudness"), self.normalizza),
+            (_("Audio output device..."), self.scegli_uscita_audio),
+            (_("Audio equalizer..."), self.equalizzatore_audio),
             None,
             (_("Delay +100 ms"), lambda: self.ritardo_audio(+0.1)),
             (_("Delay -100 ms"), lambda: self.ritardo_audio(-0.1)),
@@ -5197,6 +4100,7 @@ class TV(object):
         self.volume.set(int(self.cfg.get("volume", 85)))
         self.icona_volume()
         self.applica_video()
+        self.applica_uscita_audio(silenzioso=True)
         if self.cfg.get("in_cima"):
             self.root.attributes("-topmost", True)
         if self.icone_mancanti:
@@ -8478,10 +7382,42 @@ class TV(object):
         self.vestiti[b] = ImageTk.PhotoImage(fondo)
         c = self.tinta_barra(y + h // 2)
         b.config(image=self.vestiti[b], bg=c, activebackground=c)
+    def imposta_timer_spegnimento(self, minuti):
+        """Ferma la riproduzione dopo il tempo scelto, senza chiudere XVB."""
+        self.annulla_timer_spegnimento(silenzioso=True)
+        try:
+            self.timer_spegnimento = self.root.after(
+                int(minuti) * 60 * 1000, self.scade_timer_spegnimento
+            )
+        except tk.TclError:
+            self.timer_spegnimento = None
+            self.scrivi(_("cannot set sleep timer"), errore=True)
+            return
+        self.scrivi(_("sleep timer set: %d min") % int(minuti))
+
+    def annulla_timer_spegnimento(self, silenzioso=False):
+        """Annulla il timer, se presente."""
+        identificativo = getattr(self, "timer_spegnimento", None)
+        self.timer_spegnimento = None
+        if identificativo:
+            try:
+                self.root.after_cancel(identificativo)
+            except (tk.TclError, RuntimeError):
+                pass
+        if not silenzioso:
+            self.scrivi(_("sleep timer cancelled"))
+
+    def scade_timer_spegnimento(self):
+        """Scaduto il tempo: ferma il contenuto, lasciando XVB aperto."""
+        self.timer_spegnimento = None
+        self.ferma()
+        self.scrivi(_("sleep timer expired"))
+
     def ferma(self):
         """Stop: si ferma tutto e torna lo schermo di XVB. Play dopo lo
         stop riparte da quello che si stava guardando (i file da dove
         erano rimasti)."""
+        self.annulla_timer_spegnimento(silenzioso=True)
         if self.registrando:
             self.ferma_registrazione()
         if self.file_in_onda:
@@ -9551,6 +8487,209 @@ class TV(object):
         scrivi_config(self.cfg)
         self.applica_video()
 
+
+    def dispositivi_uscita_audio(self):
+        """Elenco dei dispositivi esposti da mpv."""
+        try:
+            elenco = self.mpv["audio-device-list"] or []
+        except Exception:
+            elenco = []
+
+        risultati = []
+
+        for voce in elenco:
+            if not isinstance(voce, dict):
+                continue
+
+            nome = voce.get("name")
+            descrizione = voce.get("description") or nome
+
+            if nome and str(nome) != "auto":
+                risultati.append((str(nome), str(descrizione)))
+
+        return risultati
+
+    def applica_uscita_audio(self, nome=None, silenzioso=False):
+        """Imposta il dispositivo scelto."""
+        if nome is None:
+            nome = self.cfg.get("audio_device", "auto")
+
+        nome = str(nome or "auto")
+
+        try:
+            self.mpv["audio-device"] = nome
+            attuale = self.mpv["audio-device"]
+
+            if nome != "auto" and attuale and str(attuale) != nome:
+                raise RuntimeError(str(attuale))
+
+            return True
+
+        except Exception as errore:
+            if nome != "auto":
+                try:
+                    self.mpv["audio-device"] = "auto"
+                except Exception:
+                    pass
+
+            if not silenzioso:
+                self.scrivi(
+                    _("cannot set audio output: %s") % errore,
+                    errore=True
+                )
+
+            return False
+
+    def scegli_uscita_audio(self):
+        """Finestra per scegliere l'uscita audio di mpv."""
+        dispositivi = [
+            ("auto", _("Auto (system default)"))
+        ]
+        dispositivi.extend(self.dispositivi_uscita_audio())
+
+        finestra = tk.Toplevel(self.root)
+        finestra.title(_("Audio output device"))
+        finestra.configure(bg=PANNELLO)
+        finestra.transient(self.root)
+        finestra.resizable(True, True)
+        finestra.grab_set()
+
+        tk.Label(
+            finestra,
+            text=_("Choose the audio output device:"),
+            bg=PANNELLO,
+            fg=TESTO,
+            font=(CARATTERE, 10, STILE_CARATTERE)
+        ).pack(anchor="w", padx=16, pady=(14, 8))
+
+        corpo = tk.Frame(finestra, bg=PANNELLO)
+        corpo.pack(fill="both", expand=True, padx=14, pady=4)
+
+        lista = tk.Listbox(
+            corpo,
+            height=min(10, max(4, len(dispositivi))),
+            width=58,
+            bg=IN_ONDA,
+            fg=TESTO,
+            selectbackground=ACCENTO,
+            selectforeground="#17121f",
+            activestyle="none",
+            relief="flat",
+            highlightthickness=0,
+            exportselection=False
+        )
+
+        barra = ttk.Scrollbar(
+            corpo,
+            orient="vertical",
+            command=lista.yview
+        )
+
+        lista.configure(yscrollcommand=barra.set)
+        lista.pack(side="left", fill="both", expand=True)
+        barra.pack(side="right", fill="y")
+
+        for _nome, descrizione in dispositivi:
+            lista.insert("end", descrizione)
+
+        corrente = str(self.cfg.get("audio_device", "auto"))
+
+        indice = next(
+            (
+                i for i, (nome, _desc) in enumerate(dispositivi)
+                if nome == corrente
+            ),
+            0
+        )
+
+        lista.selection_set(indice)
+        lista.activate(indice)
+        lista.see(indice)
+
+        def chiudi():
+            try:
+                finestra.grab_release()
+                finestra.destroy()
+            except Exception:
+                pass
+
+        def applica():
+            selezione = lista.curselection()
+
+            if not selezione:
+                return
+
+            nome = dispositivi[selezione[0]][0]
+
+            if not self.applica_uscita_audio(nome):
+                return
+
+            self.cfg["audio_device"] = nome
+            scrivi_config(self.cfg)
+
+            self.scrivi(
+                _("audio output: %s")
+                % dispositivi[selezione[0]][1]
+            )
+
+            chiudi()
+
+        tk.Label(
+            finestra,
+            text=(
+                _("No audio devices were reported by mpv.")
+                if len(dispositivi) == 1 else ""
+            ),
+            bg=PANNELLO,
+            fg=GRIGIO,
+            font=(CARATTERE, 9, STILE_CARATTERE)
+        ).pack(anchor="w", padx=16, pady=(4, 0))
+
+        pulsanti = tk.Frame(finestra, bg=PANNELLO)
+        pulsanti.pack(fill="x", padx=14, pady=14)
+
+        tk.Button(
+            pulsanti,
+            text=_("Cancel"),
+            command=chiudi,
+            relief="flat",
+            bg=IN_ONDA,
+            fg=TESTO_ONDA,
+            padx=14,
+            pady=6
+        ).pack(side="right", padx=(6, 0))
+
+        tk.Button(
+            pulsanti,
+            text=_("Apply"),
+            command=applica,
+            relief="flat",
+            bg=ACCENTO,
+            fg="#17121f",
+            padx=16,
+            pady=6
+        ).pack(side="right")
+
+        lista.bind(
+            "<Double-Button-1>",
+            lambda _e: applica()
+        )
+
+        finestra.protocol("WM_DELETE_WINDOW", chiudi)
+        finestra.update_idletasks()
+
+        x = self.root.winfo_rootx() + (
+            self.root.winfo_width() - finestra.winfo_width()
+        ) // 2
+
+        y = self.root.winfo_rooty() + (
+            self.root.winfo_height() - finestra.winfo_height()
+        ) // 2
+
+        finestra.geometry(
+            "+%d+%d" % (max(0, x), max(0, y))
+        )
+
     def applica_video(self):
         """Le impostazioni video del config date a mpv: valgono per tutti
         i canali, anche ai prossimi avvii."""
@@ -9560,7 +8699,7 @@ class TV(object):
             self.mpv.deinterlace = "yes" if self.cfg.get("deinterlaccia") else "no"
             for cosa in ("brightness", "contrast", "saturation"):
                 setattr(self.mpv, cosa, int(self.cfg.get(cosa, 0)))
-            self.mpv.af = "lavfi=[dynaudnorm=f=150:g=15]" if self.cfg.get("normalizza") else ""
+            self.applica_filtri_audio()
         except Exception:
             pass
 
@@ -9591,6 +8730,208 @@ class TV(object):
         self.cfg["boost"] = not self.cfg.get("boost")
         scrivi_config(self.cfg)
         self.alza_volume(self.volume.get())
+
+
+    def applica_filtri_audio(self):
+        """Applica normalizzazione ed equalizzatore a mpv."""
+        try:
+            filtri = []
+
+            if self.cfg.get("normalizza"):
+                filtri.append("dynaudnorm=f=150:g=15")
+
+            frequenze = (
+                31, 62, 125, 250, 500,
+                1000, 2000, 4000, 8000, 16000
+            )
+
+            bande = self.cfg.get("eq_bande", [0] * 10)
+
+            if not isinstance(bande, list) or len(bande) != 10:
+                bande = [0] * 10
+
+            equalizzatori = []
+
+            for frequenza, guadagno in zip(frequenze, bande):
+                guadagno = max(-12, min(12, int(guadagno)))
+
+                if guadagno != 0:
+                    equalizzatori.append(
+                        "equalizer=f=%d:width_type=o:width=1:g=%d"
+                        % (frequenza, guadagno)
+                    )
+
+            filtri.extend(equalizzatori)
+
+            if filtri:
+                self.mpv.af = "lavfi=[" + ",".join(filtri) + "]"
+            else:
+                self.mpv.af = ""
+
+        except Exception:
+            try:
+                _XVB_LOGGER.exception(
+                    "Errore durante l'applicazione dei filtri audio"
+                )
+            except Exception:
+                pass
+
+    def equalizzatore_audio(self):
+        """Finestra equalizzatore a dieci bande."""
+
+        originali = list(self.cfg.get("eq_bande", [0] * 10))
+
+        if len(originali) != 10:
+            originali = [0] * 10
+
+        finestra = tk.Toplevel(self.root)
+        finestra.title(_("Audio equalizer"))
+        finestra.configure(bg=PANNELLO)
+        finestra.transient(self.root)
+        finestra.resizable(False, False)
+        finestra.grab_set()
+
+        tk.Label(
+            finestra,
+            text=_("Adjust each frequency band"),
+            bg=PANNELLO,
+            fg=TESTO,
+            font=(CARATTERE, 10, STILE_CARATTERE)
+        ).pack(padx=16, pady=(14, 8))
+
+        frequenze = (
+            "31", "62", "125", "250", "500",
+            "1k", "2k", "4k", "8k", "16k"
+        )
+
+        contenitore = tk.Frame(finestra, bg=PANNELLO)
+        contenitore.pack(padx=12, pady=4)
+
+        variabili = []
+
+        def aggiorna(_valore=None):
+            self.cfg["eq_bande"] = [
+                int(round(v.get())) for v in variabili
+            ]
+            self.applica_filtri_audio()
+
+        for i, frequenza in enumerate(frequenze):
+            colonna = tk.Frame(contenitore, bg=PANNELLO)
+            colonna.grid(row=0, column=i, padx=2, sticky="n")
+
+            tk.Label(
+                colonna,
+                text=frequenza,
+                bg=PANNELLO,
+                fg=GRIGIO,
+                font=(CARATTERE, 8, STILE_CARATTERE)
+            ).pack()
+
+            variabile = tk.DoubleVar(value=originali[i])
+            variabili.append(variabile)
+
+            tk.Scale(
+                colonna,
+                from_=12,
+                to=-12,
+                resolution=1,
+                orient="vertical",
+                length=185,
+                showvalue=True,
+                variable=variabile,
+                command=aggiorna,
+                bg=PANNELLO,
+                fg=TESTO,
+                troughcolor=IN_ONDA,
+                activebackground=ACCENTO,
+                highlightthickness=0,
+                bd=0
+            ).pack()
+
+        tk.Label(
+            finestra,
+            text=_("Gain (dB) - 0 = flat"),
+            bg=PANNELLO,
+            fg=GRIGIO,
+            font=(CARATTERE, 8, STILE_CARATTERE)
+        ).pack(pady=(0, 8))
+
+        def neutro():
+            for variabile in variabili:
+                variabile.set(0)
+            aggiorna()
+
+        def chiudi(salva):
+            if salva:
+                self.cfg["eq_bande"] = [
+                    int(round(v.get())) for v in variabili
+                ]
+                scrivi_config(self.cfg)
+            else:
+                self.cfg["eq_bande"] = originali
+
+            self.applica_filtri_audio()
+
+            try:
+                finestra.grab_release()
+                finestra.destroy()
+            except Exception:
+                pass
+
+        pulsanti = tk.Frame(finestra, bg=PANNELLO)
+        pulsanti.pack(fill="x", padx=14, pady=(4, 14))
+
+        tk.Button(
+            pulsanti,
+            text=_("Flat"),
+            command=neutro,
+            relief="flat",
+            bg=IN_ONDA,
+            fg=TESTO_ONDA,
+            padx=12,
+            pady=5
+        ).pack(side="left")
+
+        tk.Button(
+            pulsanti,
+            text=_("Cancel"),
+            command=lambda: chiudi(False),
+            relief="flat",
+            bg=IN_ONDA,
+            fg=TESTO_ONDA,
+            padx=12,
+            pady=5
+        ).pack(side="right", padx=(6, 0))
+
+        tk.Button(
+            pulsanti,
+            text=_("OK"),
+            command=lambda: chiudi(True),
+            relief="flat",
+            bg=ACCENTO,
+            fg="#17121f",
+            padx=16,
+            pady=5
+        ).pack(side="right")
+
+        finestra.protocol(
+            "WM_DELETE_WINDOW",
+            lambda: chiudi(False)
+        )
+
+        finestra.update_idletasks()
+
+        x = self.root.winfo_rootx() + (
+            self.root.winfo_width() - finestra.winfo_width()
+        ) // 2
+
+        y = self.root.winfo_rooty() + (
+            self.root.winfo_height() - finestra.winfo_height()
+        ) // 2
+
+        finestra.geometry(
+            "+%d+%d" % (max(0, x), max(0, y))
+        )
 
     def normalizza(self):
         self.cfg["normalizza"] = not self.cfg.get("normalizza")
@@ -9642,13 +8983,15 @@ class TV(object):
             self.scrivi(_("up to date (%s)") % VERSIONE)
             self.root.after(3000, self.scrivi_riga)
 
-    def chiedi(self, titolo, domanda, valore=""):
-        """Una riga di testo dall'utente, nella finestrella nostra. None
-        se annulla."""
+    def chiedi(self, titolo, domanda, valore="", maschera=False):
+        """Una riga di testo dall'utente. La password può essere mascherata."""
         def corpo(dentro):
             tk.Label(dentro, text=titolo, bg=PANNELLO, fg=TESTO, anchor="w",
                      font=(CARATTERE, 11, "bold", STILE_CARATTERE)).pack(fill="x")
-        f = Finestrella(self.root, titolo, corpo, chiedi=domanda, valore=valore)
+        f = Finestrella(
+            self.root, titolo, corpo,
+            chiedi=domanda, valore=valore, maschera=maschera
+        )
         self.root.wait_window(f)
         return f.risposta
 
@@ -10666,9 +10009,65 @@ class TV(object):
             self.con_immagine[k] = any(t.get("type") == "video" for t in tracce)
         return self.con_immagine[k]
 
+    def loop_ab_imposta_a(self):
+        if not self.file_in_onda:
+            self.scrivi(_("A-B loop works with media files"), errore=True)
+            return
+        try:
+            pos = self.mpv.time_pos
+            if pos is None:
+                raise ValueError
+            self.loop_ab_a = float(pos)
+            self.loop_ab_b = None
+            self.loop_ab_file = self.file_in_onda
+            self.loop_ab_in_corso = False
+            self.scrivi(_("A point set: %s") % fmtTime(self.loop_ab_a))
+        except Exception:
+            self.scrivi(_("cannot set A-B loop point"), errore=True)
+
+    def loop_ab_imposta_b(self):
+        if not self.file_in_onda or self.loop_ab_file != self.file_in_onda:
+            self.scrivi(_("Set A before setting B"), errore=True)
+            return
+        try:
+            pos = self.mpv.time_pos
+            if pos is None or self.loop_ab_a is None:
+                raise ValueError
+            pos = float(pos)
+            if pos <= self.loop_ab_a:
+                self.scrivi(_("B point must be after A"), errore=True)
+                return
+            self.loop_ab_b = pos
+            self.loop_ab_in_corso = True
+            self.scrivi(_("A-B loop active: %s - %s") % (
+                fmtTime(self.loop_ab_a), fmtTime(self.loop_ab_b)
+            ))
+        except Exception:
+            self.scrivi(_("cannot set A-B loop point"), errore=True)
+
+    def loop_ab_azzera(self):
+        self.loop_ab_a = None
+        self.loop_ab_b = None
+        self.loop_ab_file = None
+        self.loop_ab_in_corso = False
+        self.scrivi(_("A-B loop cleared"))
+
     def _va(self, _nome, pos):
-        """Il tempo avanza: sta suonando davvero, il cerchietto va via."""
+        # Il callback del tempo gestisce anche il loop A-B.
         if pos is not None:
+            if (self.loop_ab_in_corso
+                    and self.loop_ab_file == self.file_in_onda
+                    and self.loop_ab_a is not None
+                    and self.loop_ab_b is not None):
+                try:
+                    posizione = float(pos)
+                    if posizione >= self.loop_ab_b:
+                        self.loop_ab_in_corso = False
+                        self.mpv.command("seek", "%.3f" % self.loop_ab_a, "absolute")
+                    elif posizione <= self.loop_ab_a + 1.0:
+                        self.loop_ab_in_corso = True
+                except Exception:
+                    self.loop_ab_in_corso = False
             self.attesa_da, self.salti = 0.0, 0
 
 
@@ -10971,6 +10370,543 @@ class TV(object):
         self.al_volo = url
         self.icona_preferito()
 
+
+    # OpenSubtitles API login and Bearer download
+    def cerca_sottotitoli_online(self):
+        """Ricerca OpenSubtitles usando credenziali salvate nel config locale."""
+
+        if not self.file_in_onda:
+            self.scrivi(_("nothing is playing"))
+            return
+
+        # Credenziali OpenSubtitles in file separato.
+        percorso_credenziali = os.path.expanduser(
+            "~/.config/xvb/opensubtitles.json"
+        )
+
+        try:
+            with open(percorso_credenziali, "r", encoding="utf-8") as f:
+                credenziali = json.load(f)
+            if not isinstance(credenziali, dict):
+                raise ValueError("Formato credenziali non valido")
+        except FileNotFoundError:
+            credenziali = {}
+        except Exception:
+            self.scrivi(_("Unable to read OpenSubtitles credentials"), errore=True)
+            return
+
+        api_key = str(credenziali.get("api_key", "") or "").strip()
+        username = str(credenziali.get("username", "") or "").strip()
+        password = str(credenziali.get("password", "") or "")
+
+        if not api_key:
+            api_key = self.chiedi(
+                _("OpenSubtitles API key"),
+                _("Enter your OpenSubtitles API key:")
+            )
+            if not api_key or not api_key.strip():
+                return
+            api_key = api_key.strip()
+
+        if not username:
+            username = self.chiedi(
+                _("OpenSubtitles username"),
+                _("Enter your OpenSubtitles username:")
+            )
+            if not username or not username.strip():
+                return
+            username = username.strip()
+
+        if not password:
+            password = self.chiedi(
+                _("OpenSubtitles password"),
+                _("Enter your OpenSubtitles password:"),
+                maschera=True
+            )
+            if not password:
+                return
+
+        credenziali = {
+            "api_key": api_key,
+            "username": username,
+            "password": password
+        }
+
+        try:
+            os.makedirs(os.path.dirname(percorso_credenziali), exist_ok=True)
+
+            with open(percorso_credenziali, "w", encoding="utf-8") as f:
+                json.dump(credenziali, f, indent=2)
+
+            os.chmod(percorso_credenziali, 0o600)
+
+            with open(percorso_credenziali, "r", encoding="utf-8") as f:
+                verifica = json.load(f)
+
+            if verifica != credenziali:
+                raise ValueError("Verifica del salvataggio fallita")
+
+        except Exception:
+            self.scrivi(_("Unable to save OpenSubtitles credentials"), errore=True)
+            return
+
+        lingue = self.chiedi(
+            _("Subtitle languages"),
+            _("Language codes separated by commas (example: it,en):"),
+            "it,en"
+        )
+        if not lingue or not lingue.strip():
+            return
+
+        media = str(self.file_in_onda)
+        percorso = urlparse(media).path if "://" in media else media
+        titolo = os.path.splitext(os.path.basename(percorso))[0]
+        titolo = re.sub(r"[._]+", " ", titolo).strip()
+
+        if not titolo:
+            titolo = media
+
+        codici = []
+        for codice in lingue.split(","):
+            codice = codice.strip().lower()
+            if re.fullmatch(r"[a-z]{2,3}", codice) and codice not in codici:
+                codici.append(codice)
+
+        if not codici:
+            self.scrivi(_("Invalid subtitle language codes"), errore=True)
+            return
+
+        self.scrivi(_("Searching online subtitles..."))
+
+        threading.Thread(
+            target=self._richiedi_sottotitoli_online,
+            args=(
+                api_key, username, password,
+                titolo, ",".join(codici)
+            ),
+            daemon=True
+        ).start()
+
+    def _richiedi_sottotitoli_online(
+        self, api_key, username, password, titolo, lingue
+    ):
+        """Login OpenSubtitles e ricerca dei sottotitoli."""
+
+        from urllib.error import HTTPError
+
+        try:
+            intestazioni = {
+                "Api-Key": api_key,
+                "User-Agent": "XVB Player v" + VERSIONE,
+                "Accept": "application/json",
+                "Content-Type": "application/json"
+            }
+
+            corpo_login = json.dumps({
+                "username": username,
+                "password": password
+            }).encode("utf-8")
+
+            richiesta_login = Request(
+                "https://api.opensubtitles.com/api/v1/login",
+                data=corpo_login,
+                headers=intestazioni,
+                method="POST"
+            )
+
+            try:
+                with urlopen(richiesta_login, timeout=30) as risposta:
+                    login = json.loads(
+                        risposta.read().decode("utf-8", "replace")
+                    )
+            except HTTPError as errore:
+                dettaglio = errore.read().decode("utf-8", "replace")
+                try:
+                    dettaglio = json.loads(dettaglio).get(
+                        "message", dettaglio
+                    )
+                except Exception:
+                    pass
+                raise RuntimeError(
+                    "OpenSubtitles login HTTP %s: %s"
+                    % (errore.code, dettaglio)
+                )
+
+            token = login.get("token")
+            if not token:
+                raise RuntimeError(
+                    login.get("message") or "OpenSubtitles login failed"
+                )
+
+            host = str(
+                login.get("base_url") or "api.opensubtitles.com"
+            ).strip().rstrip("/")
+
+            if not host.startswith("http://") and not host.startswith("https://"):
+                host = "https://" + host
+
+            base_url = host
+            if not base_url.endswith("/api/v1"):
+                base_url += "/api/v1"
+
+            parametri = urlencode({
+                "query": titolo,
+                "languages": lingue,
+                "order_by": "download_count",
+                "order_direction": "desc"
+            })
+
+            url = base_url + "/subtitles?" + parametri
+
+            richiesta = Request(url, headers={
+                "Api-Key": api_key,
+                "Authorization": "Bearer " + token,
+                "User-Agent": "XVB Player v" + VERSIONE,
+                "Accept": "application/json"
+            })
+
+            with urlopen(richiesta, timeout=30) as risposta:
+                dati = json.loads(
+                    risposta.read().decode("utf-8", "replace")
+                )
+
+            risultati = dati.get("data", [])
+
+            self.root.after(
+                0,
+                lambda: self._mostra_risultati_sottotitoli(
+                    api_key, token, base_url, risultati, titolo
+                )
+            )
+
+        except HTTPError as errore:
+            messaggio = "HTTP %s: %s" % (
+                errore.code, errore.reason
+            )
+            self.root.after(
+                0,
+                lambda m=messaggio: self.scrivi(
+                    _("Online subtitle search failed: %s") % m,
+                    errore=True
+                )
+            )
+
+        except Exception as errore:
+            messaggio = str(errore)
+            self.root.after(
+                0,
+                lambda m=messaggio: self.scrivi(
+                    _("Online subtitle search failed: %s") % m,
+                    errore=True
+                )
+            )
+    def _mostra_risultati_sottotitoli(
+        self, api_key, token, base_url, risultati, titolo
+    ):
+        """Mostra i risultati trovati."""
+        if not risultati:
+            self.scrivi(_("No online subtitles found"))
+            return
+
+        finestra = tk.Toplevel(self.root)
+        finestra.title(_("Online subtitles"))
+        finestra.configure(bg=PANNELLO)
+        finestra.transient(self.root)
+        finestra.geometry("760x390")
+
+        tk.Label(
+            finestra,
+            text=_("Choose a subtitle to download"),
+            bg=PANNELLO,
+            fg=TESTO,
+            font=(CARATTERE, 10, STILE_CARATTERE)
+        ).pack(anchor="w", padx=14, pady=(12, 8))
+
+        corpo = tk.Frame(finestra, bg=PANNELLO)
+        corpo.pack(fill="both", expand=True, padx=12, pady=4)
+
+        lista = tk.Listbox(
+            corpo,
+            bg=IN_ONDA,
+            fg=TESTO,
+            selectbackground=ACCENTO,
+            selectforeground="#17121f",
+            activestyle="none",
+            relief="flat",
+            highlightthickness=0,
+            font=(CARATTERE, 9),
+            exportselection=False
+        )
+
+        barra = ttk.Scrollbar(
+            corpo, orient="vertical", command=lista.yview
+        )
+        lista.configure(yscrollcommand=barra.set)
+        lista.pack(side="left", fill="both", expand=True)
+        barra.pack(side="right", fill="y")
+
+        validi = []
+
+        for elemento in risultati:
+            attributi = elemento.get("attributes") or {}
+            files = attributi.get("files") or []
+
+            file_id = next(
+                (
+                    f.get("file_id")
+                    for f in files
+                    if f.get("file_id") is not None
+                ),
+                None
+            )
+            if file_id is None:
+                continue
+
+            lingua = attributi.get("language", "?")
+            release = attributi.get("release") or (
+                files[0].get("file_name", "") if files else ""
+            )
+            uploader = (
+                attributi.get("uploader") or {}
+            ).get("name", "")
+            downloads = attributi.get("download_count", 0)
+
+            riga = "%s  |  %s  |  %s  |  %s %s" % (
+                lingua,
+                release or _("Unknown release"),
+                uploader or _("Unknown uploader"),
+                downloads,
+                _("downloads")
+            )
+
+            lista.insert("end", riga)
+            validi.append((file_id, lingua, release))
+
+        if not validi:
+            finestra.destroy()
+            self.scrivi(_("No downloadable subtitles found"))
+            return
+
+        lista.selection_set(0)
+        lista.activate(0)
+
+        def scarica():
+            selezione = lista.curselection()
+            if not selezione:
+                return
+
+            file_id, lingua, release = validi[selezione[0]]
+            pulsante.config(state="disabled")
+            self.scrivi(_("Downloading subtitle..."))
+
+            threading.Thread(
+                target=self._scarica_sottotitolo_online,
+                args=(
+                    api_key, token, base_url, file_id,
+                    lingua, release, titolo, finestra
+                ),
+                daemon=True
+            ).start()
+
+        fondo = tk.Frame(finestra, bg=PANNELLO)
+        fondo.pack(fill="x", padx=14, pady=12)
+
+        tk.Button(
+            fondo,
+            text=_("Cancel"),
+            command=finestra.destroy,
+            relief="flat",
+            bg=IN_ONDA,
+            fg=TESTO_ONDA,
+            padx=14,
+            pady=6
+        ).pack(side="right", padx=(6, 0))
+
+        pulsante = tk.Button(
+            fondo,
+            text=_("Download and load"),
+            command=scarica,
+            relief="flat",
+            bg=ACCENTO,
+            fg="#17121f",
+            padx=14,
+            pady=6
+        )
+        pulsante.pack(side="right")
+
+        lista.bind(
+            "<Double-Button-1>",
+            lambda _e: scarica()
+        )
+
+    def _scarica_sottotitolo_online(
+        self, api_key, token, base_url, file_id,
+        lingua, release, titolo, finestra
+    ):
+        """Scarica il sottotitolo con API Key e token Bearer."""
+
+        from urllib.error import HTTPError
+
+        try:
+            corpo = json.dumps({
+                "file_id": file_id
+            }).encode("utf-8")
+
+            richiesta = Request(
+                base_url.rstrip("/") + "/download",
+                data=corpo,
+                headers={
+                    "Api-Key": api_key,
+                    "Authorization": "Bearer " + token,
+                    "User-Agent": "XVB Player v" + VERSIONE,
+                    "Accept": "application/json",
+                    "Content-Type": "application/json"
+                },
+                method="POST"
+            )
+
+            try:
+                with urlopen(richiesta, timeout=30) as risposta:
+                    dati = json.loads(
+                        risposta.read().decode("utf-8", "replace")
+                    )
+            except HTTPError as errore:
+                dettaglio = errore.read().decode("utf-8", "replace")
+                try:
+                    dettaglio = json.loads(dettaglio).get(
+                        "message", dettaglio
+                    )
+                except Exception:
+                    pass
+                raise RuntimeError(
+                    "OpenSubtitles download HTTP %s: %s"
+                    % (errore.code, dettaglio)
+                )
+
+            link = dati.get("link")
+            if not link:
+                raise RuntimeError(
+                    dati.get("message") or "Download URL missing"
+                )
+
+            richiesta_file = Request(link, headers={
+                "User-Agent": "XVB Player v" + VERSIONE
+            })
+
+            with urlopen(richiesta_file, timeout=45) as risposta_file:
+                contenuto = risposta_file.read()
+
+            nome_file = os.path.basename(
+                dati.get("file_name") or "subtitle.srt"
+            )
+
+            estensioni = (
+                ".srt", ".ass", ".ssa", ".sub", ".vtt", ".ttml"
+            )
+
+            if zipfile.is_zipfile(io.BytesIO(contenuto)):
+                with zipfile.ZipFile(io.BytesIO(contenuto)) as archivio:
+                    candidati = [
+                        n for n in archivio.namelist()
+                        if not n.endswith("/")
+                        and os.path.splitext(n)[1].lower() in estensioni
+                    ]
+
+                    if not candidati:
+                        raise RuntimeError(
+                            "Archive contains no supported subtitle"
+                        )
+
+                    candidati.sort(
+                        key=lambda n: ("forced" in n.lower(), len(n))
+                    )
+                    selezionato = archivio.read(candidati[0])
+                    nome_file = os.path.basename(candidati[0])
+            else:
+                selezionato = contenuto
+
+            estensione = os.path.splitext(nome_file)[1].lower()
+            if estensione not in estensioni:
+                estensione = ".srt"
+
+            cartella = os.path.join(
+                CASA, ".cache", "xvb", "subtitles"
+            )
+            os.makedirs(cartella, exist_ok=True)
+
+            base = re.sub(
+                r"[^\w.-]+", "_", titolo, flags=re.UNICODE
+            ).strip("._") or "subtitle"
+
+            codice = re.sub(
+                r"[^a-zA-Z0-9_-]", "", str(lingua)
+            ) or "sub"
+
+            destinazione = os.path.join(
+                cartella,
+                "%s.%s%s" % (base, codice, estensione)
+            )
+
+            if os.path.exists(destinazione):
+                destinazione = os.path.join(
+                    cartella,
+                    "%s.%s.%d%s" % (
+                        base, codice, int(time.time()), estensione
+                    )
+                )
+
+            with open(destinazione, "wb") as f:
+                f.write(selezionato)
+
+            self.root.after(
+                0,
+                lambda p=destinazione, w=finestra:
+                    self._attiva_sottotitolo_online(p, w)
+            )
+
+        except Exception as errore:
+            messaggio = str(errore)
+            self.root.after(
+                0,
+                lambda m=messaggio, w=finestra:
+                    self._errore_download_sottotitolo(m, w)
+            )
+    def _attiva_sottotitolo_online(self, percorso, finestra):
+        try:
+            self.mpv.command("sub-add", percorso, "select")
+            self.scrivi(
+                _("subtitles: %s") % os.path.basename(percorso)
+            )
+            self.root.after(2500, self.scrivi_riga)
+
+            try:
+                finestra.destroy()
+            except Exception:
+                pass
+
+        except Exception as errore:
+            self.scrivi(
+                _("cannot read %s: %s")
+                % (os.path.basename(percorso), errore),
+                errore=True
+            )
+
+    def _errore_download_sottotitolo(self, messaggio, finestra):
+        self.scrivi(
+            _("Subtitle download failed: %s") % messaggio,
+            errore=True
+        )
+        try:
+            for widget in finestra.winfo_children():
+                for figlio in widget.winfo_children():
+                    if (
+                        isinstance(figlio, tk.Button)
+                        and figlio.cget("text") == _("Download and load")
+                    ):
+                        figlio.config(state="normal")
+        except Exception:
+            pass
+
     def carica_sottotitoli(self):
         """Un file di sottotitoli scelto a mano per il video che va."""
         f = self.file_in_onda or ""
@@ -11210,6 +11146,7 @@ def porta_unica():
 
 
 if __name__ == "__main__":
+    configura_logging()
     porta = porta_unica()
     if porta is not None:
         argomenti = sys.argv[1:]
