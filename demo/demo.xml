@@ -4,7 +4,7 @@
     <display-name lang="it">Big Buck Bunny</display-name>
   </channel>
   
-  <programme start="20240101000000 +0000" stop="20371231235959 +0000" channel="test1">
+  <programme start="20240101000000 +0000" stop="20371231235959 +0000" channel="Big Buck Bunny">
     <title lang="it">Big Buck Bunny (Live Demo)</title>
     <desc lang="it">Anteprima video continua della programmazione demo.</desc>
     <icon src="https://github.com/JonaDev2026/xvb/blob/main/demo/Big_buck_bunny_poster_big.jpg"/>
