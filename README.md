@@ -9,6 +9,18 @@
 
 ---
 
+![](preview1.png)
+
+- **IT:** [▶️ Guarda la dimostrazione su YouTube](https://www.youtube.com/watch?v=w5BYTwzUOBE)
+- **EN:** [▶️ Watch the demonstration on YouTube](https://www.youtube.com/watch?v=w5BYTwzUOBE)
+- **FR:** [▶️ Regarder la démonstration sur YouTube](https://www.youtube.com/watch?v=w5BYTwzUOBE)
+- **ES:** [▶️ Ver la demostración en YouTube](https://www.youtube.com/watch?v=w5BYTwzUOBE)
+- **DE:** [▶️ Demonstration auf YouTube ansehen](https://www.youtube.com/watch?v=w5BYTwzUOBE)
+- **RU:** [▶️ Посмотреть демонстрацию на YouTube](https://www.youtube.com/watch?v=w5BYTwzUOBE)
+- **PT:** [▶️ Assistir à demonstração no YouTube](https://www.youtube.com/watch?v=w5BYTwzUOBE)
+
+---
+
 ### Support & Donations
 If you find XVB Player useful, consider supporting its development:
 
