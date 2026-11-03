@@ -351,7 +351,7 @@ def avvia_mpris(app):
     threading.Thread(target=GLib.MainLoop().run, daemon=True).start()
     return m
 
-VERSIONE = "4.3.9"
+VERSIONE = "4.4.0"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"
@@ -1821,6 +1821,12 @@ def scrivi_preferiti(canali, tipo=PREF_IPTV):
 
 CACHE_EPG = os.path.join(CASA, ".cache", "xvb", "epg")
 CACHE_VARIANTE = os.path.join(CASA, ".cache", "xvb")
+CARTELLA_DEMO = os.path.join(CASA, ".local", "share", "xvb", "demo")
+DEMO_M3U = os.path.join(CARTELLA_DEMO, "demo.m3u")
+DEMO_XML = os.path.join(CARTELLA_DEMO, "demo.xml")
+CACHE_DEMO_LOCK = os.path.join(CACHE_VARIANTE, "demo.lock")
+URL_DEMO_M3U = "https://raw.githubusercontent.com/JonaDev2026/xvb/main/demo/demo.m3u"
+URL_DEMO_XML = "https://raw.githubusercontent.com/JonaDev2026/xvb/main/demo/demo.xml"
 MEDIA = ("mkv", "mp4", "avi", "mov", "webm", "ts", "m2ts", "mpg", "mpeg", "wmv", "flv",
          "ogv", "m4v", "mp3", "flac", "ogg", "opus", "m4a", "aac", "wav", "wma", "ape", "mka")
 
@@ -3434,6 +3440,87 @@ def sfoglia(root, titolo, da, file_=True, tipi=None):
     return None if file_ else dove[0]
 
 
+def installa_demo(cfg):
+    if os.path.isfile(CACHE_DEMO_LOCK):
+        return False
+
+    os.makedirs(CARTELLA_DEMO, exist_ok=True)
+    os.makedirs(CACHE_VARIANTE, exist_ok=True)
+
+    temporanei = []
+
+    try:
+        for url, destinazione in (
+            (URL_DEMO_M3U, DEMO_M3U),
+            (URL_DEMO_XML, DEMO_XML)
+        ):
+            richiesta = Request(url, headers={"User-Agent": UA})
+            dati = urlopen(richiesta, timeout=20).read()
+
+            if destinazione == DEMO_M3U:
+                if b"#EXTM3U" not in dati[:4096]:
+                    raise ValueError("Playlist demo non valida")
+                if b"bigbuckbunny.demo" not in dati:
+                    raise ValueError("ID playlist demo non valido")
+            else:
+                radice = ET.fromstring(dati)
+                ids = {c.get("id") for c in radice.findall("channel")}
+                if not any(
+                    p.get("channel") in ids
+                    for p in radice.findall("programme")
+                ):
+                    raise ValueError("Associazione XMLTV non valida")
+
+            temporaneo = destinazione + ".part"
+            temporanei.append(temporaneo)
+
+            with open(temporaneo, "wb") as f:
+                f.write(dati)
+
+            os.replace(temporaneo, destinazione)
+
+        liste = cfg.get("liste")
+        if not isinstance(liste, list):
+            liste = []
+            cfg["liste"] = liste
+
+        if DEMO_M3U not in liste:
+            liste.append(DEMO_M3U)
+
+        epg = cfg.get("epg")
+        if not isinstance(epg, list):
+            epg = [epg] if isinstance(epg, str) and epg else []
+            cfg["epg"] = epg
+
+        if DEMO_XML not in epg:
+            epg.append(DEMO_XML)
+
+        scrivi_config(cfg)
+
+        verificata = leggi_config()
+        if DEMO_M3U not in verificata.get("liste", []):
+            raise OSError("Configurazione playlist non salvata")
+        if DEMO_XML not in verificata.get("epg", []):
+            raise OSError("Configurazione guida non salvata")
+
+        temporaneo_lock = CACHE_DEMO_LOCK + ".part"
+        with open(temporaneo_lock, "w", encoding="utf-8") as f:
+            f.write("XVB DEMO INSTALLED")
+
+        os.replace(temporaneo_lock, CACHE_DEMO_LOCK)
+        return True
+
+    except Exception as errore:
+        for temporaneo in temporanei:
+            try:
+                os.remove(temporaneo)
+            except OSError:
+                pass
+
+        sys.stderr.write("XVB demo: %s\\n" % errore)
+        return False
+
+
 class TV(object):
     def __init__(self, lista=None, da_aprire=None, porta=None):
         self.cfg = leggi_config()
@@ -3460,6 +3547,7 @@ class TV(object):
                 os.makedirs(c, exist_ok=True)
             except Exception:
                 pass
+        installa_demo(self.cfg)
         self.canali, self.visti, self.liste = [], [], []
         self.varianti, self.quale = [], -1
         self.manuale = True
