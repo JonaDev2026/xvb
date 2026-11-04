@@ -9,6 +9,10 @@
 
 ---
 
+🍄 Liste Italia e EPG: ![Italian EPG / Free tv](https://github.com/JonaDev2026/xvb-playlists/)
+
+---
+
 ![](preview1.png)
 
 - **IT:** [▶️ Guarda la dimostrazione su YouTube](https://www.youtube.com/watch?v=w5BYTwzUOBE)
