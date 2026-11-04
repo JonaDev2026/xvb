@@ -351,7 +351,7 @@ def avvia_mpris(app):
     threading.Thread(target=GLib.MainLoop().run, daemon=True).start()
     return m
 
-VERSIONE = "4.4.1"
+VERSIONE = "4.4.2"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"
@@ -4354,6 +4354,7 @@ class TV(object):
         if self.cfg.get("epg"):
             self.carica_guide()
         self.root.after(30 * 60 * 1000, self.giro_guide)
+        self.root.after(60 * 1000, self.giro_liste)
 
         self.root.after(8000, lambda: self.controlla_versione(zitto=True))
 
@@ -9512,6 +9513,35 @@ class TV(object):
         self.scrivi(_("guide loaded: %d channels, %d programmes") % (
             len(self.epg_nomi), sum(len(v) for v in self.epg.values())))
         self.root.after(4000, self.scrivi_riga)
+
+    def giro_liste(self):
+        """Ogni mezz'ora: le liste da url con la copia piu' vecchia di sei
+        ore si riscaricano in silenzio; se una e' cambiata si rilegge l'elenco."""
+        def lavoro():
+            cambiata = False
+            for u in list(self.cfg.get("liste_url", {})):
+                try:
+                    f = os.path.join(CACHE_LISTE, hashlib.md5(u.encode()).hexdigest() + ".m3u")
+                    prima = None
+                    if os.path.isfile(f):
+                        if time.time() - os.path.getmtime(f) < LISTA_VECCHIA:
+                            continue
+                        with open(f, "rb") as o:
+                            prima = o.read()
+                    copia_lista_url(u, "forza")
+                    with open(f, "rb") as o:
+                        if o.read() != prima:
+                            cambiata = True
+                except Exception:
+                    pass
+            if cambiata:
+                self.root.after(0, self._liste_aggiornate)
+        threading.Thread(target=lavoro, daemon=True).start()
+        self.root.after(30 * 60 * 1000, self.giro_liste)
+
+    def _liste_aggiornate(self):
+        if self.media_in_uso is None and self.reg_in_uso is None:
+            self.rifai_liste(scegli=self.cfg.get("lista"))
 
     def giro_guide(self):
         """Ogni mezz'ora: se una guida ha piu' di sei ore (o il file locale e'
