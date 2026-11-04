@@ -6482,12 +6482,13 @@ class TV(object):
         return " " + nome + ("\n " + sotto if sotto else "")
 
     def poster_attivo(self):
+        if any(e_youtube(c[1]) for c in getattr(self, "visti", [])):
+            return True
         if not self.cfg.get("poster_epg", False) or self.reg_in_uso:
             return False
         if self.media_in_uso:
             return self.media_in_uso[0] in ("cartella", "importati")
         return bool(self.epg)
-
     def altezza_poster_onda(self):
         """Riserva lo spazio in alto solo per i video in riproduzione (esclude l'audio)."""
         if (self.cfg.get("poster_epg", False) or not HA_PIL or self.reg_in_uso
@@ -6566,23 +6567,78 @@ class TV(object):
         scrivi_config(self.cfg)
         self.applica_poster()
 
+    def youtube_immagini(self, url):
+        import json
+        meta = self.__dict__.setdefault("_youtube_meta", {})
+        if url in meta:
+            return meta[url]
+        coda = self.__dict__.setdefault("_youtube_coda", set())
+        if url in coda:
+            return None
+        coda.add(url)
+
+        def lavora():
+            dati = {}
+            try:
+                yt = percorso_ytdlp()
+                if yt:
+                    r = subprocess.run(
+                        [yt, "--dump-single-json", "--skip-download",
+                         "--no-warnings", "--no-playlist", url],
+                        capture_output=True, text=True, timeout=60,
+                        env=ambiente_ytdlp())
+                    if r.returncode == 0 and r.stdout.strip():
+                        j = json.loads(r.stdout)
+                        dati["thumbnail"] = j.get("thumbnail")
+                        favicon = j.get("channel_favicon")
+                        if favicon:
+                            os.makedirs(CACHE_LOGHI, exist_ok=True)
+                            f = os.path.join(CACHE_LOGHI,
+                                hashlib.md5(url.encode("utf-8")).hexdigest() + ".youtube")
+                            if not os.path.isfile(f) or os.path.getsize(f) == 0:
+                                try:
+                                    b = urlopen(Request(favicon, headers={"User-Agent": UA}),
+                                                timeout=15).read(2 * 1024 * 1024)
+                                    with open(f, "wb") as o:
+                                        o.write(b)
+                                except Exception:
+                                    f = None
+                            if f and os.path.isfile(f) and os.path.getsize(f):
+                                dati["logo"] = f
+            except Exception as ex:
+                log_yt("immagini YouTube: %r" % (ex,))
+
+            def fine():
+                coda.discard(url)
+                meta[url] = dati
+                self.loghi_img.pop(url, None)
+                self.poster_scaricato()
+
+            try:
+                self.root.after(0, fine)
+            except Exception:
+                coda.discard(url)
+
+        threading.Thread(target=lavora, daemon=True).start()
+        return None
+
     def poster_di(self, iid, w, h):
-        """Mostra l'anteprima per i canali TV, per i video locali e per la musica
-        (con la sua copertina) in riproduzione."""
         try:
             nome, url, ide = self.visti[int(iid)]
         except (ValueError, IndexError):
             return None, ""
 
-        if os.path.isabs(url):
+        if e_youtube(url):
+            dati = self.youtube_immagini(url)
+            src = dati.get("thumbnail") if dati else None
+            return (self.poster_pronto(src, w, h) if src else None), ""
 
+        if os.path.isabs(url):
             if os.path.splitext(url)[1][1:].lower() in AUDIO:
                 if self.poster_attivo() or url == self.file_in_onda:
                     src = self.anteprime.get(url)
                     return (self.poster_pronto(src, w, h) if src else None), ""
                 return None, ""
-
-
             if self.poster_attivo() or url == self.file_in_onda:
                 src = poster_film(url) or self.anteprime.get(url) or self.info.get(url, {}).get("poster")
                 return (self.poster_pronto(src, w, h) if src else None), ""
@@ -6597,7 +6653,6 @@ class TV(object):
             return None, ""
         src = icona_programma_epg(ide, nome, p)
         return (self.poster_pronto(src, w, h) if src else None), p[2]
-
     def poster_pronto(self, src, w, h):
         """L'immagine del programma, ritagliata a riempire il riquadro; se non
         e' ancora sul disco la si scarica (un thread) e intanto None."""
@@ -6901,14 +6956,17 @@ class TV(object):
         return self.icona_colonna
 
     def logo_di(self, url, colore=None):
-        """Il logo del canale come immagine per l'elenco, dalla cache dei
-        loghi (quella scaricata per i colori). None se non c'e' ancora."""
         cd = self.__dict__.setdefault("_colori_dischi", {})
         if url in self.loghi_img and (colore is None or cd.get(url, colore) == colore):
             return self.loghi_img[url]
         if not HA_PIL:
             return None
-        if os.path.isabs(url):
+        if e_youtube(url):
+            dati = self.youtube_immagini(url)
+            f = dati.get("logo") if dati else None
+            if not f or not os.path.isfile(f):
+                return None
+        elif os.path.isabs(url):
             f = self.anteprime.get(url)
             if not f:
                 return None
@@ -6920,10 +6978,7 @@ class TV(object):
             f = os.path.join(CACHE_LOGHI, hashlib.md5(LOGHI[url].encode()).hexdigest())
         if not os.path.isfile(f) or os.path.getsize(f) == 0:
             return None
-
-
         iptv = f.startswith(CACHE_LOGHI + os.sep)
-
         film = url.startswith("dvd://") or (os.path.isabs(url)
                                              and os.path.splitext(url)[1][1:].lower() not in AUDIO)
         if os.path.isabs(url) and os.path.splitext(url)[1][1:].lower() in AUDIO:
@@ -6934,7 +6989,6 @@ class TV(object):
         if im is not None:
             self.loghi_img[url] = im
         return im
-
     def _giradisco(self):
         """Il vinile: la copertina tonda del brano in onda gira piano in senso
         orario finche' suona; in pausa si ferma dov'e'; cambiando brano la
