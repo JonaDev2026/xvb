@@ -4853,10 +4853,11 @@ class TV(object):
         img_pod = icona("mic", img_ra, dentro=RIDOTTE)
         img_cam = icona("cam", img_pl, dentro=RIDOTTE)
         img_vid = icona("video", img_pl, dentro=RIDOTTE)
+        img_youtube = icona("youtube", img_vid, dentro=RIDOTTE)
         for cat, etichetta, img in (("podcast", "Podcast", img_pod), ("musica", "Music", img_mu),
                                     ("radio", "Radio", img_ra), ("cam", "IP cam", img_cam),
                                     ("film", "Film", img_pl), ("video", "Video", img_vid),
-                                    ("youtube", "YouTube", img_vid),
+                                    ("youtube", "YouTube", img_youtube),
                                     (None, "Temporary", img_ti)):
             lista = self.url_di(cat)
             if not lista:
@@ -6839,6 +6840,8 @@ class TV(object):
         se no quello dal nome. Una registrazione ha quello del suo canale
         (la cartella in cui sta). Un file (musica, video) il suo posto
         nell'elenco, sulla scala dei file."""
+        if e_youtube(url):
+            return PALLINI[0] #colore yt
         if url.startswith(REGISTRAZIONI + os.sep):
             return colore_di(os.path.basename(os.path.dirname(url)))
         if url in self.posto_file:
