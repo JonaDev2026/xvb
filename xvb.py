@@ -351,7 +351,7 @@ def avvia_mpris(app):
     threading.Thread(target=GLib.MainLoop().run, daemon=True).start()
     return m
 
-VERSIONE = "4.4.2"
+VERSIONE = "4.4.3"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"
@@ -3816,6 +3816,7 @@ class TV(object):
         self.menu("View", lambda: [
             (_("Fullscreen"), self.schermo_intero),
             (_("Picture in picture"), self.pip_si_no),
+            (_("Split screen") + "  F2", self.split_si_no),
             (("*  " if self.cfg.get("in_cima") else "   ") + _("Always on top"), self.sempre_in_cima),
             None,
             (_("Show list") if self.nascosti.get(self.sinistra) else _("Hide list"),
@@ -4155,14 +4156,19 @@ class TV(object):
 
         self.video = tk.Frame(self.root, bg="black")
         self.video.pack(side="right", fill="both", expand=True)
-
+        self.split, self.schermo, self.mpv2, self.stato_schermi = False, 0, None, [{}, {}]
+        self.cornici = [tk.Frame(self.video, bg="black", bd=0) for _n in range(2)]
+        self.cornici[0].place(x=0, y=0, relwidth=1, relheight=1)
+        self.vid1 = tk.Frame(self.cornici[0], bg="black", bd=0)
+        self.vid1.place(x=0, y=0, relwidth=1, relheight=1)
+        self.vid2 = tk.Frame(self.cornici[1], bg="black", bd=0)
 
         self.disponi(False)
         self.video.bind("<Button-1>", lambda e: self.root.focus_set())
         self.root.update_idletasks()
 
         self.mpv = mpv.MPV(
-            wid=str(self.video.winfo_id()),
+            wid=str(self.vid1.winfo_id()),
             cache="yes",
             demuxer_max_bytes="%dMiB" % self.buffer_attuale()[2],
             demuxer_max_back_bytes="%dMiB" % self.buffer_attuale()[3],
@@ -4203,11 +4209,12 @@ class TV(object):
             def _clic(stato, *_a):
                 if stato.startswith("d"):
                     self.ov_premuto = True
-                    self.root.after(0, self.clic_video)
+                    self.root.after(0, self.clic_schermo, 0)
                 elif stato.startswith("u"):
                     self.ov_premuto = False
         except Exception:
             pass
+        self.mpv1 = self.mpv
         for valore in ("embedded-first", "attachment"):
             try:
                 self.mpv["audio-display"] = valore
@@ -4274,8 +4281,11 @@ class TV(object):
             self, "_finestra_vista", None) and setattr(self, "_finestra_vista", time.time()),
             add="+")
         self.mostra_sfondo(True, dissolvi=True, attesa=0)
-        self.mpv.observe_property("paused-for-cache", self._buffer)
-        self.mpv.observe_property("time-pos", self._va)
+        self.mpv1 = self.mpv
+        self.mpv1.observe_property("paused-for-cache",
+                                   lambda n, v: self.mpv is self.mpv1 and self._buffer(n, v))
+        self.mpv1.observe_property("time-pos",
+                                   lambda n, v: self.mpv is self.mpv1 and self._va(n, v))
 
         self.pieno, self.barra_visibile, self.timer_barra = False, True, None
         self.sorveglio, self.dove_era = False, (0, 0)
@@ -4290,7 +4300,8 @@ class TV(object):
         try:
             @self.mpv.event_callback("end-file")
             def fine(ev, app=self):
-                app.finito_male(ev)
+                if app.mpv is app.mpv1:
+                    app.finito_male(ev)
         except Exception:
             pass
 
@@ -4304,6 +4315,7 @@ class TV(object):
             self.root.bind(nome, f)
 
         tasto("<space>", self.pausa)
+        tasto("<F2>", self.split_si_no)
         tasto("<m>", self.muto)
         tasto("<BackSpace>", self.switch)
 
@@ -7309,7 +7321,7 @@ class TV(object):
         self.suonato_da = 0.0
         try:
             os.makedirs(CACHE_VARIANTE, exist_ok=True)
-            f = os.path.join(CACHE_VARIANTE, "variante.m3u8")
+            f = os.path.join(CACHE_VARIANTE, "variante%s.m3u8" % ("2" if self.schermo else ""))
             with open(f, "w", encoding="utf-8") as o:
                 o.write(master)
             self.mpv.play(f)
@@ -7796,14 +7808,202 @@ class TV(object):
     def doppio_clic(self):
         """Doppio clic sul video: schermo intero; in PiP, torna normale.
         Sui comandi disegnati da mpv no: li' i clic sono dei bottoni."""
-        if self.ov_sotto_mouse():
+        if self.ov_sotto_mouse() or getattr(self, "split", False):
             return
         if self.pip:
             self.esci_pip()
         else:
             self.schermo_intero()
 
+    STATO_SCHERMO = ("nome", "nome_in_onda", "varianti", "quale", "file_in_onda",
+                     "ide_in_onda", "manuale", "affanni", "tranquillo_da",
+                     "ultima_discesa", "storia", "in_calo", "da_riallineare",
+                     "suonato_da", "_lista_in_onda", "colore_barra")
+    VUOTO_SCHERMO = {"nome": None, "nome_in_onda": None, "varianti": [], "quale": -1,
+                     "file_in_onda": None, "ide_in_onda": None,
+                     "colore_barra": None}
+
+    def split_si_no(self, ev=None):
+        if self.split:
+            self.chiudi_split()
+        else:
+            self.apri_split()
+
+    def disponi_split(self):
+        c0, c1 = self.cornici
+        if self.split:
+            c0.place(x=0, y=0, relwidth=1, relheight=1)
+            self.vid1.place(x=0, y=0, relwidth=1, relheight=1, width=0, height=0)
+            c1.place(relx=0.5, y=0, relwidth=0.5, relheight=1, height=-(self.OV_ALTA - self.OV_LINEA))
+            self.vid2.place(x=0, y=0, relwidth=1, relheight=1)
+            if not getattr(self, "linee", None):
+                self.linee = [[tk.Frame(self.video, bg="black", bd=0) for _n in range(4)]
+                              for _m in range(2)]
+                self.video.bind("<Configure>", lambda e: self.margini_split(), add="+")
+            t, a = 2, self.OV_ALTA - self.OV_LINEA
+            for i, (su, giu, sx, dx) in enumerate(self.linee):
+                x0 = 0.5 * i
+                su.place(relx=x0, y=0, relwidth=0.5, height=t)
+                giu.place(relx=x0, rely=1, y=-a, anchor="sw", relwidth=0.5, height=t)
+                sx.place(relx=x0, y=0, width=t, relheight=1, height=-a)
+                dx.place(relx=x0 + 0.5, y=0, anchor="ne", width=t, relheight=1, height=-a)
+        else:
+            c1.place_forget()
+            c0.place(x=0, y=0, relwidth=1, relheight=1, width=0)
+            self.vid1.place(x=0, y=0, relwidth=1, relheight=1, width=0, height=0)
+            for gruppo in getattr(self, "linee", None) or []:
+                for w in gruppo:
+                    w.place_forget()
+        self.margini_split()
+        self.bordi_schermi()
+
+    def margini_split(self):
+        """Il video del player 1 sta nella meta' sinistra e sopra ai comandi;
+        la finestra resta larga tutto, cosi' il pannello e' uno solo."""
+        try:
+            if self.split:
+                h = max(1, self.video.winfo_height())
+                self.mpv1["video-margin-ratio-right"] = 0.5
+                self.mpv1["video-margin-ratio-bottom"] = min(0.5, (self.OV_ALTA - self.OV_LINEA) / float(h))
+            else:
+                self.mpv1["video-margin-ratio-right"] = 0
+                self.mpv1["video-margin-ratio-bottom"] = 0
+        except Exception:
+            pass
+
+    def bordi_schermi(self):
+        for i, gruppo in enumerate(getattr(self, "linee", None) or []):
+            for w in gruppo:
+                w.config(bg=(getattr(self, "colore_barra", None) or "#2d9cdb")
+                         if (self.split and i == self.schermo) else "black")
+
+    def apri_split(self):
+        if self.split or self.pip or self.pieno:
+            return
+        self.split = True
+        self.vid2.place(x=0, y=0, relwidth=1, relheight=1)
+        self.disponi_split()
+        self.root.update_idletasks()
+        if self.mpv2 is None:
+            try:
+                self.crea_mpv2()
+            except Exception as e:
+                self.split = False
+                self.disponi_split()
+                self.scrivi(_("Split screen failed: %s") % e, errore=True)
+                return
+        try:
+            self.mpv2.mute = True
+            self.mpv2.volume = self.mpv.volume
+        except Exception:
+            pass
+
+    def chiudi_split(self):
+        if not self.split:
+            return
+        self.seleziona_schermo(0)
+        self.split = False
+        try:
+            self.mpv2.command("stop")
+        except Exception:
+            pass
+        self.stato_schermi[1] = {}
+        self.disponi_split()
+
+    def crea_mpv2(self):
+        b = self.buffer_attuale()
+        m = mpv.MPV(
+            wid=str(self.vid2.winfo_id()),
+            cache="yes",
+            demuxer_max_bytes="%dMiB" % b[2],
+            demuxer_max_back_bytes="%dMiB" % b[3],
+            demuxer_readahead_secs=b[4],
+            cache_pause_wait=b[5],
+            network_timeout=60,
+            ytdl=False,
+            hwdec="auto-safe",
+            force_window="yes",
+            volume_max=150,
+            user_agent=UA,
+            cursor_autohide=3000,
+            stream_lavf_o=("reconnect=1,reconnect_streamed=1,"
+                           "reconnect_on_network_error=1,"
+                           "reconnect_delay_max=10"),
+        )
+        try:
+            m["window-dragging"] = "no"
+            m["audio-display"] = "embedded-first"
+        except Exception:
+            pass
+        try:
+            @m.key_binding("MBTN_LEFT")
+            def _clic2(stato, *_a):
+                if stato.startswith("d"):
+                    self.root.after(0, self.clic_schermo, 1)
+        except Exception:
+            pass
+        m.observe_property("paused-for-cache",
+                           lambda n, v: self.mpv is m and self._buffer(n, v))
+        m.observe_property("time-pos",
+                           lambda n, v: self.mpv is m and self._va(n, v))
+        try:
+            @m.event_callback("end-file")
+            def fine2(ev, app=self):
+                if app.mpv is m:
+                    app.finito_male(ev)
+        except Exception:
+            pass
+        try:
+            m.overlay_ids.update((OV_HUD,))
+        except Exception:
+            pass
+        self.mpv2 = m
+
+    def clic_schermo(self, n):
+        if self.split and n == 0:
+            try:
+                y = self.root.winfo_pointery() - self.video.winfo_rooty()
+                if y >= self.video.winfo_height() - self.OV_ALTA:
+                    self.clic_video()
+                    return
+            except tk.TclError:
+                pass
+        if self.split and n != self.schermo:
+            self.seleziona_schermo(n)
+        else:
+            self.clic_video()
+
+    def seleziona_schermo(self, n):
+        if not self.split or n == self.schermo:
+            return
+        vecchio = self.mpv
+        salvo = {k: getattr(self, k, None) for k in self.STATO_SCHERMO}
+        self.stato_schermi[self.schermo] = salvo
+        self.schermo = n
+        nuovo = dict(self.VUOTO_SCHERMO)
+        nuovo.update(self.stato_schermi[n])
+        for k, v in nuovo.items():
+            setattr(self, k, v)
+        self.mpv = self.mpv1 if n == 0 else self.mpv2
+        try:
+            muto, vol = bool(vecchio.mute), vecchio.volume
+            vecchio.mute = True
+            self.mpv.volume = vol
+            self.mpv.mute = muto
+        except Exception:
+            pass
+        if self.colore_barra:
+            self.colora_stato(self.colore_barra)
+        else:
+            self.disegna_fondo_barra()
+        self.bordi_schermi()
+        self.mostra_ingranaggio()
+        self.icona_volume()
+        self.scrivi_riga()
+
     def pip_si_no(self):
+        if getattr(self, "split", False):
+            self.chiudi_split()
         if self.pip:
             self.esci_pip()
         else:
@@ -7875,7 +8075,7 @@ class TV(object):
         if not si:
             if ov is not None:
                 try:
-                    self.mpv.overlay_remove(OV_PIP)
+                    self.mpv1.overlay_remove(OV_PIP)
                 except Exception:
                     pass
                 self.pip_ov = self.pip_ov_misura = self.pip_ov_riquadro = None
@@ -7885,7 +8085,7 @@ class TV(object):
         except tk.TclError:
             return
         try:
-            ow = int(self.mpv.osd_width or 0)
+            ow = int(self.mpv1.osd_width or 0)
         except Exception:
             ow = 0
         k = (ow / vw) if (ow > 0 and vw > 0) else 1.0
@@ -7898,7 +8098,7 @@ class TV(object):
             pos = (max(0, round((vw - bordo) * k) - im.width), round(bordo * k))
             im = premoltiplica(im)
             if ov is None:
-                ov = mpv.ImageOverlay(self.mpv, OV_PIP, im, pos=pos)
+                ov = mpv.ImageOverlay(self.mpv1, OV_PIP, im, pos=pos)
             else:
                 ov.update(im, pos=pos)
         except Exception:
@@ -7933,7 +8133,7 @@ class TV(object):
         if not righe:
             if ov is not None:
                 try:
-                    self.mpv.overlay_remove(OV_HUD)
+                    (getattr(self, "hud_player", None) or self.mpv1).overlay_remove(OV_HUD)
                 except Exception:
                     pass
             self.hud_ov = self.hud_chiave = None
@@ -7942,14 +8142,19 @@ class TV(object):
             self._hud_id = self.root.after(250, self.hud_giro)
         try:
             vw, vh = self.video.winfo_width(), self.video.winfo_height()
-            ow = int(self.mpv.osd_width or 0)
+            sp = bool(getattr(self, "split", False))
+            m_hud = self.mpv if sp else self.mpv1
+            vwf = vw // 2 if (sp and m_hud is not self.mpv1) else vw
+            dx = vw // 2 if sp else vw
+            ow = int(m_hud.osd_width or 0)
         except Exception:
             return
         if vw < 2:
             return
-        k = (ow / vw) if (ow > 0 and vw > 0) else 1.0
+        k = (ow / vwf) if (ow > 0 and vwf > 0) else 1.0
         margine = 10 + (38 if getattr(self, "pip_ov", None) is not None else 0)
-        chiave = (vw, vh, ow, margine, tuple(righe), self.fase_rec if registrando else None)
+        chiave = (vw, vh, ow, margine, tuple(righe), self.fase_rec if registrando else None,
+                  dx, id(m_hud))
         if chiave == getattr(self, "hud_chiave", None) and ov is not None:
             return
         try:
@@ -7988,15 +8193,21 @@ class TV(object):
                     im.alpha_composite(col, (cx - ic.width // 2, cy - ic.height // 2))
                 d.text((x0 + bordo + lato_ic + vuoto - bb[0], y0 + (alta - (bb[3] - bb[1])) // 2 - bb[1]),
                        testo, font=font, fill=c + (255,))
-            pos = (max(0, round(vw * k) - im.width - round(margine * k)), round(10 * k))
+            pos = (max(0, round(dx * k) - im.width - round(margine * k)), round(10 * k))
             im = premoltiplica(im)
+            if ov is not None and getattr(self, "hud_player", None) is not m_hud:
+                try:
+                    self.hud_player.overlay_remove(OV_HUD)
+                except Exception:
+                    pass
+                ov = None
             if ov is None:
-                ov = mpv.ImageOverlay(self.mpv, OV_HUD, im, pos=pos)
+                ov = mpv.ImageOverlay(m_hud, OV_HUD, im, pos=pos)
             else:
                 ov.update(im, pos=pos)
         except Exception:
             return
-        self.hud_ov, self.hud_chiave = ov, chiave
+        self.hud_ov, self.hud_chiave, self.hud_player = ov, chiave, m_hud
 
     def clic_video(self):
         """Clic sul video: Pausa/Play; preserva comandi overlay e PiP."""
@@ -8028,6 +8239,8 @@ class TV(object):
         self.pausa()
 
     def schermo_intero(self, ev=None, acceso=None):
+        if getattr(self, "split", False):
+            self.chiudi_split()
         self.pieno = (not self.pieno) if acceso is None else acceso
         self.root.attributes("-fullscreen", self.pieno)
         if self.pieno and self.sidebar_aperte():
@@ -8183,8 +8396,8 @@ class TV(object):
             return
         try:
             vw, vh = self.video.winfo_width(), self.video.winfo_height()
-            ow = int(self.mpv.osd_width or 0)
-            oh = int(self.mpv.osd_height or 0)
+            ow = int(self.mpv1.osd_width or 0)
+            oh = int(self.mpv1.osd_height or 0)
         except Exception:
             return
         if vw < 50 or vh < 50 or ow <= 0 or oh <= 0:
@@ -8258,7 +8471,7 @@ class TV(object):
 
         if getattr(self, "ov_epg", None) is not None:
             try:
-                self.mpv.overlay_remove(OV_EPG)
+                self.mpv1.overlay_remove(OV_EPG)
             except Exception:
                 pass
             self.ov_epg = None
@@ -8320,7 +8533,7 @@ class TV(object):
         im = premoltiplica(im)
         try:
             if getattr(self, "ov", None) is None:
-                self.ov = mpv.ImageOverlay(self.mpv, OV_BARRA, im, pos=pos)
+                self.ov = mpv.ImageOverlay(self.mpv1, OV_BARRA, im, pos=pos)
             else:
                 self.ov.update(im, pos=pos)
         except Exception:
@@ -8404,14 +8617,14 @@ class TV(object):
             im = im.resize((max(1, round(mw * k)), max(1, round(mh * k))), Image.LANCZOS)
         im = premoltiplica(im)
         try:
-            self.ov_menu_img = mpv.ImageOverlay(self.mpv, OV_MENU, im, pos=(round(x * k), round(y * k)))
+            self.ov_menu_img = mpv.ImageOverlay(self.mpv1, OV_MENU, im, pos=(round(x * k), round(y * k)))
         except Exception:
             self.ov_menu_img = None
 
     def togli_menu_ov(self):
         if getattr(self, "ov_menu_img", None) is not None:
             try:
-                self.mpv.overlay_remove(OV_MENU)
+                self.mpv1.overlay_remove(OV_MENU)
             except Exception:
                 pass
         self.ov_menu_img, self.ov_menu_riquadro = None, None
@@ -8443,12 +8656,12 @@ class TV(object):
         ov = getattr(self, "ov", None)
         if ov is not None:
             try:
-                self.mpv.overlay_remove(OV_BARRA)
+                self.mpv1.overlay_remove(OV_BARRA)
             except Exception:
                 pass
         if getattr(self, "ov_epg", None) is not None:
             try:
-                self.mpv.overlay_remove(OV_EPG)
+                self.mpv1.overlay_remove(OV_EPG)
             except Exception:
                 pass
         self.ov_epg = None
@@ -9746,6 +9959,7 @@ class TV(object):
         self.icona_shuffle()
         self.icona_ripeti()
         self.disegna_fondo_barra()
+        self.bordi_schermi()
 
     def disegna_fondo_barra(self):
         """La sfumatura: dal colore (al 22%) sotto la progress al fondo
@@ -10070,8 +10284,8 @@ class TV(object):
             # Si parte solo con la finestra disegnata (all'avvio mpv non ha
             # ancora la sua misura); dopo 5 secondi si mostra lo sfondo e basta.
             try:
-                pronta = (int(self.mpv.osd_width or 0) >= 2
-                          and int(self.mpv.osd_height or 0) >= 2)
+                pronta = (int(self.mpv1.osd_width or 0) >= 2
+                          and int(self.mpv1.osd_height or 0) >= 2)
             except Exception:
                 pronta = False
             # La finestra deve essere davvero a schermo da un secondo:
@@ -10105,7 +10319,7 @@ class TV(object):
         if not HA_PIL or not os.path.isfile(self.sfondo_file):
             return
         try:
-            ow, oh = int(self.mpv.osd_width or 0), int(self.mpv.osd_height or 0)
+            ow, oh = int(self.mpv1.osd_width or 0), int(self.mpv1.osd_height or 0)
         except Exception:
             return
         if ow < 2 or oh < 2:
@@ -10125,7 +10339,7 @@ class TV(object):
             quadro = Image.blend(Image.new("RGBA", (ow, oh), (0, 0, 0, 255)), tela,
                                  max(0.0, min(1.0, k)))
             if getattr(self, "ov_sfondo", None) is None:
-                self.ov_sfondo = mpv.ImageOverlay(self.mpv, OV_SFONDO, quadro, pos=(0, 0))
+                self.ov_sfondo = mpv.ImageOverlay(self.mpv1, OV_SFONDO, quadro, pos=(0, 0))
             else:
                 self.ov_sfondo.update(quadro)
         except Exception:
@@ -10158,7 +10372,7 @@ class TV(object):
                 or getattr(self, "_dissolvi_att", False)):
             return
         try:
-            ow, oh = int(self.mpv.osd_width or 0), int(self.mpv.osd_height or 0)
+            ow, oh = int(self.mpv1.osd_width or 0), int(self.mpv1.osd_height or 0)
         except Exception:
             return
         if ow < 2 or oh < 2:
@@ -10178,7 +10392,7 @@ class TV(object):
                 if len(self._xvb_render_cache) >= 8:
                     self._xvb_render_cache.pop(next(iter(self._xvb_render_cache)))
                 self._xvb_render_cache[chiave] = tela
-            self.ov_sfondo = mpv.ImageOverlay(self.mpv, OV_SFONDO, tela, pos=(0, 0))
+            self.ov_sfondo = mpv.ImageOverlay(self.mpv1, OV_SFONDO, tela, pos=(0, 0))
             self.sfondo_misura = (ow, oh, self.sfondo_file)
         except Exception:
             pass
@@ -10187,7 +10401,7 @@ class TV(object):
         self.sfondo_misura = None
         if getattr(self, "ov_sfondo", None) is not None:
             try:
-                self.mpv.overlay_remove(OV_SFONDO)
+                self.mpv1.overlay_remove(OV_SFONDO)
             except Exception:
                 pass
             self.ov_sfondo = None
@@ -11553,7 +11767,12 @@ class TV(object):
             pass
         scrivi_config(self.cfg)
         try:
-            self.mpv.terminate()
+            if self.mpv2 is not None:
+                self.mpv2.terminate()
+        except Exception:
+            pass
+        try:
+            self.mpv1.terminate()
         except Exception:
             pass
         self.root.destroy()
