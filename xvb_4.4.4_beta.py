@@ -4827,6 +4827,7 @@ class TV(object):
                 self.iid_media[figlio] = k
 
         self.iid_file, self.iid_url = {}, {}
+        self.iid_youtube = {}
         if self.cfg.get("importati"):
             chiave = ("importati", None)
             iid = self.el_liste.insert(locale, "end", text=" %s (%d)" % (
@@ -4860,6 +4861,13 @@ class TV(object):
                                     ("youtube", "YouTube", img_youtube),
                                     (None, "Temporary", img_ti)):
             lista = self.url_di(cat)
+            if cat == "youtube":
+                iid = self.el_liste.insert(
+                    rete, "end", text=" YouTube", image=img,
+                    open=aperta_di("youtube", False))
+                self.iid_youtube[iid] = (
+                    "home", "https://www.youtube.com/feed/recommended", "Home")
+                continue
             if not lista:
                 continue
             chiave = ("url", cat)
@@ -5013,6 +5021,10 @@ class TV(object):
 
     def scegli_lista(self):
         s = self.el_liste.selection()
+        if s and s[0] in getattr(self, "iid_youtube", {}):
+            tipo, url, nome = self.iid_youtube[s[0]]
+            self.youtube_apri(tipo, url, nome)
+            return
         if s and s[0] in getattr(self, "iid_file", {}):
             self.suona_da_barra(("importati", None), self.iid_file[s[0]])
             return
@@ -5306,6 +5318,252 @@ class TV(object):
         self.cfg.setdefault("liste_url", {})[url] = nome.strip()
         scrivi_config(self.cfg)
         self.rifai_liste(scegli=url)
+
+    def youtube_cache_file(self, tipo, url):
+        import hashlib
+        import os
+        chiave = (tipo + "|" + url).encode("utf-8")
+        nome = hashlib.sha256(chiave).hexdigest() + ".json"
+        cartella = os.path.expanduser("~/.cache/xvb/youtube")
+        os.makedirs(cartella, exist_ok=True)
+        return os.path.join(cartella, nome)
+
+    def youtube_cache_leggi(self, tipo, url):
+        import json
+        import os
+        percorso = self.youtube_cache_file(tipo, url)
+        try:
+            with open(percorso, "r", encoding="utf-8") as f:
+                dati = json.load(f)
+            if isinstance(dati, dict) and "risultato" in dati:
+                return dati
+        except Exception:
+            pass
+        return None
+
+    def youtube_cache_scrivi(self, tipo, url, risultato):
+        import json
+        import os
+        import time
+        percorso = self.youtube_cache_file(tipo, url)
+        temporaneo = percorso + ".tmp"
+        dati = {
+            "timestamp": time.time(),
+            "risultato": risultato
+        }
+        try:
+            with open(temporaneo, "w", encoding="utf-8") as f:
+                json.dump(dati, f, ensure_ascii=False)
+            os.replace(temporaneo, percorso)
+        except Exception as ex:
+            log_yt("youtube cache errore: %r" % (ex,))
+            try:
+                os.remove(temporaneo)
+            except Exception:
+                pass
+
+    def youtube_json(self, url, cookie=True):
+        yt = percorso_ytdlp()
+        if not yt:
+            return {}
+        cmd = [
+            yt, "--flat-playlist", "--dump-single-json",
+            "--playlist-end", "30", "--no-warnings",
+            "--ignore-errors", "--socket-timeout", "15",
+            "--sleep-requests", "1"
+        ]
+        if cookie:
+            cmd += ["--cookies-from-browser", "firefox"]
+        cmd.append(url)
+        try:
+            r = subprocess.run(
+                cmd, capture_output=True, text=True,
+                timeout=60, env=ambiente_ytdlp()
+            )
+            if not r.stdout.strip():
+                return {}
+            return json.loads(r.stdout)
+        except Exception as ex:
+            log_yt("youtube_json errore: %r" % (ex,))
+            return {}
+
+    def youtube_converti_voci(self, dati):
+        video = []
+        for voce in dati.get("entries") or []:
+            ident = voce.get("id")
+            indirizzo = voce.get("url") or voce.get("webpage_url") or ""
+            if ident and (not indirizzo or not indirizzo.startswith("http")):
+                indirizzo = "https://www.youtube.com/watch?v=" + ident
+            if not indirizzo:
+                continue
+            titolo = voce.get("title") or ident or indirizzo
+            data = voce.get("upload_date") or ""
+            video.append((data, titolo, indirizzo, ident))
+        video.sort(key=lambda x: x[0], reverse=True)
+        return [
+            (titolo, indirizzo, ident)
+            for _data, titolo, indirizzo, ident in video
+        ]
+
+    def youtube_apri(self, tipo, url, nome):
+        import threading
+        import time
+
+        self._youtube_generation = getattr(self, "_youtube_generation", 0) + 1
+        generazione = self._youtube_generation
+
+        self.media_in_uso = ("youtube", url)
+        self.reg_in_uso = None
+        self._categoria_m3u_attiva = None
+
+        cache = self.youtube_cache_leggi(tipo, url)
+        if cache:
+            risultato = dict(cache["risultato"])
+            risultato["generazione"] = generazione
+            self.youtube_pronto(risultato)
+
+        durata = 900 if tipo == "home" else 1800
+        aggiorna = True
+        if cache:
+            try:
+                aggiorna = time.time() - float(cache["timestamp"]) >= durata
+            except Exception:
+                aggiorna = True
+
+        if not aggiorna:
+            return
+
+        self.scrivi(_("YouTube: updating cache..."))
+
+        if not hasattr(self, "_youtube_lock"):
+            self._youtube_lock = threading.Lock()
+            self._youtube_pending = None
+            self._youtube_thread = None
+
+        with self._youtube_lock:
+            self._youtube_pending = (
+                generazione, tipo, url, nome
+            )
+            if self._youtube_thread is None or not self._youtube_thread.is_alive():
+                self._youtube_thread = threading.Thread(
+                    target=self.youtube_lavora,
+                    name="XVB-YouTube",
+                    daemon=True
+                )
+                self._youtube_thread.start()
+
+    def youtube_lavora(self):
+        import time
+
+        while True:
+            with self._youtube_lock:
+                richiesta = self._youtube_pending
+                self._youtube_pending = None
+                if richiesta is None:
+                    self._youtube_thread = None
+                    return
+
+            generazione, tipo, url, nome = richiesta
+            risultato = {
+                "tipo": tipo,
+                "url": url,
+                "nome": nome,
+                "canali": [],
+                "iscrizioni": [],
+                "generazione": generazione
+            }
+
+            try:
+                if tipo == "home":
+                    dati = self.youtube_json(
+                        "https://www.youtube.com/feed/channels", True
+                    )
+                    for voce in dati.get("entries") or []:
+                        ident = voce.get("id") or ""
+                        titolo = voce.get("title") or voce.get("uploader") or ident
+                        indirizzo = voce.get("url") or voce.get("webpage_url") or ""
+                        if not indirizzo and ident:
+                            indirizzo = "https://www.youtube.com/channel/" + ident
+                        if indirizzo and not indirizzo.startswith("http"):
+                            if indirizzo.startswith("/"):
+                                indirizzo = "https://www.youtube.com" + indirizzo
+                            else:
+                                indirizzo = "https://www.youtube.com/channel/" + indirizzo
+                        if indirizzo:
+                            risultato["iscrizioni"].append((titolo, indirizzo))
+
+                    time.sleep(3)
+
+                    dati = self.youtube_json(
+                        "https://www.youtube.com/feed/recommended", True
+                    )
+                    if not dati.get("entries"):
+                        time.sleep(3)
+                        dati = self.youtube_json(
+                            "https://www.youtube.com/feed/recommended", False
+                        )
+                else:
+                    dati = self.youtube_json(url, True)
+                    if not dati.get("entries"):
+                        time.sleep(3)
+                        dati = self.youtube_json(url, False)
+
+                risultato["canali"] = self.youtube_converti_voci(dati)
+                self.youtube_cache_scrivi(tipo, url, risultato)
+
+                if generazione == getattr(self, "_youtube_generation", 0):
+                    self.root.after(
+                        0,
+                        lambda r=risultato: self.youtube_pronto(r)
+                    )
+
+            except Exception as ex:
+                log_yt("youtube_lavora errore: %r" % (ex,))
+
+    def youtube_pronto(self, risultato):
+        if risultato.get("generazione") != getattr(self, "_youtube_generation", 0):
+            return
+
+        tipo = risultato["tipo"]
+        root = next(
+            (iid for iid, dati in self.iid_youtube.items()
+             if dati[0] == "home" and self.el_liste.exists(iid)),
+            None
+        )
+
+        if root is None:
+            return
+
+        if tipo == "home":
+            for iid in self.el_liste.get_children(root):
+                self.el_liste.delete(iid)
+                self.iid_youtube.pop(iid, None)
+
+            immagine = self.el_liste.item(root, "image")
+            for titolo, indirizzo in risultato["iscrizioni"]:
+                iid = self.el_liste.insert(
+                    root, "end", text=" " + titolo, image=immagine
+                )
+                self.iid_youtube[iid] = (
+                    "channel", indirizzo.rstrip("/") + "/videos", titolo
+                )
+
+        self.canali = list(risultato["canali"])
+        self.ordine_vero = list(self.canali)
+        self.visti = list(self.canali)
+        self.media_in_uso = ("youtube", risultato["url"])
+        self.reg_in_uso = None
+        self._categoria_m3u_attiva = None
+        self.filtra()
+
+        if tipo == "home":
+            self.scrivi(_("YouTube Home - %d videos, %d subscriptions") % (
+                len(self.canali), len(risultato["iscrizioni"])
+            ))
+        else:
+            self.scrivi(_("YouTube - %s - %d videos") % (
+                risultato["nome"], len(self.canali)
+            ))
 
     def apri_youtube(self, url):
         """Un video YouTube: yt-dlp trova video e audio (al massimo 1080p) e
