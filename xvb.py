@@ -351,7 +351,7 @@ def avvia_mpris(app):
     threading.Thread(target=GLib.MainLoop().run, daemon=True).start()
     return m
 
-VERSIONE = "4.4.0"
+VERSIONE = "4.4.1"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"
@@ -2200,11 +2200,17 @@ def varianti(url):
     cosi' e' ffmpeg a leggere video e audio insieme e restano a tempo.
     Se il canale non e' un master torna una lista vuota: non c'e' niente
     da scegliere e si suona l'indirizzo com'e'."""
+    if "jmp2.uk" in url:
+        return []
     try:
         r = Request(url, headers={"User-Agent": UA})
 
 
-        testo = urlopen(r, timeout=10).read(262144).decode("utf-8", "ignore")
+        risposta = urlopen(r, timeout=10)
+        testo = risposta.read(262144).decode("utf-8", "ignore")
+        base_url = url
+        if "jmp2.uk" in url:
+            base_url = risposta.geturl()
     except Exception:
         return []
     if not testo.lstrip().startswith("#EXTM3U") or "#EXT-X-STREAM-INF" not in testo:
@@ -2216,7 +2222,7 @@ def varianti(url):
             g = re.search(r'GROUP-ID="([^"]*)"', riga)
             u = re.search(r'URI="([^"]*)"', riga)
             if g and u:
-                assoluto = urljoin(url, u.group(1))
+                assoluto = urljoin(base_url, u.group(1))
                 gruppi.setdefault(g.group(1), assoluto)
                 media.setdefault(g.group(1), []).append(
                     riga.replace('URI="%s"' % u.group(1), 'URI="%s"' % assoluto))
@@ -2244,7 +2250,7 @@ def varianti(url):
                                                  "vp0", "dvh", "mp4v"))
         elif riga and not riga.startswith("#"):
             if video:
-                indirizzo = urljoin(url, riga)
+                indirizzo = urljoin(base_url, riga)
                 master = "\n".join(testa + media.get(gruppo, []) +
                                    [inf, indirizzo]) + "\n"
                 fuori.append((banda, indirizzo, gruppi.get(gruppo), alta, master))
@@ -7236,6 +7242,12 @@ class TV(object):
         except Exception:
             pass
         self.applica_chiave(url)
+        try:
+            self.mpv["stream-lavf-o"] = ("" if "jmp2.uk" in url else
+                "reconnect=1,reconnect_streamed=1,reconnect_on_network_error=1,"
+                "reconnect_delay_max=10")
+        except Exception:
+            pass
         self.varianti = varianti(url)
         self.root.after(0, self.mostra_ingranaggio)
         self.affanni, self.tranquillo_da = [], time.time()
