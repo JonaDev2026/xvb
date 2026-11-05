@@ -1,0 +1,78 @@
+# Maintainer: Jonathan Sanfilippo
+pkgname=xvb
+pkgver=4.4.4
+pkgrel=1
+pkgdesc="Media player for videos, music, discs and IPTV"
+arch=('any')
+url="https://github.com/JonaDev2026/xvb"
+license=('MIT')
+depends=(
+  'python'
+  'tk'
+  'mpv'
+  'python-mpv'
+  'python-pillow'
+  'python-mutagen'
+  'librsvg'
+  'fontconfig'
+)
+optdepends=(
+  'ffmpeg: additional media conversion and processing support'
+  'python-dbus: MPRIS desktop media-player integration'
+  'python-gobject: MPRIS desktop media-player integration'
+  'tkdnd: drag-and-drop support'
+)
+source=("${pkgname}-${pkgver}.tar.gz::https://github.com/JonaDev2026/xvb/archive/refs/tags/v${pkgver}.tar.gz")
+sha256sums=('012380d6ef82e1aab0739641eeea8819f0a997cd71045c47c585ecad045b6435')
+
+build() {
+  cd "${srcdir}/xvb-${pkgver}"
+
+  grep -q "^VERSIONE = \"${pkgver}\"" xvb.py || {
+    error "The source version does not match pkgver=${pkgver}"
+    return 1
+  }
+
+  python -m py_compile xvb.py
+}
+
+package() {
+  cd "${srcdir}/xvb-${pkgver}"
+
+  install -dm755 "${pkgdir}/usr/lib/xvb"
+  install -dm755 "${pkgdir}/usr/bin"
+  install -dm755 "${pkgdir}/usr/share/applications"
+  install -dm755 "${pkgdir}/usr/share/icons/hicolor/512x512/apps"
+  install -dm755 "${pkgdir}/usr/share/pixmaps"
+  install -dm755 "${pkgdir}/usr/share/licenses/${pkgname}"
+
+  install -Dm644 xvb.py "${pkgdir}/usr/lib/xvb/xvb.py"
+  cp -a icone "${pkgdir}/usr/lib/xvb/"
+  cp -a fonts "${pkgdir}/usr/lib/xvb/"
+
+  install -Dm644 icon.png "${pkgdir}/usr/share/icons/hicolor/512x512/apps/xvb.png"
+  install -Dm644 icon.png "${pkgdir}/usr/share/pixmaps/xvb.png"
+  install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+
+  cat > "${pkgdir}/usr/bin/xvb" <<'EOF'
+#!/bin/sh
+exec /usr/bin/python /usr/lib/xvb/xvb.py "$@"
+EOF
+  chmod 755 "${pkgdir}/usr/bin/xvb"
+
+  cat > "${pkgdir}/usr/share/applications/xvb.desktop" <<'EOF'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=XVB Player
+Comment=Media player for videos, music, discs and IPTV
+Exec=xvb %F
+Icon=xvb
+Terminal=false
+Categories=AudioVideo;Video;Player;TV;
+Keywords=media;player;video;audio;iptv;mpv;
+StartupNotify=true
+StartupWMClass=Xvb
+MimeType=video/mp4;video/x-matroska;video/webm;video/x-msvideo;video/quicktime;video/mpeg;video/mp2t;video/x-flv;video/x-ms-wmv;video/ogg;video/x-m4v;audio/mpeg;audio/flac;audio/x-flac;audio/ogg;audio/x-vorbis+ogg;audio/opus;audio/mp4;audio/x-m4a;audio/aac;audio/x-wav;audio/wav;audio/x-ms-wma;audio/x-ape;audio/x-mpegurl;audio/mpegurl;application/vnd.apple.mpegurl;
+EOF
+}
