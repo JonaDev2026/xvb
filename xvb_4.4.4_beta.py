@@ -6833,54 +6833,78 @@ class TV(object):
         meta = self.__dict__.setdefault("_youtube_meta", {})
         if url in meta:
             return meta[url]
-        coda = self.__dict__.setdefault("_youtube_coda", set())
-        if url in coda:
+
+        lock = self.__dict__.setdefault("_youtube_img_lock", threading.Lock())
+        pending = self.__dict__.setdefault("_youtube_img_pending", set())
+        queue = self.__dict__.setdefault("_youtube_img_queue", [])
+        if url in pending:
             return None
-        coda.add(url)
+
+        with lock:
+            if url in meta or url in pending:
+                return meta.get(url)
+            pending.add(url)
+            queue.append(url)
+            if self.__dict__.get("_youtube_img_worker"):
+                return None
+            self._youtube_img_worker = True
 
         def lavora():
-            dati = {}
-            try:
-                yt = percorso_ytdlp()
-                if yt:
-                    r = subprocess.run(
-                        [yt, "--dump-single-json", "--skip-download",
-                         "--no-warnings", "--no-playlist", url],
-                        capture_output=True, text=True, timeout=60,
-                        env=ambiente_ytdlp())
-                    if r.returncode == 0 and r.stdout.strip():
-                        j = json.loads(r.stdout)
-                        dati["thumbnail"] = j.get("thumbnail")
-                        favicon = j.get("channel_favicon")
-                        if favicon:
-                            os.makedirs(CACHE_LOGHI, exist_ok=True)
-                            f = os.path.join(CACHE_LOGHI,
-                                hashlib.md5(url.encode("utf-8")).hexdigest() + ".youtube")
-                            if not os.path.isfile(f) or os.path.getsize(f) == 0:
-                                try:
-                                    b = urlopen(Request(favicon, headers={"User-Agent": UA}),
-                                                timeout=15).read(2 * 1024 * 1024)
-                                    with open(f, "wb") as o:
-                                        o.write(b)
-                                except Exception:
-                                    f = None
-                            if f and os.path.isfile(f) and os.path.getsize(f):
-                                dati["logo"] = f
-            except Exception as ex:
-                log_yt("immagini YouTube: %r" % (ex,))
+            while True:
+                with lock:
+                    if not queue:
+                        self._youtube_img_worker = False
+                        return
+                    corrente = queue.pop(0)
 
-            def fine():
-                coda.discard(url)
-                meta[url] = dati
-                self.loghi_img.pop(url, None)
-                self.poster_scaricato()
+                dati = {}
+                try:
+                    yt = percorso_ytdlp()
+                    if yt:
+                        r = subprocess.run(
+                            [yt, "--dump-single-json", "--skip-download",
+                             "--no-warnings", "--no-playlist", corrente],
+                            capture_output=True, text=True, timeout=60,
+                            env=ambiente_ytdlp())
+                        if r.returncode == 0 and r.stdout.strip():
+                            j = json.loads(r.stdout)
+                            dati["thumbnail"] = j.get("thumbnail")
+                            favicon = j.get("channel_favicon")
+                            if favicon:
+                                os.makedirs(CACHE_LOGHI, exist_ok=True)
+                                f = os.path.join(
+                                    CACHE_LOGHI,
+                                    hashlib.md5(favicon.encode("utf-8")).hexdigest()
+                                    + ".youtube")
+                                if not os.path.isfile(f) or os.path.getsize(f) == 0:
+                                    try:
+                                        b = urlopen(
+                                            Request(favicon, headers={"User-Agent": UA}),
+                                            timeout=15).read(2 * 1024 * 1024)
+                                        with open(f, "wb") as o:
+                                            o.write(b)
+                                    except Exception:
+                                        f = None
+                                if f and os.path.isfile(f) and os.path.getsize(f):
+                                    dati["logo"] = f
+                except Exception as ex:
+                    log_yt("immagini YouTube: %r" % (ex,))
 
-            try:
-                self.root.after(0, fine)
-            except Exception:
-                coda.discard(url)
+                with lock:
+                    meta[corrente] = dati
+                    pending.discard(corrente)
 
-        threading.Thread(target=lavora, daemon=True).start()
+                try:
+                    self.root.after(0, lambda u=corrente: (
+                        self.loghi_img.pop(u, None),
+                        self.poster_scaricato()
+                    ))
+                except Exception:
+                    pass
+
+        threading.Thread(
+            target=lavora, daemon=True, name="xvb-youtube-images"
+        ).start()
         return None
 
     def poster_di(self, iid, w, h):
