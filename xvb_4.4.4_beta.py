@@ -1274,7 +1274,8 @@ def colore_dal_logo(url_logo):
         return None
     import colorsys
     os.makedirs(CACHE_LOGHI, exist_ok=True)
-    f = os.path.join(CACHE_LOGHI, hashlib.md5(url_logo.encode()).hexdigest())
+    f = url_logo if os.path.isabs(url_logo) else os.path.join(
+        CACHE_LOGHI, hashlib.md5(url_logo.encode()).hexdigest())
     if not os.path.isfile(f) or os.path.getsize(f) == 0:
         r = Request(url_logo, headers={"User-Agent": UA})
         dati = svg_in_png(urlopen(r, timeout=10).read())
@@ -1379,6 +1380,35 @@ def carica_logo(f, larga, alta, dentro=None, margine=0, quadrata=False):
         k = max(1, int(round(max(im.height() / float(alta),
                                  im.width() / float(larga)))))
         return im.subsample(k, k) if k > 1 else im
+    except Exception:
+        return None
+
+
+def cid_youtube(url):
+    m = re.search(r"/channel/(UC[\w-]+)", url or "")
+    return m.group(1) if m else None
+
+
+def avatar_tondo(f, lato, larga=None, alta=None):
+    """L'avatar di un canale: quadrato al centro, tondo a bordo liscio, in un
+    riquadro larga x alta (di default lato x lato)."""
+    try:
+        if not HA_PIL:
+            return None
+        from PIL import ImageDraw
+        larga, alta = larga or lato, alta or lato
+        im = Image.open(f).convert("RGBA")
+        k = min(im.size)
+        x0, y0 = (im.width - k) // 2, (im.height - k) // 2
+        S = 4
+        im = im.crop((x0, y0, x0 + k, y0 + k)).resize((lato * S, lato * S), Image.LANCZOS)
+        m = Image.new("L", (lato * S, lato * S), 0)
+        ImageDraw.Draw(m).ellipse([0, 0, lato * S - 1, lato * S - 1], fill=255)
+        im.putalpha(m)
+        im = im.resize((lato, lato), Image.LANCZOS)
+        box = Image.new("RGBA", (larga, alta), (0, 0, 0, 0))
+        box.alpha_composite(im, ((larga - lato) // 2, (alta - lato) // 2))
+        return ImageTk.PhotoImage(box)
     except Exception:
         return None
 
@@ -2189,7 +2219,10 @@ def leggi_epg(f):
     return nomi, programmi
 
 
-YT_FORMATO = "bv*[height<=1080][vcodec!^=av01]+ba/b[height<=1080]/b"
+YT_FORMATO = ("bv*[height<=1080][fps<=?30][vcodec!^=av01]+ba/"
+              "bv*[height<=1080][vcodec!^=av01]+ba/b[height<=1080]/b")
+YT_FORMATO_SPLIT = ("bv*[height<=720][fps<=?30][vcodec!^=av01]+ba/"
+                    "bv*[height<=720][vcodec!^=av01]+ba/b[height<=720]/b")
 
 
 def log_yt(t):
@@ -2209,16 +2242,19 @@ def e_youtube(url):
 
 def percorso_ytdlp():
     import shutil
-    for p in (shutil.which("yt-dlp"), os.path.join(CASA, ".local", "bin", "yt-dlp")):
-        if p and os.path.isfile(p):
-            return p
+    p = shutil.which("yt-dlp")
+    if p and os.path.isfile(p):
+        return p
     return None
 
 
 def ambiente_ytdlp():
-    """~/.local/bin in testa al PATH: ci sta deno, che yt-dlp cerca da solo."""
     e = dict(os.environ)
-    e["PATH"] = os.path.join(CASA, ".local", "bin") + os.pathsep + e.get("PATH", "")
+    percorsi = [
+        os.path.join(QUI, "bin"),
+        e.get("PATH", "")
+    ]
+    e["PATH"] = os.pathsep.join(p for p in percorsi if p)
     return e
 
 
@@ -5406,12 +5442,52 @@ class TV(object):
             for _data, titolo, indirizzo, ident in video
         ]
 
+    def youtube_meta(self, dati, nome=""):
+        """Per ogni video della pagina: canale e miniatura, che yt-dlp da' gia'
+        negli stessi dati: niente richieste in piu'."""
+        meta = {}
+        base = dati.get("channel_id") or dati.get("uploader_id") or ""
+        base_nome = dati.get("channel") or dati.get("uploader") or nome or ""
+        for voce in dati.get("entries") or []:
+            ident = voce.get("id")
+            u = voce.get("url") or voce.get("webpage_url") or ""
+            if ident and (not u or not u.startswith("http")):
+                u = "https://www.youtube.com/watch?v=" + ident
+            if not u:
+                continue
+            th = [t.get("url") for t in (voce.get("thumbnails") or []) if t.get("url")]
+            meta[u] = [voce.get("channel_id") or base, th[-1] if th else "",
+                       voce.get("channel") or voce.get("uploader") or base_nome,
+                       voce.get("duration") or 0]
+        return meta
+
+    def youtube_pulisci_cache(self):
+        """Una volta per sessione: via le pagine YouTube non riaperte da una
+        settimana e gli avatar vecchi di un mese."""
+        if self.__dict__.get("_yt_pulito"):
+            return
+        self._yt_pulito = True
+
+        def lavoro():
+            ora = time.time()
+            for cart, giorni, ext in ((os.path.expanduser("~/.cache/xvb/youtube"), 7, ".json"),
+                                      (CACHE_LOGHI, 30, ".yta")):
+                try:
+                    for n in os.listdir(cart):
+                        p = os.path.join(cart, n)
+                        if n.endswith(ext) and ora - os.path.getmtime(p) > giorni * 86400:
+                            os.remove(p)
+                except Exception:
+                    pass
+        threading.Thread(target=lavoro, daemon=True, name="xvb-yt-pulizia").start()
+
     def youtube_apri(self, tipo, url, nome):
         import threading
         import time
 
         self._youtube_generation = getattr(self, "_youtube_generation", 0) + 1
         generazione = self._youtube_generation
+        self.youtube_pulisci_cache()
 
         self.media_in_uso = ("youtube", url)
         self.reg_in_uso = None
@@ -5471,6 +5547,8 @@ class TV(object):
                 "nome": nome,
                 "canali": [],
                 "iscrizioni": [],
+                "avatar": {},
+                "meta": {},
                 "generazione": generazione
             }
 
@@ -5492,6 +5570,10 @@ class TV(object):
                                 indirizzo = "https://www.youtube.com/channel/" + indirizzo
                         if indirizzo:
                             risultato["iscrizioni"].append((titolo, indirizzo))
+                        mie = [t.get("url") for t in (voce.get("thumbnails") or []) if t.get("url")]
+                        ca = voce.get("channel_id") or ident
+                        if mie and ca:
+                            risultato["avatar"][ca] = mie[-1]
 
                     time.sleep(3)
 
@@ -5510,6 +5592,13 @@ class TV(object):
                         dati = self.youtube_json(url, False)
 
                 risultato["canali"] = self.youtube_converti_voci(dati)
+                risultato["meta"] = self.youtube_meta(dati, nome if tipo != "home" else "")
+                if tipo != "home":
+                    cidc = dati.get("channel_id") or dati.get("uploader_id")
+                    av = [t.get("url") for t in (dati.get("thumbnails") or [])
+                          if "avatar" in str(t.get("id", "")) and t.get("url")]
+                    if cidc and av:
+                        risultato["avatar"][cidc] = av[-1]
                 self.youtube_cache_scrivi(tipo, url, risultato)
 
                 if generazione == getattr(self, "_youtube_generation", 0):
@@ -5526,6 +5615,17 @@ class TV(object):
             return
 
         tipo = risultato["tipo"]
+        voci = self.__dict__.setdefault("_youtube_voci", {})
+        if len(voci) > 3000:
+            voci.clear()
+        meta = {}
+        for u, v in (risultato.get("meta") or {}).items():
+            v = list(v) + [""] * (4 - len(v))
+            if tipo != "home" and not v[2]:
+                v[2] = risultato.get("nome") or ""
+            meta[u] = v
+        voci.update(meta)
+        self.__dict__.setdefault("_yt_avatar_url", {}).update(risultato.get("avatar") or {})
         root = next(
             (iid for iid, dati in self.iid_youtube.items()
              if dati[0] == "home" and self.el_liste.exists(iid)),
@@ -5541,15 +5641,19 @@ class TV(object):
                 self.iid_youtube.pop(iid, None)
 
             immagine = self.el_liste.item(root, "image")
+            self._yt_iid_cid = {}
             for titolo, indirizzo in risultato["iscrizioni"]:
+                cid = cid_youtube(indirizzo)
                 iid = self.el_liste.insert(
-                    root, "end", text=" " + titolo, image=immagine,
+                    root, "end", text=" " + titolo,
+                    image=self.youtube_img_albero(cid) or immagine,
                     tags=("zebra",) #cazzo
 
                 )
                 self.iid_youtube[iid] = (
                     "channel", indirizzo.rstrip("/") + "/videos", titolo
                 )
+                self._yt_iid_cid[iid] = cid
 
         self.canali = list(risultato["canali"])
         self.ordine_vero = list(self.canali)
@@ -5558,6 +5662,7 @@ class TV(object):
         self.reg_in_uso = None
         self._categoria_m3u_attiva = None
         self.filtra()
+        self.root.after(300, self.youtube_colori)
 
         if tipo == "home":
             self.scrivi(_("YouTube Home - %d videos, %d subscriptions") % (
@@ -5573,6 +5678,9 @@ class TV(object):
         mpv li suona insieme. Solo per questi link, gli altri non cambiano."""
         log_yt("apri_youtube start")
         m, n = self.mpv, self._apri_n
+        self.yt_in_onda = url
+        da = float(self.cfg.get("posizioni", {}).get(url, 0.0) or 0.0)
+        self.riprendi_da = da if da >= 10 else 0.0
         self.varianti, self.quale = [], -1
         self.root.after(0, self.mostra_ingranaggio)
         self.affanni, self.tranquillo_da = [], time.time()
@@ -5582,7 +5690,9 @@ class TV(object):
         yt, righe = percorso_ytdlp(), []
         if yt:
             try:
-                r = subprocess.run([yt, "-g", "--no-playlist", "-f", YT_FORMATO, url],
+                r = subprocess.run([yt, "-g", "--no-playlist", "-f",
+                                   (YT_FORMATO_SPLIT if getattr(self, "split", False)
+                                    else YT_FORMATO), url],
                                    capture_output=True, text=True, timeout=60,
                                    env=ambiente_ytdlp())
                 righe = [x.strip() for x in r.stdout.splitlines() if x.strip().startswith("http")]
@@ -6829,6 +6939,132 @@ class TV(object):
         self.applica_poster()
 
     def youtube_immagini(self, url):
+        voce = self.__dict__.get("_youtube_voci", {}).get(url)
+        if not voce:
+            return self.youtube_immagini_lento(url)
+        dati = {"thumbnail": voce[1] or None}
+        f = self.youtube_avatar_file(voce[0])
+        if f:
+            dati["logo"] = f
+        return dati
+
+    def youtube_avatar_file(self, cid):
+        """Il file dell'avatar di un canale, se e' gia' in cache su disco;
+        se manca parte il download (al massimo 2 thread) e per ora None."""
+        url = self.__dict__.get("_yt_avatar_url", {}).get(cid)
+        if not url:
+            return None
+        if url.startswith("//"):
+            url = "https:" + url
+        f = os.path.join(CACHE_LOGHI, hashlib.md5(url.encode()).hexdigest() + ".yta")
+        if os.path.isfile(f) and os.path.getsize(f) > 0:
+            return f
+        import queue
+        st = self.__dict__.setdefault("_yt_av", {"coda": queue.Queue(), "visti": set(),
+                                                 "thread": 0, "lock": threading.Lock()})
+        with st["lock"]:
+            if f in st["visti"]:
+                return None
+            st["visti"].add(f)
+            st["coda"].put((url, f))
+            avvia = st["thread"] < 2
+            if avvia:
+                st["thread"] += 1
+        if avvia:
+            threading.Thread(target=self._yt_av_lavora, daemon=True, name="xvb-yt-avatar").start()
+        return None
+
+    def _yt_av_lavora(self):
+        st, fatti = self._yt_av, 0
+        while True:
+            try:
+                url, f = st["coda"].get(timeout=3)
+            except Exception:
+                with st["lock"]:
+                    st["thread"] -= 1
+                return
+            try:
+                os.makedirs(CACHE_LOGHI, exist_ok=True)
+                b = urlopen(Request(url, headers={"User-Agent": UA}), timeout=15).read(512 * 1024)
+                if b:
+                    with open(f + ".tmp", "wb") as o:
+                        o.write(b)
+                    os.replace(f + ".tmp", f)
+            except Exception as ex:
+                log_yt("avatar: %r" % (ex,))
+            fatti += 1
+            if fatti % 8 == 0 or st["coda"].empty():
+                try:
+                    self.root.after(0, self.youtube_avatar_pronti)
+                except Exception:
+                    return
+
+    def youtube_img_albero(self, cid):
+        if not cid or not HA_PIL:
+            return None
+        f = self.youtube_avatar_file(cid)
+        if not f:
+            return None
+        tk_ = self.__dict__.setdefault("_yt_tk", {})
+        if f not in tk_:
+            tk_[f] = avatar_tondo(f, PUNTO)
+        return tk_[f]
+
+    def youtube_avatar_pronti(self):
+        """Sono arrivati degli avatar: albero a destra e loghi a sinistra."""
+        for iid, cid in list(self.__dict__.get("_yt_iid_cid", {}).items()):
+            try:
+                if self.el_liste.exists(iid):
+                    img = self.youtube_img_albero(cid)
+                    if img is not None:
+                        self.el_liste.item(iid, image=img)
+            except Exception:
+                pass
+        self.loghi_img = {k: v for k, v in self.loghi_img.items() if not e_youtube(k)}
+        self.poster_scaricato()
+        self.youtube_colori()
+
+    def youtube_colori(self):
+        """In un thread: il colore di ogni canale YouTube dal suo avatar, come
+        l'IPTV dal logo; poi i pallini e la barra si aggiornano."""
+        if self.__dict__.get("_yt_col_attivo"):
+            return
+        da_fare = {}
+        for url, v in list(self.__dict__.get("_youtube_voci", {}).items()):
+            cid = v[0]
+            if cid and ("yt:" + cid) not in self.colori and cid not in da_fare:
+                f = self.youtube_avatar_file(cid)
+                if f:
+                    da_fare[cid] = f
+        if not da_fare:
+            return
+        self._yt_col_attivo = True
+
+        def lavoro():
+            nuovi = {}
+            for cid, f in da_fare.items():
+                try:
+                    c = colore_dal_logo(f)
+                except Exception:
+                    c = None
+                self.colori["yt:" + cid] = c or ""
+                if c:
+                    nuovi[cid] = c
+            scrivi_colori(self.colori)
+            try:
+                self.root.after(0, lambda: self._youtube_colori_pronti(nuovi))
+            except Exception:
+                self._yt_col_attivo = False
+        threading.Thread(target=lavoro, daemon=True, name="xvb-yt-colori").start()
+
+    def _youtube_colori_pronti(self, nuovi):
+        self._yt_col_attivo = False
+        for url, v in list(self.__dict__.get("_youtube_voci", {}).items()):
+            if v[0] in nuovi and any(c[1] == url for c in self.visti):
+                self.aggiorna_pallino(url, nuovi[v[0]])
+        self.youtube_colori()
+
+    def youtube_immagini_lento(self, url):
         import json
         meta = self.__dict__.setdefault("_youtube_meta", {})
         if url in meta:
@@ -7018,6 +7254,13 @@ class TV(object):
             nome, url, ide = self.visti[int(iid)]
         except (ValueError, IndexError):
             return None
+        if e_youtube(url):
+            pos = self.cfg.get("posizioni", {}).get(url)
+            v = self.__dict__.get("_youtube_voci", {}).get(url)
+            dur = self.cfg.get("durate", {}).get(url) or (v[3] if v and len(v) > 3 else 0)
+            if not pos or not dur:
+                return None
+            return max(0.0, min(1.0, pos / float(dur)))
         if self.media_in_uso or self.reg_in_uso or os.path.isabs(url):
             if not os.path.isabs(url):
                 return None
@@ -7058,6 +7301,10 @@ class TV(object):
         """Titolo e sottotitolo di un file. Film: il titolo di TMDB e sotto
         '2023 · Drama · ★ 7.8' (senza info, l'anno dal nome). Musica: il
         titolo e sotto 'Artista · Album · 1975'."""
+        if e_youtube(f):
+            v = self.__dict__.get("_youtube_voci", {}).get(f)
+            canale = v[2] if v and len(v) > 2 else ""
+            return (canale or nome), (nome if canale else "")
         if e_cd(f):
             return nome, _("Audio CD")
         if f.startswith("dvd://"):
@@ -7181,7 +7428,8 @@ class TV(object):
         (la cartella in cui sta). Un file (musica, video) il suo posto
         nell'elenco, sulla scala dei file."""
         if e_youtube(url):
-            return PALLINI[0] #colore yt
+            v = self.__dict__.get("_youtube_voci", {}).get(url)
+            return (self.colori.get("yt:%s" % v[0]) if v else None) or PALLINI[0]
         if url.startswith(REGISTRAZIONI + os.sep):
             return colore_di(os.path.basename(os.path.dirname(url)))
         if url in self.posto_file:
@@ -7233,7 +7481,7 @@ class TV(object):
                     if os.path.isfile(os.path.join(QUI, "icone", "disco.png")) else disco(TESTO, lato=LOGO_A)
             return self.img_liste["disco_grande"]
 
-        in_url = bool(self.media_in_uso and self.media_in_uso[0] == "url")
+        in_url = bool(self.media_in_uso and self.media_in_uso[0] in ("url", "youtube"))
         if not (os.path.isabs(url) or in_url) or not self.icona_file or not HA_PIL:
             return None
         if getattr(self, "icona_colonna", None) is None:
@@ -7251,6 +7499,10 @@ class TV(object):
             f = dati.get("logo") if dati else None
             if not f or not os.path.isfile(f):
                 return None
+            im = avatar_tondo(f, LOGO_A - 8, LOGO_L, LOGO_A)
+            if im is not None:
+                self.loghi_img[url] = im
+            return im
         elif os.path.isabs(url):
             f = self.anteprime.get(url)
             if not f:
@@ -7628,6 +7880,7 @@ class TV(object):
         self.apri(nome, url)
 
     def apri(self, nome, url, ide=None):
+        self.yt_in_onda = None
         log_yt("apri %s" % url[:80])
         self.fermato = None
         self.faccia(self.b_pausa, "pausa", _("Pause"))
@@ -8240,10 +8493,10 @@ class TV(object):
     STATO_SCHERMO = ("nome", "nome_in_onda", "varianti", "quale", "file_in_onda",
                      "ide_in_onda", "manuale", "affanni", "tranquillo_da",
                      "ultima_discesa", "storia", "in_calo", "da_riallineare",
-                     "suonato_da", "_lista_in_onda", "colore_barra")
+                     "suonato_da", "_lista_in_onda", "colore_barra", "yt_in_onda")
     VUOTO_SCHERMO = {"nome": None, "nome_in_onda": None, "varianti": [], "quale": -1,
                      "file_in_onda": None, "ide_in_onda": None,
-                     "colore_barra": None}
+                     "colore_barra": None, "yt_in_onda": None}
 
     def split_si_no(self, ev=None):
         if self.split:
@@ -9171,7 +9424,7 @@ class TV(object):
             x0, larga = self.ov_posti[self.volume]
             k = (x - x0 - 10) / float(max(1, larga - 20))
             self.volume.set(int(round(max(0.0, min(1.0, k)) * 100)))
-        elif self.ov_trascina == "linea" and self.file_in_onda:
+        elif self.ov_trascina == "linea" and (self.file_in_onda or getattr(self, "yt_in_onda", None)):
             k = max(0.0, min(1.0, x / float(max(1, self.video.winfo_width()))))
             if abs(k - getattr(self, "ov_ultimo_salto", -1)) > 0.002:
                 self.ov_ultimo_salto = k
@@ -9205,7 +9458,7 @@ class TV(object):
         self.mosso()
         self.ov_trascina = "linea" if tipo == "linea" else ("volume" if w is self.volume else None)
         if tipo == "linea":
-            if self.file_in_onda:
+            if self.file_in_onda or getattr(self, "yt_in_onda", None):
                 k = max(0.0, min(1.0, x / float(max(1, self.video.winfo_width()))))
                 try:
                     self.mpv.command("seek", "%.2f" % (k * 100), "absolute-percent")
@@ -10436,6 +10689,20 @@ class TV(object):
                         self.segna_posizione(pos, dur)
             except Exception:
                 parte = 0.0
+        elif getattr(self, "yt_in_onda", None):
+            try:
+                pos, dur = float(self.mpv.time_pos or 0.0), float(self.mpv.duration or 0.0)
+                senza_ora = dur > 0
+                parte = max(0.0, min(1.0, pos / dur)) if dur > 0 else 0.0
+                if dur > 0:
+                    self.et_ora.config(text="  -  %s / %s" % (ore_min_sec(pos), ore_min_sec(dur)))
+                    if self.riprendi_da and pos > 0:
+                        da, self.riprendi_da = self.riprendi_da, 0.0
+                        self.mpv.command("seek", "%.1f" % da, "absolute")
+                    elif not self.riprendi_da and pos > 3:
+                        self.segna_posizione(pos, dur)
+            except Exception:
+                parte = 0.0
         elif self.cfg.get("canale") and not self.sfondo_su:
             p = self.programma()
             if p:
@@ -10923,7 +11190,7 @@ class TV(object):
         ogni dieci secondi e alla chiusura); a meno di venti secondi dalla
         fine si dimentica, cosi' la volta dopo riparte da capo."""
         p = self.cfg.setdefault("posizioni", {})
-        f = self.file_in_onda
+        f = self.file_in_onda or getattr(self, "yt_in_onda", None)
         if dur - pos < 20:
             p.pop(f, None)
             self.cfg.get("durate", {}).pop(f, None)
@@ -10941,7 +11208,7 @@ class TV(object):
             scrivi_config(self.cfg)
 
     def vai_a(self, ev):
-        if not self.file_in_onda:
+        if not (self.file_in_onda or getattr(self, "yt_in_onda", None)):
             return
         w = max(1, self.linea.winfo_width())
         k = max(0.0, min(1.0, ev.x / float(w)))
@@ -10955,7 +11222,7 @@ class TV(object):
         Nei file sempre; nei canali solo se mpv dice che il flusso si puo'
         scorrere (dentro al buffer o alla finestra HLS)."""
         try:
-            if not self.file_in_onda and not self.mpv.seekable:
+            if not (self.file_in_onda or getattr(self, "yt_in_onda", None)) and not self.mpv.seekable:
                 return
             self.mpv.command("seek", str(secondi), "relative")
         except Exception:
