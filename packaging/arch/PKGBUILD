@@ -33,7 +33,7 @@ build() {
     return 1
   }
 
-  python -m py_compile xvb.py
+  python -m py_compile xvb.py traduzioni.py
 }
 
 package() {
@@ -47,6 +47,7 @@ package() {
   install -dm755 "${pkgdir}/usr/share/licenses/${pkgname}"
 
   install -Dm644 xvb.py "${pkgdir}/usr/lib/xvb/xvb.py"
+  install -Dm644 traduzioni.py "${pkgdir}/usr/lib/xvb/traduzioni.py"
   cp -a icone "${pkgdir}/usr/lib/xvb/"
   cp -a fonts "${pkgdir}/usr/lib/xvb/"
 
