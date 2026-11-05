@@ -5410,7 +5410,7 @@ class TV(object):
             "--sleep-requests", "1"
         ]
         if cookie:
-            cmd += ["--cookies-from-browser", "firefox"]
+            cmd += ["--cookies-from-browser", "all"]
         cmd.append(url)
         try:
             r = subprocess.run(
