@@ -351,7 +351,7 @@ def avvia_mpris(app):
     threading.Thread(target=GLib.MainLoop().run, daemon=True).start()
     return m
 
-VERSIONE = "4.4.3"
+VERSIONE = "4.4.4"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"
@@ -3772,7 +3772,7 @@ class TV(object):
             None,
             (_("Screenshot"), self.istantanea)])
         self.menu("Audio", lambda: [
-            (("*  " if t["selected"] else "   ") + _("Track: %s") % self.nome_traccia(t),
+            (("*  " if t["selected"] else "   ") + _("Track: %s") % corto(self.nome_traccia(t), 30),
              lambda i=t["id"]: self.metti_traccia("aid", i))
             for t in self.tracce("audio")] + ([None] if self.tracce("audio") else []) + [
             (("*  " if not any(t["selected"] for t in self.tracce("sub")) else "   ") + _("Subtitles off"),
