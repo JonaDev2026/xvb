@@ -3088,7 +3088,7 @@ class Elenco(tk.Text):
         e = tk.Label(self, bd=0, highlightthickness=0, bg=PANNELLO, fg=GRIGIO,
                      cursor="arrow", font=(CARATTERE, -SOTTO_PX), padx=6)
         e.image = None
-        e.bind("<Button-1>", lambda ev, w=e: self.clic_y(w.winfo_y() + w.winfo_height() + 6))
+        e.bind("<Button-1>", lambda ev, w=e: self.clic_y(w.winfo_y() + w.winfo_height() + 6, attiva=True))
         e.bind("<Double-Button-1>", lambda ev: self.doppio() if self.doppio else None)
         e.bind("<Button-4>", lambda ev: self.yview_scroll(-3, "units"))
         e.bind("<Button-5>", lambda ev: self.yview_scroll(3, "units"))
@@ -3991,6 +3991,7 @@ class TV(object):
             getattr(self, "col_mouse", False) and self.scegli_lista(),
             self.non_sul_verde(self.el_liste, "usata"),
             getattr(self, "col_mouse", False) and self.el_liste.selection() and
+            self.el_liste.selection()[0] not in getattr(self, "iid_youtube", {}) and
             self.root.after_idle(lambda: self.el_liste.selection_remove(*self.el_liste.selection()))))
 
 
@@ -5542,7 +5543,9 @@ class TV(object):
             immagine = self.el_liste.item(root, "image")
             for titolo, indirizzo in risultato["iscrizioni"]:
                 iid = self.el_liste.insert(
-                    root, "end", text=" " + titolo, image=immagine
+                    root, "end", text=" " + titolo, image=immagine,
+                    tags=("zebra",) #cazzo
+
                 )
                 self.iid_youtube[iid] = (
                     "channel", indirizzo.rstrip("/") + "/videos", titolo
