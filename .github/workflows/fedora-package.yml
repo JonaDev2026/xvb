@@ -1,0 +1,130 @@
+name: Build Fedora RPM package
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to package"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+          path: source
+
+      - name: Validate version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${RELEASE_TAG#v}"
+          SOURCE_VERSION="$(sed -n 's/^VERSIONE = "\(.*\)"/\1/p' source/xvb.py | head -n 1)"
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9.-]+)?$ ]]
+          [[ "$VERSION" == "$SOURCE_VERSION" ]] || { echo "::error::Tag and source versions differ"; exit 1; }
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build RPM in Fedora
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          docker run --rm -v "$GITHUB_WORKSPACE/source:/src" -v "$GITHUB_WORKSPACE/out:/out" fedora:latest bash -euc '
+            dnf -y install rpm-build tar gzip
+            TOP=/tmp/rpmbuild
+            mkdir -p "$TOP"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
+            VERSION="$(sed -n "s/^VERSIONE = \"\(.*\)\"/\1/p" /src/xvb.py | head -n 1)"
+            STAGE="/tmp/xvb-$VERSION"
+            mkdir -p "$STAGE"
+            cp /src/xvb.py /src/traduzioni.py /src/icon.png "$STAGE/"
+            cp -a /src/icone /src/fonts "$STAGE/"
+            mkdir -p "$STAGE/usr/bin" "$STAGE/usr/share/applications" "$STAGE/usr/share/icons/hicolor/512x512/apps"
+            cat > "$STAGE/usr/bin/xvb" << "EOF"
+          #!/bin/sh
+          exec /usr/bin/python3 /usr/lib/xvb/xvb.py "$@"
+          EOF
+            chmod 755 "$STAGE/usr/bin/xvb"
+            cat > "$STAGE/usr/share/applications/xvb.desktop" << "EOF"
+          [Desktop Entry]
+          Version=1.0
+          Type=Application
+          Name=XVB Player
+          Comment=Media player for videos, music, discs and IPTV
+          Exec=xvb %F
+          Icon=xvb
+          Terminal=false
+          Categories=AudioVideo;Video;Player;TV;
+          StartupNotify=true
+          StartupWMClass=Xvb
+          EOF
+            cp /src/icon.png "$STAGE/usr/share/icons/hicolor/512x512/apps/xvb.png"
+            tar -C /tmp -czf "$TOP/SOURCES/xvb-$VERSION.tar.gz" "xvb-$VERSION"
+            cat > "$TOP/SPECS/xvb.spec" <<SPEC
+          Name:           xvb
+          Version:        $VERSION
+          Release:        1%{?dist}
+          Summary:        Media player for videos, music, discs and IPTV
+          License:        MIT
+          BuildArch:      noarch
+          Requires:       python3
+          Requires:       python3-tkinter
+          Requires:       mpv-libs
+          Requires:       python3-pillow
+          Requires:       python3-mutagen
+          Requires:       python3-mpv
+          Requires:       librsvg2-tools
+          Requires:       fontconfig
+          Source0:        xvb-%{version}.tar.gz
+
+          %description
+          Media player built on libmpv for local media, discs and IPTV.
+
+          %prep
+          %setup -q
+
+          %build
+
+          %install
+          mkdir -p %{buildroot}/usr/lib/xvb
+          cp xvb.py traduzioni.py %{buildroot}/usr/lib/xvb/
+          cp -a icone fonts %{buildroot}/usr/lib/xvb/
+          mkdir -p %{buildroot}/usr/bin %{buildroot}/usr/share/applications %{buildroot}/usr/share/icons/hicolor/512x512/apps
+          install -m755 usr/bin/xvb %{buildroot}/usr/bin/xvb
+          install -m644 usr/share/applications/xvb.desktop %{buildroot}/usr/share/applications/xvb.desktop
+          install -m644 usr/share/icons/hicolor/512x512/apps/xvb.png %{buildroot}/usr/share/icons/hicolor/512x512/apps/xvb.png
+
+          %files
+          /usr/lib/xvb
+          /usr/bin/xvb
+          /usr/share/applications/xvb.desktop
+          /usr/share/icons/hicolor/512x512/apps/xvb.png
+
+          %changelog
+          * Fri Nov 06 2026 XVB Project - $VERSION-1
+          - Initial Fedora package
+          SPEC
+            rpmbuild -bb --define "_topdir $TOP" "$TOP/SPECS/xvb.spec"
+            cp "$TOP"/RPMS/noarch/*.rpm /out/
+          '
+
+      - name: Validate RPM
+        run: |
+          set -euo pipefail
+          test -n "$(find out -maxdepth 1 -type f -name '*.rpm' -print -quit)"
+
+      - name: Attach package to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$RELEASE_TAG" out/*.rpm --repo "$GITHUB_REPOSITORY" --clobber
