@@ -85,6 +85,7 @@ jobs:
           Requires:       python3-tkinter
           Requires:       mpv-libs
           Requires:       python3-pillow
+          Requires:       python3-pillow-tk
           Requires:       python3-mutagen
           Requires:       librsvg2-tools
           Requires:       fontconfig
