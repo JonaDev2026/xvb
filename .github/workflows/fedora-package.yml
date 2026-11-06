@@ -49,6 +49,9 @@ jobs:
             STAGE="/tmp/xvb-$VERSION"
             mkdir -p "$STAGE"
             cp /src/xvb.py /src/traduzioni.py /src/icon.png "$STAGE/"
+            cp /src/packaging/fedora/mpv.py "$STAGE/"
+            mkdir -p "$STAGE/usr/share/licenses/xvb"
+            cp /src/packaging/fedora/LICENSE.GPL /src/packaging/fedora/LICENSE.LGPL "$STAGE/usr/share/licenses/xvb/"
             cp -a /src/icone /src/fonts "$STAGE/"
             mkdir -p "$STAGE/usr/bin" "$STAGE/usr/share/applications" "$STAGE/usr/share/icons/hicolor/512x512/apps"
             cat > "$STAGE/usr/bin/xvb" << "EOF"
@@ -76,14 +79,13 @@ jobs:
           Version:        $VERSION
           Release:        1%{?dist}
           Summary:        Media player for videos, music, discs and IPTV
-          License:        MIT
+          License:        MIT AND (GPL-2.0-or-later OR LGPL-2.1-or-later)
           BuildArch:      noarch
           Requires:       python3
           Requires:       python3-tkinter
           Requires:       mpv-libs
           Requires:       python3-pillow
           Requires:       python3-mutagen
-          Requires:       python3-mpv
           Requires:       librsvg2-tools
           Requires:       fontconfig
           Source0:        xvb-%{version}.tar.gz
@@ -99,6 +101,9 @@ jobs:
           %install
           mkdir -p %{buildroot}/usr/lib/xvb
           cp xvb.py traduzioni.py %{buildroot}/usr/lib/xvb/
+          install -m644 mpv.py %{buildroot}/usr/lib/xvb/mpv.py
+          mkdir -p %{buildroot}/usr/share/licenses/xvb
+          cp usr/share/licenses/xvb/LICENSE.GPL usr/share/licenses/xvb/LICENSE.LGPL %{buildroot}/usr/share/licenses/xvb/
           cp -a icone fonts %{buildroot}/usr/lib/xvb/
           mkdir -p %{buildroot}/usr/bin %{buildroot}/usr/share/applications %{buildroot}/usr/share/icons/hicolor/512x512/apps
           install -m755 usr/bin/xvb %{buildroot}/usr/bin/xvb
@@ -107,6 +112,7 @@ jobs:
 
           %files
           /usr/lib/xvb
+          /usr/share/licenses/xvb
           /usr/bin/xvb
           /usr/share/applications/xvb.desktop
           /usr/share/icons/hicolor/512x512/apps/xvb.png
