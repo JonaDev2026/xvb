@@ -357,7 +357,7 @@ def avvia_mpris(app):
     threading.Thread(target=GLib.MainLoop().run, daemon=True).start()
     return m
 
-VERSIONE = "4.4.5"
+VERSIONE = "4.4.6"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"
@@ -2135,6 +2135,8 @@ POSTER_H = 192
 CACHE_POSTER = os.path.join(CASA, ".cache", "xvb", "poster")
 EPG_ICONE = {}
 EPG_ICONE_NOME = {}
+EPG_DESC = {}
+EPG_DESC_NOME = {}
 
 
 def icona_programma_epg(ide, nome, programma):
@@ -2150,6 +2152,15 @@ def icona_programma_epg(ide, nome, programma):
     if src:
         return src
     return EPG_ICONE_NOME.get((nome_piatto(nome), inizio, nome_piatto(titolo)))
+
+
+def descrizione_programma_epg(ide, nome, programma):
+    """La descrizione del programma (stessa ricerca della locandina)."""
+    if not programma:
+        return ""
+    inizio, _fine, titolo = programma
+    return (EPG_DESC.get((ide or "", inizio))
+            or EPG_DESC_NOME.get((nome_piatto(nome), inizio, nome_piatto(titolo))) or "")
 
 
 def leggi_epg(f):
@@ -2179,6 +2190,14 @@ def leggi_epg(f):
                     titolo = (t.text or "").strip() if t is not None else ""
                     programmi.setdefault(el.get("channel") or "", []).append(
                         (inizio, fine, titolo))
+                    dd = el.find("desc")
+                    if dd is not None and dd.text and dd.text.strip() and inizio <= time.time() + 86400:
+                        ide_d = el.get("channel") or ""
+                        testo_d = " ".join(dd.text.split())[:300]
+                        EPG_DESC.setdefault((ide_d, inizio), testo_d)
+                        titolo_d = nome_piatto(titolo)
+                        for nome_d in nomi_per_id.get(ide_d, ()):
+                            EPG_DESC_NOME.setdefault((nome_d, inizio, titolo_d), testo_d)
                     ic = el.find("icon")
                     if ic is not None and ic.get("src"):
                         src = ic.get("src")
@@ -2832,10 +2851,15 @@ class Elenco(tk.Text):
         self.poster_h = 0
         self.poster_onda_h = 0
         self.poster_di = None
+        self.desc_di = None
+        self.fisici = set()
+        self.larg_desc = 0
+        self.font_desc = None
         self.poster_lbl = []
         self.singolo = None
         self.config(yscrollcommand=lambda *a: self.ridisegna_colonna())
         self.bind("<Configure>", lambda e: self.ridisegna_colonna(), add="+")
+        self.bind("<Configure>", self._larghezza, add="+")
         self.colonna.bind("<Button-1>", lambda e: self.clic_y(e.y, attiva=True))
         self.colonna.bind("<Button-4>", lambda e: self.yview_scroll(-3, "units"))
         self.colonna.bind("<Button-5>", lambda e: self.yview_scroll(3, "units"))
@@ -2858,6 +2882,9 @@ class Elenco(tk.Text):
         self.tag_configure("nome", foreground="#ffffff", spacing1=self.nome_sopra, spacing3=4,
                            font=(CARATTERE, -NOME_PX, "bold"))
         self.tag_configure("sotto", spacing1=0, spacing3=14, font=(CARATTERE, -SOTTO_PX))
+        self.tag_configure("descrizione", foreground=GRIGIO, spacing1=0, spacing2=0, spacing3=14,
+                           wrap="word", lmargin1=COLONNA, lmargin2=COLONNA, rmargin=8,
+                           font=(CARATTERE, -SOTTO_PX))
         self.tag_configure("onda")
         self.tag_raise("onda")
         self.tag_raise("scelto")
@@ -2898,12 +2925,14 @@ class Elenco(tk.Text):
         if set(iids) >= set(self.voci):
             tk.Text.delete(self, "1.0", "end")
             self.voci, self.dati, self.scelta, self.posto = [], {}, None, {}
+            self.fisici.clear()
             self.ridisegna_colonna()
         else:
             for iid in iids:
                 if iid in self.dati:
                     r = self.riga(iid)
-                    tk.Text.delete(self, "%d.0" % r, "%d.0" % (r + 3))
+                    tk.Text.delete(self, "%d.0" % r, "%d.0" % (r + self._n(iid)))
+                    self.fisici.discard(iid)
                     self.voci.remove(iid)
                     del self.dati[iid]
                     if self.scelta == iid:
@@ -2947,8 +2976,66 @@ class Elenco(tk.Text):
             tk.Text.see(self, "%d.0" % self.riga(iid))
 
 
+    def _n(self, iid):
+        """Righe di testo della voce: 3, 4 se ha la riga della descrizione."""
+        return 4 if iid in self.fisici else 3
+
     def riga(self, iid):
-        return 3 * self.posto[iid] + 1
+        p = self.posto[iid]
+        return 3 * p + 1 + sum(1 for k in self.fisici if self.posto.get(k, p) < p)
+
+    def _dove(self, r):
+        """Dalla riga di testo: (indice della voce, True se e' la riga descrizione)."""
+        r0, spost = r - 1, 0
+        for p in sorted(self.posto[k] for k in self.fisici if k in self.posto):
+            inizio = 3 * p + spost
+            if r0 < inizio:
+                break
+            if r0 < inizio + 4:
+                return p, r0 == inizio + 2
+            spost += 1
+        return (r0 - spost) // 3, False
+
+    def _visibili(self, su, giu):
+        return range(max(0, self._dove(su)[0]), min(len(self.voci), self._dove(giu)[0] + 1))
+
+    def _due_righe(self, testo):
+        """La descrizione accorciata in modo che stia in due righe."""
+        larg = (self.winfo_width() if self.winfo_width() > 50 else 380) - COLONNA - 28
+        if self.font_desc is None:
+            self.font_desc = tkfont.Font(root=self, font=(CARATTERE, -SOTTO_PX))
+        m = self.font_desc.measure
+        righe, cur, taglio = [], "", False
+        for w in testo.split():
+            prova = (cur + " " + w) if cur else w
+            if m(prova) <= larg or not cur:
+                cur = prova
+            elif len(righe) < 3:
+                righe.append(cur)
+                cur = w
+            else:
+                taglio = True
+                break
+        righe.append(cur)
+        if taglio:
+            ult = righe[-1]
+            while ult and m(ult + "\u2026") > larg:
+                ult = ult.rsplit(" ", 1)[0] if " " in ult else ult[:-1]
+            righe[-1] = ult + "\u2026"
+        return " ".join(righe)
+
+    def aggiorna_desc(self):
+        """La riga descrizione della voce in onda, se e' cambiata."""
+        if self.desc_di is None or self.segno != "logo":
+            return
+        for iid, d in list(self.dati.items()):
+            if "onda" in d["tags"] and (self.desc_di(iid) or "") != d.get("desc", ""):
+                self.disegna(iid)
+
+    def _larghezza(self, e):
+        if self.fisici and abs(e.width - self.larg_desc) > 6:
+            self.after_idle(lambda: [self.disegna(i) for i in list(self.fisici) if i in self.dati])
+        self.larg_desc = e.width
 
     def spanne(self, iid):
         r = self.riga(iid)
@@ -2975,7 +3062,8 @@ class Elenco(tk.Text):
         nome, _sep, sotto = testo.partition("\n")
         if d["img"] is not None:
 
-            tk.Text.delete(self, "%d.0" % r, "%d.0" % (r + 3))
+            tk.Text.delete(self, "%d.0" % r, "%d.0" % (r + self._n(iid)))
+            self.fisici.discard(iid)
 
 
         colore = d["colore"] or GRIGIO
@@ -2997,7 +3085,13 @@ class Elenco(tk.Text):
         extra = tuple(d["tags"]) + (("scelto",) if self.scelta == iid else ())
 
 
+        desc = ""
+        if self.desc_di is not None and self.segno == "logo" and "onda" in d["tags"]:
+            desc = self.desc_di(iid) or ""
+        d["desc"] = desc
         tk.Text.insert(self, "%d.0" % r, "\n", ("stacco",))
+        if desc:
+            tk.Text.insert(self, "%d.0" % r, self._due_righe(desc) + "\n", ("descrizione", "zebra", "onda"))
         if self.segno == "logo":
 
             nome, sotto = nome.lstrip(" "), sotto.lstrip(" ")
@@ -3020,8 +3114,11 @@ class Elenco(tk.Text):
             self.tag_add("pronda", "%d.0" % r)
         self.image_create("%d.0" % (r + 1), image=sotto_img)
         self.tag_add(tinta, "%d.0" % (r + 1)); self.tag_add("sotto", "%d.0" % (r + 1))
-        self.image_create("%d.0" % (r + 2), image=self.stacco)
-        self.tag_add("stacco", "%d.0" % (r + 2))
+        rs = r + 3 if desc else r + 2
+        self.image_create("%d.0" % rs, image=self.stacco)
+        self.tag_add("stacco", "%d.0" % rs)
+        if desc:
+            self.fisici.add(iid)
         for t in zebra + extra:
             self.tag_add(t, "%d.0" % r); self.tag_add(t, "%d.0" % (r + 1))
         d["img"] = True
@@ -3078,14 +3175,14 @@ class Elenco(tk.Text):
             except (tk.TclError, ValueError):
                 su = giu = 0
             larg = self.winfo_width()
-            for i in range(max(0, (su - 1) // 3), min(len(self.voci), (giu - 1) // 3 + 1)):
+            for i in self._visibili(su, giu):
                 hh = h or (self.poster_onda_h if "onda" in self.dati[self.voci[i]]["tags"] else 0)
                 if not hh:
                     continue
                 img, titolo = self.poster_di(self.voci[i], larg - 8, hh)
                 if img is None and not titolo:
                     continue
-                riga = self.dlineinfo("%d.0" % (3 * i + 1))
+                riga = self.dlineinfo("%d.0" % self.riga(self.voci[i]))
                 if riga is None:
                     continue
                 if usati >= len(self.poster_lbl):
@@ -3122,12 +3219,12 @@ class Elenco(tk.Text):
             except (tk.TclError, ValueError):
                 su = giu = 0
             adesso, larg = time.time(), self.winfo_width()
-            for i in range(max(0, (su - 1) // 3), min(len(self.voci), (giu - 1) // 3 + 1)):
+            for i in self._visibili(su, giu):
                 iid = self.voci[i]
                 parte = self.prog_di(iid)
                 if parte is None:
                     continue
-                riga = self.dlineinfo("%d.0" % (3 * i + 3))
+                riga = self.dlineinfo("%d.0" % (self.riga(iid) + 2))
                 if riga is None:
                     continue
                 if usate >= len(self.barre):
@@ -3158,9 +3255,16 @@ class Elenco(tk.Text):
             giu = int(self.index("@0,%d" % self.winfo_height()).split(".")[0])
         except (tk.TclError, ValueError):
             return
-        for i in range(max(0, (su - 1) // 3), min(len(self.voci), (giu - 1) // 3 + 1)):
+        for i in self._visibili(su, giu):
             iid = self.voci[i]
-            r = 3 * i + 1
+            r = self.riga(iid)
+            if iid in self.fisici:
+                d1 = self.dlineinfo("%d.0" % (r + 2))
+                d2 = self.dlineinfo("%d.0 lineend" % (r + 2))
+                if d1 or d2:
+                    c.create_rectangle(0, d1[1] - 1 if d1 else 0, COLONNA,
+                                       (d2[1] + d2[3] - 1) if d2 else self.winfo_height(),
+                                       fill=self.tag_cget("onda", "background") or ZEBRA, outline="")
             a, b = self.dlineinfo("%d.0" % r), self.dlineinfo("%d.0" % (r + 1))
             if a is None and b is None:
                 continue
@@ -3194,7 +3298,9 @@ class Elenco(tk.Text):
             r = int(self.index("@%d,%d" % (COLONNA + 5, y)).split(".")[0])
         except (tk.TclError, ValueError):
             return "break"
-        i = (r - 1) // 3
+        i, sul = self._dove(r)
+        if sul:
+            return "break"
         if 0 <= i < len(self.voci):
             self.selection_set(self.voci[i])
             if attiva and self.singolo:
@@ -3207,7 +3313,9 @@ class Elenco(tk.Text):
             r = int(self.index("@%d,%d" % (ev.x, ev.y)).split(".")[0])
         except (tk.TclError, ValueError):
             return "break"
-        i = (r - 1) // 3
+        i, sul = self._dove(r)
+        if sul:
+            return "break"
         if 0 <= i < len(self.voci):
             self.selection_set(self.voci[i])
             if self.singolo:
@@ -3876,6 +3984,7 @@ class TV(object):
         scrivi_config(self.cfg)
         self.elenco.prog_di = self.progresso_di
         self.elenco.poster_di = self.poster_di
+        self.elenco.desc_di = self.descrizione_di
         self.elenco.singolo = self.parti
         self.poster_tk, self.poster_pil = {}, {}
         self.elenco.tag_configure("onda", background=IN_ONDA,
@@ -5866,7 +5975,7 @@ class TV(object):
         indirizzi: la copertina."""
         try:
             r = int(self.elenco.index("@%d,%d" % (COLONNA + 5, ev.y if y is None else y)).split(".")[0])
-            iid = self.elenco.voci[(r - 1) // 3]
+            iid = self.elenco.voci[self.elenco._dove(r)[0]]
             nome, url, _i = self.visti[int(iid)]
         except (tk.TclError, ValueError, IndexError):
             return "break"
@@ -6492,6 +6601,21 @@ class TV(object):
     def applica_poster(self):
         self.elenco.metti_poster(POSTER_H if self.poster_attivo() else 0)
         self.elenco.metti_poster_onda(0 if self.poster_attivo() else self.altezza_poster_onda())
+        self.elenco.aggiorna_desc()
+
+    def descrizione_di(self, iid):
+        """La descrizione EPG del programma in onda sul canale (vuota se manca)."""
+        if not self.epg or self.media_in_uso or self.reg_in_uso:
+            return ""
+        try:
+            nome, url, ide = self.visti[int(iid)]
+        except (ValueError, IndexError):
+            return ""
+        if os.path.isabs(url):
+            return ""
+        if not ide or ide not in self.epg:
+            ide = self.epg_nomi.get(nome_piatto(nome))
+        return descrizione_programma_epg(ide, nome, self.programma_di(ide, nome))
 
     def poster_si_no(self):
         self.cfg["poster_epg"] = not self.cfg.get("poster_epg", False)
@@ -9700,12 +9824,12 @@ class TV(object):
                          args=(list(self.cfg.get("epg", [])), silenzioso), daemon=True).start()
 
     def _carica_guide(self, dove_tutte, silenzioso=False):
-        global EPG_ICONE, EPG_ICONE_NOME
+        global EPG_ICONE, EPG_ICONE_NOME, EPG_DESC, EPG_DESC_NOME
         self.guide_in_corso = True
         self.epg_tentata = time.time()
         quando = time.time()
         try:
-            EPG_ICONE, EPG_ICONE_NOME = {}, {}
+            EPG_ICONE, EPG_ICONE_NOME, EPG_DESC, EPG_DESC_NOME = {}, {}, {}, {}
             guide = []
             for dove in dove_tutte:
                 if not silenzioso:
