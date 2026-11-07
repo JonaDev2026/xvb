@@ -357,7 +357,7 @@ def avvia_mpris(app):
     threading.Thread(target=GLib.MainLoop().run, daemon=True).start()
     return m
 
-VERSIONE = "4.4.6"
+VERSIONE = "4.4.7"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"
@@ -2597,6 +2597,13 @@ class Guida(tk.Toplevel):
 SCORRE = object()
 
 
+def _azione_informativa_audio():
+    pass
+
+
+_AZIONE_INFORMATIVA_AUDIO = _azione_informativa_audio
+
+
 class Tendina(object):
     """Il menu a tendina disegnato noi, nello stile delle finestrelle:
     scuro, bordo sottile, voci con aria, spunta lilla su quella attiva,
@@ -2651,13 +2658,14 @@ class Tendina(object):
             riga = tk.Frame(dove, bg=PANNELLO, height=self.ALTA, width=larga)
             riga.pack(fill="x")
             riga.pack_propagate(False)
-            colore = TESTO if cosa else GRIGIO
-            segno = tk.Label(riga, text="✓" if spunta else "", bg=PANNELLO,
+            informativa = cosa is _AZIONE_INFORMATIVA_AUDIO
+            colore = TESTO if cosa or informativa else GRIGIO
+            segno = tk.Label(riga, text="●" if spunta else "", bg=PANNELLO,
                              fg=ACCENTO, width=2, anchor="center")
             segno.pack(side="left", padx=(8, 0))
             et = tk.Label(riga, text=testo, bg=PANNELLO, fg=colore, anchor="w")
             et.pack(side="left", fill="both", expand=True, padx=(4, 16))
-            if cosa:
+            if cosa and not informativa:
                 for w in (riga, segno, et):
                     w.bind("<Enter>", lambda e, r=riga, a=segno, b=et: self.accendi(r, a, b, True))
                     w.bind("<Leave>", lambda e, r=riga, a=segno, b=et: self.accendi(r, a, b, False))
@@ -3760,7 +3768,8 @@ class TV(object):
                   "rec", "rec_stop",
                   "volume", "volume_high",
                   "volume_low", "volume_off", "muto", "pieno", "prima", "dopo",
-                  "aperto", "chiuso", "setting", "epg", "shuffle", "stop", "pip", "timer"):
+                  "aperto", "chiuso", "setting", "epg", "shuffle", "stop", "pip", "timer",
+                  "cuffie", "cuffie_bluetooth"):
             p = os.path.join(QUI, "icone", n + ".png")
             if os.path.isfile(p):
                 if HA_PIL:
@@ -3777,6 +3786,10 @@ class TV(object):
                             Image.open(p).convert("RGBA"))
                     except Exception:
                         pass
+
+        if HA_PIL and "aperto" in self.icone_pil:
+            self.icone_pil["aperto_su"] = self.icone_pil["aperto"].rotate(180, resample=Image.BICUBIC)
+            self.icone["aperto_su"] = ImageTk.PhotoImage(self.icone_pil["aperto_su"])
 
         if HA_PIL:
             dimensioni_icone = {
@@ -4248,12 +4261,20 @@ class TV(object):
         self.b_sidebar.pack(side="right", padx=2, pady=6, before=self.b_pieno)
         self.volume = Cursore(self.barra, self.alza_volume, larga=85)
         self.volume.pack(side="right", padx=0)
+        self.b_audio_menu = self.bottone(self.barra, "", self.apri_menu_uscita_audio)
+        self.b_audio_menu.config(image=self.icone.get("aperto"), width=34, height=30,
+                                 bg=BARRA, activebackground=BARRA)
+        self.b_audio_menu.icona = "aperto"
+        self.b_audio_menu.sopra = False
+        self.b_audio_menu.bind("<Enter>", lambda e: self.hover_tk(self.b_audio_menu, True), add="+")
+        self.b_audio_menu.bind("<Leave>", lambda e: self.hover_tk(self.b_audio_menu, False), add="+")
+        self.b_audio_menu.pack(side="right", padx=0, pady=6, before=self.volume)
         self.b_muto = self.tasto("volume", _("Mute"), self.muto, lato="right")
 
 
-        self.volume_largo, self.volume_dopo = 0, None
+        self.volume_largo, self.volume_dopo, self.volume_animazione = 0, None, None
         self.volume.config(width=0)
-        for w in (self.b_muto, self.volume):
+        for w in (self.b_muto, self.volume, self.b_audio_menu):
             w.bind("<Enter>", lambda e: self.apri_volume(), add="+")
             w.bind("<Leave>", lambda e: self.chiudi_volume_tra_poco(), add="+")
 
@@ -4346,6 +4367,10 @@ class TV(object):
         self.icona_volume()
         self.applica_video()
         self.applica_uscita_audio(silenzioso=True)
+        self.tipo_uscita_corrente = self.rileva_tipo_uscita_audio()
+        self.icona_volume()
+        self.root.after(1000, self.controlla_uscita_audio)
+        threading.Thread(target=self.ascolta_eventi_uscita_audio, daemon=True).start()
         if self.cfg.get("in_cima"):
             self.root.attributes("-topmost", True)
         if self.icone_mancanti:
@@ -7473,7 +7498,7 @@ class TV(object):
         b = self.b_qualita
         if len(self.varianti or []) > 1:
             if not b.winfo_ismapped():
-                b.pack(side="right", padx=2, pady=6, before=self.volume)
+                b.pack(side="right", padx=2, pady=6, before=self.b_audio_menu)
                 self.root.after_idle(lambda: self.vesti(b))
         else:
             if self.tendina.aperta() and self.tendina.chi is b:
@@ -7490,6 +7515,7 @@ class TV(object):
             if getattr(self, "ov_menu", None):
                 self.chiudi_menu_ov()
             else:
+                self.ov_menu_bottone = self.b_qualita
                 self.ov_menu, self.ov_menu_sopra = self.voci_qualita(), None
                 self.gira_ingranaggio(+1)
                 self.disegna_menu_ov()
@@ -7793,9 +7819,138 @@ class TV(object):
             return
         self.icona_volume()
 
+    def rileva_tipo_uscita_audio(self):
+        dispositivo = "auto"
+        try:
+            dispositivo = str(self.mpv["audio-device"] or "auto")
+        except Exception:
+            pass
+
+        descrizione = ""
+        try:
+            elenco = self.mpv._get_property("audio-device-list") or []
+            voce = next((v for v in elenco
+                         if isinstance(v, dict) and v.get("name") == dispositivo), None)
+            if voce:
+                descrizione = str(voce.get("description") or "")
+        except Exception:
+            pass
+
+        nome_sink = ""
+        try:
+            risposta = subprocess.run(
+                ["pactl", "get-default-sink"],
+                capture_output=True, text=True, timeout=2, check=True
+            )
+            nome_sink = risposta.stdout.strip()
+        except Exception:
+            if dispositivo not in ("auto", "pipewire", "pulse", "alsa", "jack", "sdl", "sndio"):
+                nome_sink = dispositivo.split("/", 1)[-1]
+
+        proprieta = {}
+        if nome_sink:
+            try:
+                risposta = subprocess.run(
+                    ["pactl", "-f", "json", "list", "sinks"],
+                    capture_output=True, text=True, timeout=2, check=True
+                )
+                uscite = json.loads(risposta.stdout)
+                uscita = next(
+                    (u for u in uscite
+                     if u.get("name") == nome_sink
+                     or str(u.get("name", "")).endswith("/" + nome_sink)),
+                    None
+                )
+                if uscita:
+                    proprieta = uscita.get("properties") or {}
+                    descrizione = str(
+                        uscita.get("description") or descrizione
+                    )
+            except Exception:
+                pass
+
+        testo = " ".join(
+            [nome_sink, descrizione] +
+            [str(v) for k, v in proprieta.items()
+             if k in ("device.bus", "device.form_factor", "device.icon_name",
+                      "api.bluez5.address", "device.name")]
+        ).lower()
+        bus = str(proprieta.get("device.bus", "")).lower()
+        forma = str(proprieta.get("device.form_factor", "")).lower()
+
+        if (bus == "bluetooth" or "bluez" in testo
+                or "bluetooth" in testo or "audio-headphones-bluetooth" in testo):
+            return "bluetooth"
+        if (forma in ("headset", "headphones", "earbuds")
+                or any(parola in testo for parola in
+                       ("headset", "headphone", "cuffie", "auricolari", "earbuds"))):
+            return "cuffie"
+
+        if not proprieta and dispositivo in (
+                "auto", "pipewire", "pulse", "alsa", "jack", "sdl", "sndio"):
+            try:
+                risposta = subprocess.run(
+                    ["wpctl", "inspect", "@DEFAULT_AUDIO_SINK@"],
+                    capture_output=True, text=True, timeout=2, check=True
+                )
+                testo = risposta.stdout.lower()
+                if "bluez" in testo or "bluetooth" in testo:
+                    return "bluetooth"
+                if any(parola in testo for parola in
+                       ("headset", "headphone", "cuffie", "auricolari", "earbuds")):
+                    return "cuffie"
+            except Exception:
+                pass
+
+        return "altoparlanti"
+
+    def applica_tipo_uscita_audio(self, tipo):
+        if tipo != self.tipo_uscita_corrente:
+            self.tipo_uscita_corrente = tipo
+            self.icona_volume()
+
+    def ascolta_eventi_uscita_audio(self):
+        while True:
+            processo = None
+            try:
+                processo = subprocess.Popen(
+                    ["pactl", "subscribe"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL,
+                    text=True,
+                    bufsize=1
+                )
+                for evento in processo.stdout:
+                    if "on sink" in evento or "on server" in evento:
+                        tipo = self.rileva_tipo_uscita_audio()
+                        try:
+                            self.root.after(
+                                0, self.sincronizza_uscita_audio_sistema
+                            )
+                            self.root.after(
+                                0, lambda t=tipo: self.applica_tipo_uscita_audio(t)
+                            )
+                        except tk.TclError:
+                            return
+                processo.wait()
+            except Exception:
+                pass
+            finally:
+                if processo and processo.poll() is None:
+                    processo.terminate()
+            time.sleep(3)
+
+    def controlla_uscita_audio(self):
+        try:
+            self.sincronizza_uscita_audio_sistema()
+            tipo = self.rileva_tipo_uscita_audio()
+            self.applica_tipo_uscita_audio(tipo)
+            self.root.after(500, self.controlla_uscita_audio)
+        except tk.TclError:
+            pass
+
     def icona_volume(self):
-        """L'altoparlante secondo il volume: spento, basso, medio, alto;
-        rosso se e' in muto."""
+        """Mostra il dispositivo audio attivo, mantenendo muto e volume."""
         try:
             muto = bool(self.mpv.mute)
         except Exception:
@@ -7803,6 +7958,10 @@ class TV(object):
         v = self.volume.get()
         if muto:
             icona = "muto"
+        elif getattr(self, "tipo_uscita_corrente", "") == "bluetooth":
+            icona = "cuffie_bluetooth"
+        elif getattr(self, "tipo_uscita_corrente", "") == "cuffie":
+            icona = "cuffie"
         elif v == 0:
             icona = "volume_off"
         elif v < 34:
@@ -7819,9 +7978,14 @@ class TV(object):
         if self.volume_dopo:
             self.root.after_cancel(self.volume_dopo)
             self.volume_dopo = None
+        if self.volume_animazione:
+            self.root.after_cancel(self.volume_animazione)
+            self.volume_animazione = None
         self.anima_volume(+1)
 
     def chiudi_volume_tra_poco(self):
+        if self.tendina.aperta() and self.tendina.chi is self.b_audio_menu:
+            return
         if self.volume_dopo:
             self.root.after_cancel(self.volume_dopo)
         self.volume_dopo = self.root.after(400, lambda: self.anima_volume(-1))
@@ -7829,6 +7993,9 @@ class TV(object):
     def anima_volume(self, verso):
         """Il cursore si allarga (o si stringe) in cinque passi da 15 ms:
         e' lui a cambiare larghezza, l'altoparlante si sposta di conseguenza."""
+        if self.volume_animazione:
+            self.root.after_cancel(self.volume_animazione)
+            self.volume_animazione = None
         passo = self.volume.larga // 5
         largo = max(0, min(self.volume.larga, self.volume_largo + verso * passo))
         if largo == self.volume_largo:
@@ -7838,7 +8005,12 @@ class TV(object):
         if self.barra_in_overlay():
             self.disegna_ov()
         if 0 < largo < self.volume.larga:
-            self.root.after(15, lambda: self.anima_volume(verso))
+            self.volume_animazione = self.root.after(
+                15, lambda: self.prossimo_passo_volume(verso))
+
+    def prossimo_passo_volume(self, verso):
+        self.volume_animazione = None
+        self.anima_volume(verso)
 
     def alza_volume(self, v):
         try:
@@ -8677,23 +8849,30 @@ class TV(object):
 
     def disegna_menu_ov(self):
         voci = getattr(self, "ov_menu", None)
-        if not voci or getattr(self, "ov", None) is None or self.b_qualita not in getattr(self, "ov_posti", {}):
+        ancora = getattr(self, "ov_menu_bottone", None)
+        if not voci or getattr(self, "ov", None) is None or ancora not in getattr(self, "ov_posti", {}):
             self.togli_menu_ov()
             return
         from PIL import ImageDraw
         R = self.OV_MENU_RIGA
         d0 = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+        try:
+            from PIL import ImageFont
+            _pf = percorso_google_sans("Regular")
+            font_m = ImageFont.truetype(_pf, 12) if _pf else None
+        except Exception:
+            font_m = None
         larghe = []
         for t, _c in voci:
             t = t[3:] if t[:3] in ("*  ", "   ") else t
             try:
-                b = d0.textbbox((0, 0), t)
+                b = d0.textbbox((0, 0), t, font=font_m)
                 larghe.append(b[2] - b[0])
             except Exception:
                 larghe.append(len(t) * 7)
         mw = max(larghe + [60]) + 44
         mh = len(voci) * R + 8
-        gx, gl = self.ov_posti[self.b_qualita]
+        gx, gl = self.ov_posti[ancora]
         x = max(0, min(gx + gl - mw, self.video.winfo_width() - mw))
         # il menu poggia sulla riga dei bottoni (come in Tk: 4 px sopra al bottone),
         # non sul bordo alto della barra, che e' piu' su di OV_ALTA - OV_RIGA px
@@ -8716,7 +8895,8 @@ class TV(object):
             yy = 4 + i * R
             scelta = t.startswith("*  ")
             t = t[3:] if t[:3] in ("*  ", "   ") else t
-            if i == getattr(self, "ov_menu_sopra", None) and cosa:
+            if (i == getattr(self, "ov_menu_sopra", None) and cosa
+                    and cosa is not _AZIONE_INFORMATIVA_AUDIO):
 
                 luce = Image.new("RGBA", (mw, mh), (0, 0, 0, 0))
                 ImageDraw.Draw(luce).rounded_rectangle([4, yy + 1, mw - 5, yy + R - 2], radius=6,
@@ -8741,7 +8921,7 @@ class TV(object):
             try:
                 b = d.textbbox((0, 0), t, font=font_usato)
                 d.text((30, yy + (R - (b[3] - b[1])) // 2 - b[1]), t,
-                       fill=TESTO if cosa else GRIGIO, font=font_usato)
+                       fill=TESTO if cosa or cosa is _AZIONE_INFORMATIVA_AUDIO else GRIGIO, font=font_usato)
             except Exception:
                 pass
         k = getattr(self, "ov_k", 1.0)
@@ -8764,8 +8944,14 @@ class TV(object):
     def chiudi_menu_ov(self):
         self.ov_menu_fuori = None
         if getattr(self, "ov_menu", None):
+            ancora = getattr(self, "ov_menu_bottone", None)
             self.ov_menu = None
-            self.gira_ingranaggio(-1)
+            self.ov_menu_bottone = None
+            if ancora is self.b_qualita:
+                self.gira_ingranaggio(-1)
+            elif ancora is self.b_audio_menu:
+                self.freccia_audio(False)
+                self.chiudi_volume_tra_poco()
         self.togli_menu_ov()
 
     def riga_menu_ov(self):
@@ -8833,15 +9019,19 @@ class TV(object):
             return
         z = self.zona_ov()
         sopra = z[0][5] if z else None
-        if sopra in (self.b_muto, self.volume):
-            if getattr(self, "ov_sopra", None) not in (self.b_muto, self.volume):
+        if sopra in (self.b_muto, self.volume, self.b_audio_menu):
+            if getattr(self, "ov_sopra", None) not in (self.b_muto, self.volume, self.b_audio_menu):
                 self.apri_volume()
-        elif getattr(self, "ov_sopra", None) in (self.b_muto, self.volume):
+        elif (getattr(self, "ov_sopra", None) in (self.b_muto, self.volume, self.b_audio_menu)
+              and not getattr(self, "ov_menu", None)):
             self.chiudi_volume_tra_poco()
         self.ov_sopra = sopra
 
 
-        su_qualcosa = bool(z) or (getattr(self, "ov_menu", None) and self.riga_menu_ov() is not None)
+        riga_menu = self.riga_menu_ov() if getattr(self, "ov_menu", None) else None
+        voce_menu_attiva = (riga_menu is not None and riga_menu >= 0
+                            and self.ov_menu[riga_menu][1] is not _AZIONE_INFORMATIVA_AUDIO)
+        su_qualcosa = bool(z) or voce_menu_attiva
         mano = "hand2" if su_qualcosa else ""
         if self.video.cget("cursor") != mano:
             self.video.config(cursor=mano)
@@ -8851,7 +9041,7 @@ class TV(object):
                 self.ov_menu_sopra = r
                 self.disegna_menu_ov()
 
-            if r is None and sopra is not self.b_qualita:
+            if r is None and sopra is not getattr(self, "ov_menu_bottone", None):
                 if not getattr(self, "ov_menu_fuori", None):
                     self.ov_menu_fuori = time.time()
                 elif time.time() - self.ov_menu_fuori > 2.0:
@@ -8898,15 +9088,17 @@ class TV(object):
         if getattr(self, "ov_menu", None):
             i = self.riga_menu_ov()
             if i is not None:
-                if i >= 0 and self.ov_menu[i][1]:
+                if (i >= 0 and self.ov_menu[i][1]
+                        and self.ov_menu[i][1] is not _AZIONE_INFORMATIVA_AUDIO):
                     cosa = self.ov_menu[i][1]
                     self.chiudi_menu_ov()
                     self.root.after(40, cosa)
                 return True
 
             z = self.zona_ov()
+            ancora = getattr(self, "ov_menu_bottone", None)
             self.chiudi_menu_ov()
-            if z and z[0][5] is self.b_qualita:
+            if z and z[0][5] is ancora:
                 return True
         z = self.zona_ov()
         if z is None:
@@ -9091,205 +9283,281 @@ class TV(object):
 
 
     def dispositivi_uscita_audio(self):
-        """Elenco dei dispositivi esposti da mpv."""
-        try:
-            elenco = self.mpv["audio-device-list"] or []
-        except Exception:
-            elenco = []
-
+        """Elenco delle uscite audio con descrizioni fornite da PipeWire."""
         risultati = []
+        predefinito = self.nome_uscita_predefinita()
+        try:
+            risposta = subprocess.run(
+                ["wpctl", "status", "-n"], capture_output=True,
+                text=True, timeout=4, check=True
+            )
+            in_uscite = False
+            nodi = []
+            for riga in risposta.stdout.splitlines():
+                testo = re.sub(r"^[│├└─\s]+", "", riga).strip()
+                if testo == "Sinks:":
+                    in_uscite = True
+                    continue
+                if in_uscite and testo.endswith(":"):
+                    break
+                if not in_uscite:
+                    continue
+                voce = re.match(r"^(\*)?\s*(\d+)\.?\s+(\S+)", testo)
+                if voce:
+                    nodi.append((voce.group(2), voce.group(3), bool(voce.group(1))))
+            for identificativo, nome_tecnico, attiva in nodi:
+                info = ""
+                try:
+                    info = subprocess.run(
+                        ["wpctl", "inspect", identificativo],
+                        capture_output=True, text=True, timeout=3, check=True
+                    ).stdout
+                except Exception:
+                    continue
+                nome_pipewire = ""
+                descrizione = ""
+                for chiave in ("node.description", "device.description",
+                               "device.nick", "device.product.name",
+                               "api.bluez5.alias", "node.nick"):
+                    voce = re.search(
+                        r'^[\s*]*' + re.escape(chiave) + r'\s*=\s*"([^"]+)"',
+                        info, re.MULTILINE
+                    )
+                    if voce and voce.group(1).strip():
+                        descrizione = voce.group(1).strip()
+                        if chiave in ("node.description", "device.description"):
+                            break
+                voce = re.search(
+                    r'^[\s*]*node.name\s*=\s*"([^"]+)"',
+                    info, re.MULTILINE
+                )
+                nome_pipewire = voce.group(1).strip() if voce else nome_tecnico
+                if not descrizione:
+                    descrizione = nome_pipewire
+                    for prefisso in ("alsa_output.", "bluez_output.", "alsa_input.", "bluez_input."):
+                        descrizione = descrizione.removeprefix(prefisso)
+                    descrizione = descrizione.replace("_", " ").replace(".", " ").strip()
+                risultati.append((
+                    "pulse/" + nome_pipewire, descrizione,
+                    attiva or nome_pipewire == predefinito
+                ))
+        except Exception:
+            try:
+                risposta = subprocess.run(
+                    ["pactl", "-f", "json", "list", "sinks"],
+                    capture_output=True, text=True, timeout=3, check=True
+                )
+                for uscita in json.loads(risposta.stdout):
+                    nome = str(uscita.get("name") or "").strip()
+                    if not nome:
+                        continue
+                    proprieta = uscita.get("properties") or {}
+                    descrizione = str(
+                        uscita.get("description")
+                        or proprieta.get("device.description")
+                        or proprieta.get("device.nick")
+                        or proprieta.get("device.product.name")
+                        or nome.replace("_", " ").replace(".", " ")
+                    ).strip()
+                    risultati.append(("pulse/" + nome, descrizione, nome == predefinito))
+            except Exception:
+                pass
+        unici = []
+        visti = set()
+        for nome, descrizione, attiva in risultati:
+            if nome not in visti:
+                visti.add(nome)
+                unici.append((nome, descrizione, attiva))
+        return unici
 
-        for voce in elenco:
-            if not isinstance(voce, dict):
-                continue
-
-            nome = voce.get("name")
-            descrizione = voce.get("description") or nome
-
-            if nome and str(nome) != "auto":
-                risultati.append((str(nome), str(descrizione)))
-
-        return risultati
+    def nome_uscita_predefinita(self):
+        try:
+            risposta = subprocess.run(
+                ["pactl", "get-default-sink"], capture_output=True,
+                text=True, timeout=2, check=True
+            )
+            nome = risposta.stdout.strip()
+            if nome:
+                return nome
+        except Exception:
+            pass
+        try:
+            risposta = subprocess.run(
+                ["wpctl", "inspect", "@DEFAULT_AUDIO_SINK@"],
+                capture_output=True, text=True, timeout=3, check=True
+            )
+            voce = re.search(
+                r'^[\s*]*node.name\s*=\s*"([^"]+)"',
+                risposta.stdout, re.MULTILINE
+            )
+            if voce:
+                return voce.group(1).strip()
+        except Exception:
+            pass
+        return ""
 
     def applica_uscita_audio(self, nome=None, silenzioso=False):
-        """Imposta il dispositivo scelto."""
-        if nome is None:
-            nome = self.cfg.get("audio_device", "auto")
-
-        nome = str(nome or "auto")
-
+        """Usa esclusivamente l'uscita predefinita scelta dal sistema."""
+        predefinito = self.nome_uscita_predefinita()
+        if not predefinito:
+            return False
+        dispositivo = "pulse/" + predefinito
         try:
-            self.mpv["audio-device"] = nome
-            attuale = self.mpv["audio-device"]
-
-            if nome != "auto" and attuale and str(attuale) != nome:
-                raise RuntimeError(str(attuale))
-
+            self.mpv["audio-device"] = dispositivo
+            attuale = str(self.mpv["audio-device"] or "")
+            if attuale and attuale != dispositivo:
+                raise RuntimeError(attuale)
             return True
-
         except Exception as errore:
-            if nome != "auto":
-                try:
-                    self.mpv["audio-device"] = "auto"
-                except Exception:
-                    pass
-
             if not silenzioso:
-                self.scrivi(
-                    _("cannot set audio output: %s") % errore,
-                    errore=True
-                )
-
+                self.scrivi(_("cannot follow system audio output: %s") % errore, errore=True)
             return False
 
-    def scegli_uscita_audio(self):
-        """Finestra per scegliere l'uscita audio di mpv."""
-        dispositivi = [
-            ("auto", _("Auto (system default)"))
+    def voci_uscita_audio(self):
+        """Voci informative: non selezionabili, con pallino sull'uscita attiva."""
+        return [
+            (("*  " if attiva else "   ") + descrizione,
+             (lambda n=nome.split("/", 1)[-1]: self.imposta_uscita_audio(n)))
+            for nome, descrizione, attiva in self.dispositivi_uscita_audio()
         ]
-        dispositivi.extend(self.dispositivi_uscita_audio())
 
+    def imposta_uscita_audio(self, nome):
+        """Imposta l'uscita predefinita del sistema e porta mpv sulla stessa."""
+        try:
+            ident = None
+            stato = subprocess.run(
+                ["wpctl", "status", "-n"], capture_output=True,
+                text=True, timeout=4, check=True
+            ).stdout
+            in_uscite = False
+            for riga in stato.splitlines():
+                testo = re.sub(r"^[│├└─\s]+", "", riga).strip()
+                if testo == "Sinks:":
+                    in_uscite = True
+                    continue
+                if in_uscite and testo.endswith(":"):
+                    break
+                if in_uscite:
+                    voce = re.match(r"^\*?\s*(\d+)\.?\s+(\S+)", testo)
+                    if voce and voce.group(2) == nome:
+                        ident = voce.group(1)
+                        break
+            if not ident:
+                raise RuntimeError(nome)
+            subprocess.run(
+                ["wpctl", "set-default", ident],
+                capture_output=True, timeout=3, check=True
+            )
+        except Exception as errore:
+            self.scrivi(_("cannot follow system audio output: %s") % errore, errore=True)
+            return
+        self.sincronizza_uscita_audio_sistema()
+        self.applica_tipo_uscita_audio(self.rileva_tipo_uscita_audio())
+
+    def scegli_uscita_audio(self):
+        """Finestra informativa delle uscite audio pubblicate dal sistema."""
+        voci = self.voci_uscita_audio()
         finestra = tk.Toplevel(self.root)
-        finestra.title(_("Audio output device"))
+        finestra.title(_("System audio outputs"))
         finestra.configure(bg=PANNELLO)
         finestra.transient(self.root)
         finestra.resizable(True, True)
         finestra.grab_set()
-
         tk.Label(
             finestra,
-            text=_("Choose the audio output device:"),
+            text=_("*  System default output") + "\n" + _("GNOME manages audio routing."),
             bg=PANNELLO,
             fg=TESTO,
+            justify="left",
             font=(CARATTERE, 10, STILE_CARATTERE)
         ).pack(anchor="w", padx=16, pady=(14, 8))
-
-        corpo = tk.Frame(finestra, bg=PANNELLO)
-        corpo.pack(fill="both", expand=True, padx=14, pady=4)
-
         lista = tk.Listbox(
-            corpo,
-            height=min(10, max(4, len(dispositivi))),
+            finestra,
+            height=min(10, max(2, len(voci))),
             width=58,
             bg=IN_ONDA,
             fg=TESTO,
-            selectbackground=ACCENTO,
-            selectforeground="#17121f",
             activestyle="none",
             relief="flat",
             highlightthickness=0,
             exportselection=False
         )
+        lista.pack(fill="both", expand=True, padx=14, pady=4)
 
-        barra = ttk.Scrollbar(
-            corpo,
-            orient="vertical",
-            command=lista.yview
-        )
-
-        lista.configure(yscrollcommand=barra.set)
-        lista.pack(side="left", fill="both", expand=True)
-        barra.pack(side="right", fill="y")
-
-        for _nome, descrizione in dispositivi:
-            lista.insert("end", descrizione)
-
-        corrente = str(self.cfg.get("audio_device", "auto"))
-
-        indice = next(
-            (
-                i for i, (nome, _desc) in enumerate(dispositivi)
-                if nome == corrente
-            ),
-            0
-        )
-
-        lista.selection_set(indice)
-        lista.activate(indice)
-        lista.see(indice)
-
-        def chiudi():
-            try:
-                finestra.grab_release()
+        def scelto(e):
+            i = lista.nearest(e.y)
+            bb = lista.bbox(i)
+            if bb and bb[1] <= e.y <= bb[1] + bb[3]:
                 finestra.destroy()
-            except Exception:
-                pass
-
-        def applica():
-            selezione = lista.curselection()
-
-            if not selezione:
-                return
-
-            nome = dispositivi[selezione[0]][0]
-
-            if not self.applica_uscita_audio(nome):
-                return
-
-            self.cfg["audio_device"] = nome
-            scrivi_config(self.cfg)
-
-            self.scrivi(
-                _("audio output: %s")
-                % dispositivi[selezione[0]][1]
-            )
-
-            chiudi()
-
-        tk.Label(
+                voci[i][1]()
+        lista.bind("<ButtonRelease-1>", scelto)
+        for testo, _azione in voci:
+            lista.insert("end", testo.strip())
+        for i, (testo, _azione) in enumerate(voci):
+            if testo.startswith("*  "):
+                lista.selection_set(i)
+                lista.activate(i)
+                lista.see(i)
+                break
+        tk.Button(
             finestra,
-            text=(
-                _("No audio devices were reported by mpv.")
-                if len(dispositivi) == 1 else ""
-            ),
-            bg=PANNELLO,
-            fg=GRIGIO,
-            font=(CARATTERE, 9, STILE_CARATTERE)
-        ).pack(anchor="w", padx=16, pady=(4, 0))
-
-        pulsanti = tk.Frame(finestra, bg=PANNELLO)
-        pulsanti.pack(fill="x", padx=14, pady=14)
-
-        tk.Button(
-            pulsanti,
-            text=_("Cancel"),
-            command=chiudi,
-            relief="flat",
-            bg=IN_ONDA,
-            fg=TESTO_ONDA,
-            padx=14,
-            pady=6
-        ).pack(side="right", padx=(6, 0))
-
-        tk.Button(
-            pulsanti,
-            text=_("Apply"),
-            command=applica,
+            text=_("Close"),
+            command=finestra.destroy,
             relief="flat",
             bg=ACCENTO,
             fg="#17121f",
             padx=16,
             pady=6
-        ).pack(side="right")
+        ).pack(anchor="e", padx=14, pady=14)
 
-        lista.bind(
-            "<Double-Button-1>",
-            lambda _e: applica()
-        )
+    def sincronizza_uscita_audio_sistema(self):
+        predefinito = self.nome_uscita_predefinita()
+        if not predefinito:
+            return
+        dispositivo = "pulse/" + predefinito
+        try:
+            attuale = str(self.mpv["audio-device"] or "")
+        except Exception:
+            attuale = ""
+        if attuale != dispositivo:
+            self.applica_uscita_audio(silenzioso=True)
 
-        finestra.protocol("WM_DELETE_WINDOW", chiudi)
-        finestra.update_idletasks()
+    def freccia_audio(self, su):
+        icona = "aperto_su" if su else "aperto"
+        if icona in self.icone:
+            self.b_audio_menu.icona = icona
+            self.vesti(self.b_audio_menu)
+        if self.barra_in_overlay():
+            self.disegna_ov()
 
-        x = self.root.winfo_rootx() + (
-            self.root.winfo_width() - finestra.winfo_width()
-        ) // 2
+    def chiudi_menu_uscita_audio(self):
+        self.freccia_audio(False)
+        self.chiudi_volume_tra_poco()
 
-        y = self.root.winfo_rooty() + (
-            self.root.winfo_height() - finestra.winfo_height()
-        ) // 2
-
-        finestra.geometry(
-            "+%d+%d" % (max(0, x), max(0, y))
+    def apri_menu_uscita_audio(self):
+        voci = self.voci_uscita_audio()
+        if self.barra_in_overlay():
+            if getattr(self, "ov_menu", None):
+                self.chiudi_menu_ov()
+            else:
+                self.freccia_audio(True)
+                self.ov_menu_bottone = self.b_audio_menu
+                self.ov_menu, self.ov_menu_sopra = voci, None
+                self.disegna_menu_ov()
+            return
+        if self.tendina.aperta() and self.tendina.chi is self.b_audio_menu:
+            self.tendina.chiudi()
+            return
+        self.freccia_audio(True)
+        b = self.b_audio_menu
+        self.tendina.apri(
+            b.winfo_rootx() + b.winfo_width(),
+            b.winfo_rooty() - 4,
+            voci,
+            sopra=True,
+            destra=True,
+            al_chiudere=self.chiudi_menu_uscita_audio,
+            chi=b
         )
 
     def applica_video(self):
