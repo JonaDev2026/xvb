@@ -1,6 +1,6 @@
 # Maintainer: Jonathan Sanfilippo
 pkgname=xvb
-pkgver=4.4.7
+pkgver=4.4.8
 pkgrel=1
 pkgdesc="Media player for videos, music, discs and IPTV"
 arch=('any')
@@ -23,7 +23,7 @@ optdepends=(
   'tkdnd: drag-and-drop support'
 )
 source=("${pkgname}-${pkgver}.tar.gz::https://github.com/JonaDev2026/xvb/archive/refs/tags/v${pkgver}.tar.gz")
-sha256sums=('172b0764469d391fcdded38dc7c9f6788bd0aada53f0c5163742b23853a7de79')
+sha256sums=('9cc4ed6e8687239b788bdeb5c04aa43d054bac274df1842c345bb073f6eb2bd8')
 
 build() {
   cd "${srcdir}/xvb-${pkgver}"
