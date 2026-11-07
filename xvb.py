@@ -357,7 +357,7 @@ def avvia_mpris(app):
     threading.Thread(target=GLib.MainLoop().run, daemon=True).start()
     return m
 
-VERSIONE = "4.4.7"
+VERSIONE = "4.4.8"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"
@@ -449,7 +449,7 @@ PANNELLO = "#1c1b22"
 BARRA = PANNELLO
 STATO = "#121217"
 TASTO = "#2c2c2c"
-SCELTO = "#0071e3"
+SCELTO = "#42414d"
 ZEBRA = "#2b2a33"
 TESTO = "#e0e0e0"
 GRIGIO = "#9e9e9e"
@@ -2896,6 +2896,16 @@ class Elenco(tk.Text):
         self.tag_configure("onda")
         self.tag_raise("onda")
         self.tag_raise("scelto")
+        self.tag_configure("sopra", background=SCELTO, foreground="#ffffff")
+        self.tag_raise("sopra")
+        self.sopra = None
+        self.ultimo = None
+        self._guardia_id = None
+        self.al_attivita = None
+        self.bind("<Motion>", lambda e: self.passa_y(e.y))
+        self.bind("<Leave>", self.esci_sopra)
+        self.colonna.bind("<Motion>", lambda e: self.passa_y(e.y))
+        self.colonna.bind("<Leave>", self.esci_sopra)
         self.bind("<Button-1>", self.clic)
         self.bind("<Button-4>", lambda e: self.yview_scroll(-3, "units"))
         self.bind("<Button-5>", lambda e: self.yview_scroll(3, "units"))
@@ -2933,6 +2943,7 @@ class Elenco(tk.Text):
         if set(iids) >= set(self.voci):
             tk.Text.delete(self, "1.0", "end")
             self.voci, self.dati, self.scelta, self.posto = [], {}, None, {}
+            self.sopra = None
             self.fisici.clear()
             self.ridisegna_colonna()
         else:
@@ -2968,6 +2979,8 @@ class Elenco(tk.Text):
         if self.scelta in self.dati:
             self.tag_remove("scelto", *self.spanne(self.scelta))
         self.scelta = iid if iid in self.dati else None
+        if self.scelta:
+            self.ultimo = self.scelta
         if self.scelta and vedi:
             self.tag_add("scelto", *self.spanne(self.scelta))
             self.tag_raise("scelto")
@@ -3090,7 +3103,8 @@ class Elenco(tk.Text):
                 self.tag_configure(tinta, foreground=colore, lmargin1=0, lmargin2=0)
             self.tag_lower(tinta, "zebra")
         zebra = ("zebra",)
-        extra = tuple(d["tags"]) + (("scelto",) if self.scelta == iid else ())
+        extra = (tuple(d["tags"]) + (("scelto",) if self.scelta == iid else ())
+                 + (("sopra",) if self.sopra == iid else ()))
 
 
         desc = ""
@@ -3127,6 +3141,8 @@ class Elenco(tk.Text):
         self.tag_add("stacco", "%d.0" % rs)
         if desc:
             self.fisici.add(iid)
+        if self.sopra == iid:
+            self.tag_add("sopra", *self.spanne_sopra(iid))
         for t in zebra + extra:
             self.tag_add(t, "%d.0" % r); self.tag_add(t, "%d.0" % (r + 1))
         d["img"] = True
@@ -3166,6 +3182,7 @@ class Elenco(tk.Text):
                      cursor="arrow", font=(CARATTERE, -SOTTO_PX), padx=6)
         e.image = None
         e.bind("<Button-1>", lambda ev, w=e: self.clic_y(w.winfo_y() + w.winfo_height() + 6))
+        e.bind("<Motion>", lambda ev, w=e: self.passa_y(w.winfo_y() + w.winfo_height() + 6))
         e.bind("<Double-Button-1>", lambda ev: self.doppio() if self.doppio else None)
         e.bind("<Button-4>", lambda ev: self.yview_scroll(-3, "units"))
         e.bind("<Button-5>", lambda ev: self.yview_scroll(3, "units"))
@@ -3272,7 +3289,8 @@ class Elenco(tk.Text):
                 if d1 or d2:
                     c.create_rectangle(0, d1[1] - 1 if d1 else 0, COLONNA,
                                        (d2[1] + d2[3] - 1) if d2 else self.winfo_height(),
-                                       fill=self.tag_cget("onda", "background") or ZEBRA, outline="")
+                                       fill=(self.tag_cget("sopra", "background") if iid == self.sopra
+                                             else self.tag_cget("onda", "background")) or ZEBRA, outline="")
             a, b = self.dlineinfo("%d.0" % r), self.dlineinfo("%d.0" % (r + 1))
             if a is None and b is None:
                 continue
@@ -3290,7 +3308,7 @@ class Elenco(tk.Text):
 
             nomi = self.tag_names("%d.0" % r)
             fondo = ZEBRA
-            if "scelto" in nomi:
+            if "scelto" in nomi or "sopra" in nomi:
                 fondo = self.tag_cget("scelto", "background") or ZEBRA
             elif "onda" in nomi:
                 fondo = self.tag_cget("onda", "background") or ZEBRA
@@ -3301,6 +3319,8 @@ class Elenco(tk.Text):
 
     def clic_y(self, y, attiva=False):
         """Clic singolo sulla colonna dei loghi."""
+        if self.al_attivita:
+            self.al_attivita()
         self.focus_set()
         try:
             r = int(self.index("@%d,%d" % (COLONNA + 5, y)).split(".")[0])
@@ -3316,6 +3336,8 @@ class Elenco(tk.Text):
         return "break"
 
     def clic(self, ev):
+        if self.al_attivita:
+            self.al_attivita()
         self.focus_set()
         try:
             r = int(self.index("@%d,%d" % (ev.x, ev.y)).split(".")[0])
@@ -3330,10 +3352,59 @@ class Elenco(tk.Text):
                 self.singolo()
         return "break"
 
+    def accendi_sopra(self, iid):
+        if iid == self.sopra:
+            return
+        if self.sopra in self.dati:
+            self.tag_remove("sopra", *self.spanne_sopra(self.sopra))
+        self.sopra = iid
+        if iid in self.dati:
+            self.tag_add("sopra", *self.spanne_sopra(iid))
+            self.tag_raise("sopra")
+            if self._guardia_id is None:
+                self._guardia_id = self.after(120, self._guardia)
+        self.ridisegna_colonna()
+
+    def _guardia(self):
+        # Finche' e' acceso, controlla dov'e' il puntatore: se e' uscito si spegne.
+        self._guardia_id = None
+        if self.sopra is None:
+            return
+        try:
+            x, y = self.winfo_pointerxy()
+            w = self.winfo_containing(x, y)
+        except (tk.TclError, KeyError):
+            w = None
+        if w is not None and (w is self or str(w).startswith(str(self) + ".")):
+            self._guardia_id = self.after(120, self._guardia)
+        else:
+            self.accendi_sopra(None)
+
+    def spanne_sopra(self, iid):
+        r = self.riga(iid)
+        return ("%d.0" % r, "%d.0" % (r + (3 if iid in self.fisici else 2)))
+
+    def passa_y(self, y):
+        try:
+            r = int(self.index("@%d,%d" % (COLONNA + 5, y)).split(".")[0])
+        except (tk.TclError, ValueError):
+            return
+        i = self._dove(r)[0]
+        self.accendi_sopra(self.voci[i] if 0 <= i < len(self.voci) else None)
+
+    def esci_sopra(self, e):
+        w = self.winfo_containing(e.x_root, e.y_root)
+        if w is not None and str(w).startswith(str(self)):
+            return
+        self.accendi_sopra(None)
+
     def sposta(self, dove):
+        if self.al_attivita:
+            self.al_attivita()
         if not self.voci:
             return "break"
-        i = self.voci.index(self.scelta) if self.scelta in self.dati else -1
+        base = self.scelta if self.scelta in self.dati else self.ultimo
+        i = self.voci.index(base) if base in self.dati else -1
         i = max(0, min(len(self.voci) - 1, i + dove))
         self.selection_set(self.voci[i], vedi=True)
         self.see(self.voci[i])
@@ -3999,6 +4070,14 @@ class TV(object):
         self.elenco.poster_di = self.poster_di
         self.elenco.desc_di = self.descrizione_di
         self.elenco.singolo = self.parti
+        self.elenco.al_attivita = self.attivita
+        self._ultima_att = time.monotonic()
+        self._t_inatt = None
+        self._att_onda = None
+        self._vista_onda = None
+        for _ev in ("<Motion>", "<ButtonPress>", "<ButtonRelease>", "<MouseWheel>",
+                    "<Button-4>", "<Button-5>", "<KeyPress>"):
+            self.root.bind_all(_ev, self.attivita, add="+")
         self.poster_tk, self.poster_pil = {}, {}
         self.elenco.tag_configure("onda", background=IN_ONDA,
                                   foreground=TESTO_ONDA)
@@ -4089,6 +4168,10 @@ class TV(object):
 
 
         self.el_liste.tag_configure("sotto", background=ZEBRA)
+        self.el_liste.tag_configure("sopra", background=SCELTO, foreground="#ffffff")
+        self._sopra_liste = None
+        self.el_liste.bind("<Motion>", self.passa_liste, add="+")
+        self.el_liste.bind("<Leave>", lambda e: self.spegni_liste(), add="+")
         self.el_liste.tag_configure("usata", background=IN_ONDA,
                                     foreground=TESTO_ONDA)
 
@@ -4621,6 +4704,41 @@ class TV(object):
                 vista = p
             p = self.el_liste.parent(p)
         self.el_liste.see(vista)
+
+    def spegni_liste(self):
+        v = self._sopra_liste
+        self._sopra_liste = None
+        if not v or not self.el_liste.exists(v[0]):
+            return
+        cur = tuple(self.el_liste.item(v[0], "tags") or ())
+        if "sopra" in cur:
+            resto = tuple(t for t in cur if t != "sopra")
+            self.el_liste.item(v[0], tags=resto or v[1])
+
+    def _guardia_liste(self):
+        self._gl_id = None
+        if not self._sopra_liste:
+            return
+        try:
+            x, y = self.root.winfo_pointerxy()
+            w = self.root.winfo_containing(x, y)
+        except (tk.TclError, KeyError):
+            w = None
+        if w is self.el_liste:
+            self._gl_id = self.root.after(120, self._guardia_liste)
+        else:
+            self.spegni_liste()
+
+    def passa_liste(self, e):
+        iid = self.el_liste.identify_row(e.y)
+        if self._sopra_liste and self._sopra_liste[0] == iid:
+            return
+        self.spegni_liste()
+        if iid and self.el_liste.exists(iid):
+            self._sopra_liste = (iid, tuple(self.el_liste.item(iid, "tags") or ()))
+            self.el_liste.item(iid, tags=("sopra",))
+            if getattr(self, "_gl_id", None) is None:
+                self._gl_id = self.root.after(120, self._guardia_liste)
 
     def tag_riga(self, iid, usata):
         """I tag di una riga della barra: "usata" se e' quella in uso, e
@@ -5223,6 +5341,7 @@ class TV(object):
             self.cfg["recenti"] = ([f] + [x for x in self.cfg.get("recenti", []) if x != f])[:12]
         self.file_in_onda = f
         self._lista_in_onda = None
+        self._vista_onda = self.vista_corrente()
         if os.path.isabs(f) and os.path.splitext(f)[1][1:].lower() in AUDIO:
             self.richiedi_foto_artisti(f)
         self.nome = self.nome_in_onda = nome or os.path.splitext(os.path.basename(f))[0]
@@ -7099,6 +7218,124 @@ class TV(object):
 
         self.apri(nome, url, ide)
 
+    def vista_corrente(self):
+        """Cosa mostra l'elenco di sinistra: registrazioni, file, oppure
+        una lista IPTV (con l'eventuale categoria M3U)."""
+        if self.reg_in_uso is not None:
+            return ("reg", self.reg_in_uso)
+        if self.media_in_uso is not None:
+            return ("media", self.media_in_uso)
+        cat = getattr(self, "_categoria_m3u_attiva", None)
+        return ("iptv", self.cfg.get("lista"), tuple(cat) if cat else None)
+
+    def attivita(self, e=None):
+        """Qualsiasi mouse, rotella o tasto: i 3 secondi ripartono."""
+        self._ultima_att = time.monotonic()
+        if self._att_onda is not None:
+            try:
+                self.root.after_cancel(self._att_onda)
+            except Exception:
+                pass
+            self._att_onda = None
+        if self._t_inatt is None:
+            self._t_inatt = self.root.after(3000, self._inattivo)
+
+    def _inattivo(self):
+        self._t_inatt = None
+        resto = 3.0 - (time.monotonic() - self._ultima_att)
+        if resto > 0.05:
+            self._t_inatt = self.root.after(int(resto * 1000) + 50, self._inattivo)
+            return
+        try:
+            self.controlla_in_onda()
+        except Exception:
+            logging.exception("ritorno al canale in onda")
+
+    def controlla_in_onda(self):
+        """Dopo 3 secondi senza muovere niente: a sinistra torna la vista
+        di quello che suona (lista, categoria, file...) e la sua scheda
+        va in cima."""
+        if (self.cerca.get() or not self.elenco.winfo_viewable()
+                or self.root.grab_current() is not None):
+            return
+        url = self.file_in_onda or self.cfg.get("canale")
+        if not url:
+            return
+        voluta = self._vista_onda or self.vista_corrente()
+        if self.vista_corrente() != voluta:
+            self.vai_alla_vista(voluta)
+        self._att_onda = self.root.after(
+            250, lambda: self._assesta_in_onda(url, voluta, 0, 0))
+
+    def vai_alla_vista(self, v):
+        if v[0] == "reg":
+            self.mostra_registrazioni(v[1])
+            return
+        if v[0] == "media":
+            self.mostra_media(v[1])
+            return
+        _t, lista, cat = v
+        if not lista or lista not in self.liste:
+            return
+        self._categoria_m3u_attiva = cat
+        if cat:
+            for _d, _iid in self.iid_di.items():
+                if self.el_liste.exists(_iid):
+                    self.tag_riga(_iid, False)
+            for _iid, (_d, _c) in self.iid_categoria_m3u.items():
+                if self.el_liste.exists(_iid):
+                    self.tag_riga(_iid, (_d, _c) == tuple(cat))
+        else:
+            for _iid in self.iid_categoria_m3u:
+                if self.el_liste.exists(_iid):
+                    self.tag_riga(_iid, False)
+            for _d, _iid in self.iid_di.items():
+                if self.el_liste.exists(_iid):
+                    self.tag_riga(_iid, _d == lista)
+        if (lista != self.cfg.get("lista") or self.reg_in_uso is not None
+                or self.media_in_uso is not None):
+            self.reg_in_uso = self.media_in_uso = None
+            self.carica(lista)
+        else:
+            self.filtra()
+
+    def _assesta_in_onda(self, url, voluta, tent, fermi):
+        """Finche' la vista non e' pronta (caricamenti in background) si
+        riprova ogni 250 ms, poi si controlla che la scheda resti in cima."""
+        self._att_onda = None
+        if tent > 80:
+            return
+        if self.vista_corrente() == voluta:
+            i = next((k for k, c in enumerate(self.visti) if c[1] == url), -1)
+            if i >= 0 and self.elenco.exists(str(i)):
+                if self.in_cima(str(i)):
+                    fermi += 1
+                    if fermi >= 3:
+                        return
+                else:
+                    fermi = 0
+        self._att_onda = self.root.after(
+            250, lambda: self._assesta_in_onda(url, voluta, tent + 1, fermi))
+
+    def in_cima(self, iid):
+        # Porta la scheda in cima; True se ci e' (o e' tra le ultime).
+        el = self.elenco
+        r = el.riga(iid)
+
+        def prima():
+            return int(el.index("@0,0").split(".")[0])
+
+        if prima() == r:
+            return True
+        try:
+            y = int(el.tk.call(el._w, "count", "-ypixels", "1.0", "%d.0" % r))
+            tot = int(el.tk.call(el._w, "count", "-ypixels", "1.0", "end"))
+            el.yview_moveto(y / float(max(tot, 1)))
+        except Exception:
+            tk.Text.yview(el, "%d.0" % r)
+        el.update_idletasks()
+        return prima() == r or el.yview()[1] >= 0.999
+
     def segna_in_onda(self, url):
         """La riga di quello che si sta guardando: fondo argento fisso
         (IN_RIPRODUZIONE), testo e pallino neri. Il colore del canale resta
@@ -7390,6 +7627,7 @@ class TV(object):
         self.et_formato.config(text="")
         self.nome_in_onda, self.ide_in_onda = nome, ide
         self._lista_in_onda = self.cfg.get("lista")
+        self._vista_onda = self.vista_corrente()
         self.attesa_da = time.time()
         self.colora_stato(self.colore_canale(nome, url))
         self.indice = next((k for k, c in enumerate(self.visti)
