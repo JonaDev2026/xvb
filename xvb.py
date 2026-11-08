@@ -357,7 +357,7 @@ def avvia_mpris(app):
     threading.Thread(target=GLib.MainLoop().run, daemon=True).start()
     return m
 
-VERSIONE = "4.4.8"
+VERSIONE = "4.4.9"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"
@@ -2233,9 +2233,7 @@ def varianti(url):
 
         risposta = urlopen(r, timeout=10)
         testo = risposta.read(262144).decode("utf-8", "ignore")
-        base_url = url
-        if "jmp2.uk" in url:
-            base_url = risposta.geturl()
+        base_url = risposta.geturl()
     except Exception:
         return []
     if not testo.lstrip().startswith("#EXTM3U") or "#EXT-X-STREAM-INF" not in testo:
