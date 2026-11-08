@@ -357,7 +357,7 @@ def avvia_mpris(app):
     threading.Thread(target=GLib.MainLoop().run, daemon=True).start()
     return m
 
-VERSIONE = "4.4.9"
+VERSIONE = "4.5.0"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"
@@ -4206,6 +4206,11 @@ class TV(object):
                     self.icona_errore = tk.PhotoImage(file=f_err)
             except Exception:
                 self.icona_errore = None
+        self.livello = tk.Canvas(self.riga_stato, width=26, height=14,
+                                 bg=STATO, highlightthickness=0, bd=0)
+        self.livello.pack(side="left", padx=(8, 0))
+        self.livello_barre = [0.0] * 5
+        self.root.after(1000, self.anima_livello)
         self.ic_categoria = tk.Label(self.riga_stato, text="", anchor="w",
                                      bg=STATO)
         self.ic_categoria.pack(side="left", padx=(8, 0), fill="y")
@@ -4229,6 +4234,33 @@ class TV(object):
 
         self.et_formato = tk.Label(self.riga_stato, text="", bg=STATO, fg=TESTO)
         self.et_formato.pack(side="left", fill="y")
+        self.et_inizio = tk.Label(self.riga_stato, text="", bg=STATO, fg=TESTO)
+        self.et_ora_seguente = tk.Label(self.riga_stato, text="", bg=STATO, fg=TESTO)
+        self.fr_cat = tk.Label(self.riga_stato, text="", bg=STATO)
+        self.ic_cat = tk.Label(self.riga_stato, text="", anchor="w", bg=STATO)
+        self.et_cat = tk.Label(self.riga_stato, text="", anchor="w",
+                               bg=STATO, fg=TESTO)
+        self.sep_eq = tk.Label(self.riga_stato, text="    ", bg=STATO, fg=TESTO)
+        self.ic_tipo = tk.Canvas(self.riga_stato, width=16, height=14,
+                                 bg=STATO, highlightthickness=0, bd=0)
+        for w in (self.et_formato, self.livello, self.sep_eq, self.ic_categoria,
+                  self.ic_tipo, self.et_categoria, self.stato, self.et_inizio,
+                  self.et_titolo, self.et_ora, self.et_seguente,
+                  self.et_ora_seguente, self.et_titolo_seguente):
+            w.pack_forget()
+        self.et_formato.pack(side="left", padx=(8, 0), fill="y")
+        self.livello.pack(side="left")
+        self.sep_eq.pack(side="left", fill="y")
+        self.ic_categoria.pack(side="left", padx=(0, 6))
+        self.et_categoria.pack(side="left", fill="y")
+        self.fr_cat.pack(side="left", padx=(2, 0))
+        self.ic_cat.pack(side="left", padx=(0, 6))
+        self.et_cat.pack(side="left", fill="y")
+        for w in (self.stato, self.et_inizio, self.et_titolo,
+                  self.et_ora, self.et_seguente, self.et_ora_seguente,
+                  self.et_titolo_seguente):
+            w.pack(side="left", fill="y")
+        self.root.after(1200, self.aggiorna_formato)
 
         self.et_recdot = tk.Label(self.riga_stato, bg=STATO, bd=0)
         self.et_rec = tk.Label(self.riga_stato, text="", bg=STATO, fg="#ff453a")
@@ -5350,7 +5382,7 @@ class TV(object):
         dvd = f.startswith("dvd://")
         est = "dvd" if dvd else "cd" if e_cd(f) else \
             os.path.splitext(urlparse(f).path if e_media_url(f) else f)[1][1:].lower()
-        self.et_formato.config(text=("  -  " + est) if est else "")
+        self.et_formato.config(text="")
 
         self.percorso_mpv = "dvd://" if dvd else "cdda://" if e_cd(f) else f
         self.varianti, self.quale = [], -1
@@ -7827,17 +7859,16 @@ class TV(object):
         mancanti = max(0, int((fine - time.time()) / 60))
 
         restano = {
-            "it": "mancano %d min",
-            "en": "%d min remaining",
-            "es": "quedan %d min",
-            "fr": "encore %d min",
-            "de": "noch %d Min.",
-            "pt": "faltam %d min",
-            "ru": "осталось %d мин.",
-        }.get(LINGUA, "%d min remaining") % mancanti
-        fascia = "%s/%s   %s" % (
-            time.strftime("%H:%M", time.localtime(inizio)),
-            time.strftime("%H:%M", time.localtime(fine)), restano)
+            "it": "tra %d min",
+            "en": "in %d min",
+            "es": "en %d min",
+            "fr": "dans %d min",
+            "de": "in %d Min.",
+            "pt": "em %d min",
+            "ru": "через %d мин.",
+        }.get(LINGUA, "in %d min") % mancanti
+        fascia = "%s\t%s" % (
+            time.strftime("%H:%M", time.localtime(inizio)), restano)
         return (self.nome_canale(), titolo or "?", fascia)
 
     def cambia(self, dove):
@@ -8016,7 +8047,7 @@ class TV(object):
         self.colore_barra = None
         self.linea.itemconfig(self.pieno_linea, fill="#ffffff")
         self.linea.coords(self.pieno_linea, 0, 0, 0, self.alta_linea)
-        for et in (self.et_titolo, self.et_orologio, self.et_formato):
+        for et in (self.et_titolo, self.et_orologio):
             et.config(fg=TESTO)
         self.icona_shuffle()
         self.icona_ripeti()
@@ -9897,6 +9928,77 @@ class TV(object):
         self.alza_volume(self.volume.get())
 
 
+    def icona_sorgente(self, nome):
+        """Le icone di sempre della sidebar (music, player)."""
+        for est in (".png", ".jpg", ".jpeg", ".gif"):
+            g = os.path.join(QUI, "icone", nome + est)
+            if os.path.isfile(g):
+                if g not in self.img_liste:
+                    im = carica_logo(g, PUNTO, PUNTO, RIDOTTE)
+                    if im is not None:
+                        self.img_liste[g] = im
+                return self.img_liste.get(g, "")
+        return ""
+
+    def aggiorna_formato(self):
+        """Il codec audio vero (AAC, MP3, FLAC...) in testa alla barra."""
+        t = ""
+        try:
+            n = self.mpv._get_property("audio-codec-name")
+            if n:
+                t = str(n).upper() + "    "
+        except Exception:
+            t = ""
+        if self.et_formato.cget("text") != t:
+            self.et_formato.config(text=t)
+        self.et_formato.config(fg="#ffffff")
+        self.root.after(1000, self.aggiorna_formato)
+
+    def disegna_tipo(self, tipo, col):
+        """Icona del tipo di contenuto: musica, video o tv (IPTV)."""
+        c = self.ic_tipo
+        c.delete("all")
+        if tipo == "musica":
+            c.create_oval(2, 8, 8, 13, fill=col, outline="")
+            c.create_rectangle(7, 1, 9, 10, fill=col, outline="")
+            c.create_polygon(9, 1, 14, 3, 14, 6, 9, 5, fill=col, outline="")
+        elif tipo == "video":
+            c.create_rectangle(1, 3, 10, 11, fill=col, outline="")
+            c.create_polygon(11, 7, 15, 3, 15, 11, fill=col, outline="")
+        elif tipo == "tv":
+            c.create_rectangle(1, 4, 15, 13, outline=col, width=2)
+            c.create_line(5, 1, 8, 4, fill=col, width=2)
+            c.create_line(11, 1, 8, 4, fill=col, width=2)
+
+    def anima_livello(self):
+        """Equalizzatore in barra di stato: cinque bande vere (basso ->
+        alto) misurate da astats nella catena af, etichetta lvl."""
+        liv = [0.0] * 5
+        try:
+            m = self.mpv
+            if not (m.pause or m.mute):
+                md = m._get_property("af-metadata/lvl") or {}
+                for k in range(5):
+                    p = max(float(md.get("lavfi.astats.%d.Peak_level"
+                                         % (2 * k + n), "-inf"))
+                            for n in (1, 2))
+                    if p > -45.0:
+                        liv[k] = min(1.0, (p + 45.0) / 45.0)
+        except Exception:
+            liv = [0.0] * 5
+        b = self.livello_barre
+        for k in range(5):
+            b[k] = max(liv[k], b[k] * 0.7)
+        c = self.livello
+        c.delete("all")
+        col = schiarisci(self.colore_barra) if self.colore_barra else ACCENTO
+        for i, x in enumerate(b):
+            for j in range(max(1, int(round(x * 5)))):
+                y = 14 - j * 3
+                c.create_rectangle(i * 5, y - 2, i * 5 + 4, y,
+                                   fill=col, outline="")
+        self.root.after(35, self.anima_livello)
+
     def applica_filtri_audio(self):
         """Applica normalizzazione ed equalizzatore a mpv."""
         try:
@@ -9928,10 +10030,14 @@ class TV(object):
 
             filtri.extend(equalizzatori)
 
-            if filtri:
-                self.mpv.af = "lavfi=[" + ",".join(filtri) + "]"
-            else:
-                self.mpv.af = ""
+            grafo = ",".join(["aformat=channel_layouts=stereo"] + filtri) + (
+                ",acrossover=split=150 600 2400 8000:order=4th"
+                "[b0][b1][b2][b3][b4];[b0][b1][b2][b3][b4]amerge=inputs=5,"
+                "astats=metadata=1:reset=1:measure_perchannel=Peak_level:"
+                "measure_overall=none,"
+                "pan=stereo|c0=c0+c2+c4+c6+c8|c1=c1+c3+c5+c7+c9")
+            self.mpv.af = "@lvl:lavfi=graph=%%%d%%%s" % (
+                len(grafo.encode()), grafo)
 
         except Exception:
             try:
@@ -10589,7 +10695,7 @@ class TV(object):
         self.et_titolo.config(fg=schiarisci(colore))
         self.et_canale.config(fg="#ffffff")
         self.et_orologio.config(fg=TESTO)
-        self.et_formato.config(fg=schiarisci(colore))
+        self.et_formato.config(fg="#ffffff")
         self.colore_barra = colore
         self.icona_shuffle()
         self.icona_ripeti()
@@ -12296,6 +12402,12 @@ class TV(object):
             self.et_ora.config(text="")
             self.et_seguente.config(text="")
             self.et_titolo_seguente.config(text="")
+            self.et_inizio.config(text="")
+            self.et_ora_seguente.config(text="")
+            self.fr_cat.config(image="")
+            self.ic_cat.config(image="")
+            self.et_cat.config(text="")
+            self.disegna_tipo("", TESTO)
         self.root.after(0, fai)
 
     def scrivi_riga(self):
@@ -12304,6 +12416,7 @@ class TV(object):
         nome, titolo, ora = self.riga_mostrata
 
         prossimo = ""
+        ora_seg = ""
         if self.epg and not self.file_in_onda:
             ide = self.ide_in_onda
             if not ide or ide not in self.epg:
@@ -12312,6 +12425,7 @@ class TV(object):
             for _inizio, _fine, _titolo in self.epg.get(ide or "", []):
                 if _inizio > adesso:
                     prossimo = _titolo or ""
+                    ora_seg = time.strftime("%H:%M", time.localtime(_inizio))
                     break
 
         etichetta_seguente = {
@@ -12319,6 +12433,34 @@ class TV(object):
             "fr": "À suivre : ", "de": "als Nächstes: ",
             "pt": "a seguir: ", "ru": "Далее: ",
         }.get(LINGUA, "Next: ")
+
+        nome_lista, img_lista = "", ""
+        if getattr(self, "fermato", None) is None and (
+                self.file_in_onda or self.nome_in_onda):
+            d_l = None
+            try:
+                if self.file_in_onda:
+                    v = getattr(self, "_vista_onda", None)
+                    iid_l = self.iid_media.get(v[1]) if v and v[0] == "media" else None
+                else:
+                    d_l = getattr(self, "_lista_in_onda", None)
+                    iid_l = self.iid_di.get(d_l) if d_l else None
+                if iid_l is not None and self.el_liste.exists(iid_l):
+                    nome_lista = (self.el_liste.item(iid_l, "text") or "").strip()
+                    img_lista = self.el_liste.item(iid_l, "image") or ""
+            except Exception:
+                pass
+            if self.file_in_onda:
+                f_ = self.file_in_onda
+                est_ = os.path.splitext(
+                    urlparse(f_).path if e_media_url(f_) else f_)[1][1:].lower()
+                img_lista = self.icona_sorgente(
+                    "music" if (est_ in AUDIO or e_cd(f_)) else "player") or img_lista
+            if not nome_lista:
+                if self.file_in_onda and os.path.isabs(self.file_in_onda):
+                    nome_lista = os.path.basename(os.path.dirname(self.file_in_onda))
+                elif d_l:
+                    nome_lista = nome_vista(d_l)
 
         categoria = ""
         colore_categoria = TESTO
@@ -12336,28 +12478,40 @@ class TV(object):
             if categoria:
                 colore_categoria = colori.get((lista_in_onda, categoria), TESTO)
 
+        inizio_txt, sep_t, resto = (ora or "").partition("\t")
+        if not sep_t:
+            inizio_txt, resto = "", (ora or "")
+        ora_fine = ("    " + resto) if sep_t else (("  " + resto) if resto else "")
+
         def fai():
-            icona_categoria = (
+            self.ic_categoria.config(image=img_lista)
+            icona_cat = (
                 (self.icona_segnalibro(colore_categoria)
                  if os.path.basename(os.path.dirname(lista_in_onda or "")) == PREFERITI
                  else self.icona_cartella(colore_categoria, False))
                 if categoria else "")
-            self.ic_categoria.config(image=icona_categoria)
+            self.fr_cat.config(
+                image=getattr(self, "frecce", {}).get("chiuso", "") if categoria else "")
+            self.ic_cat.config(image=icona_cat)
+            self.et_cat.config(
+                text=(categoria + "    ") if categoria else "", fg=TESTO)
             self.et_categoria.config(
-                text=(categoria + "") if categoria else "",
-                fg=TESTO)
+                text=(nome_lista + (" " if categoria else "    ")) if nome_lista else "", fg=TESTO)
             self.stato.config(text=nome, image="", compound="left", fg=TESTO)
+            self.et_inizio.config(
+                text=("  " + inizio_txt) if inizio_txt else "", fg=TESTO)
             self.et_titolo.config(
                 text=(" " + titolo) if titolo else "",
                 fg=schiarisci(self.colore_barra) if self.colore_barra else TESTO)
-            self.et_ora.config(
-                text=("  " + ora) if titolo and ora else ("  " + ora if ora else ""),
-                fg=TESTO)
+            self.et_ora.config(text=ora_fine, fg=TESTO)
             self.et_seguente.config(
-                text=("  " + etichetta_seguente) if prossimo else "",
+                text=("  " + etichetta_seguente.rstrip(": ")) if prossimo else "",
                 fg=TESTO)
+            self.et_ora_seguente.config(
+                text=(" " + ora_seg) if (prossimo and ora_seg) else "", fg=TESTO)
             self.et_titolo_seguente.config(
-                text=prossimo, fg=schiarisci(self.colore_barra) if self.colore_barra else TESTO)
+                text=(" " + prossimo) if prossimo else "",
+                fg=schiarisci(self.colore_barra) if self.colore_barra else TESTO)
         self.root.after(0, fai)
 
 
