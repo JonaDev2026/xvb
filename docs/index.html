@@ -1223,7 +1223,7 @@ html[lang="it"] [data-lang="it"] { display: revert; }
     .then(function(r){ if(!r.ok) throw Error(); return r.json(); })
     .then(function(d){
       var assets = d && d.assets ? d.assets : [];
-      var installer = assets.find(function(a){ return /^XVB-Setup.*\\.exe$/i.test(a.name); });
+      var installer = assets.find(function(a){ return /^XVB-Setup.*\.exe$/i.test(a.name); });
       if(installer) document.getElementById("windows-install-download").href = installer.browser_download_url;
     }).catch(function(){});
 
