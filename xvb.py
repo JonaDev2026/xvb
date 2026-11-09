@@ -357,7 +357,7 @@ def avvia_mpris(app):
     threading.Thread(target=GLib.MainLoop().run, daemon=True).start()
     return m
 
-VERSIONE = "4.5.1"
+VERSIONE = "4.5.2"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"
@@ -4206,10 +4206,10 @@ class TV(object):
                     self.icona_errore = tk.PhotoImage(file=f_err)
             except Exception:
                 self.icona_errore = None
-        self.livello = tk.Canvas(self.riga_stato, width=26, height=14,
+        self.livello = tk.Canvas(self.riga_stato, width=40, height=14,
                                  bg=STATO, highlightthickness=0, bd=0)
         self.livello.pack(side="left", padx=(8, 0))
-        self.livello_barre = [0.0] * 5
+        self.livello_barre = [0.0] * 10
         self.root.after(1000, self.anima_livello)
         self.ic_categoria = tk.Label(self.riga_stato, text="", anchor="w",
                                      bg=STATO)
@@ -4232,7 +4232,7 @@ class TV(object):
         self.et_titolo_seguente = tk.Label(self.riga_stato, text="", bg=STATO, fg=TESTO)
         self.et_titolo_seguente.pack(side="left", fill="y")
 
-        self.et_formato = tk.Label(self.riga_stato, text="", bg=STATO, fg=TESTO)
+        self.et_formato = tk.Label(self.riga_stato, text="", bg=STATO, fg=TESTO, width=4)
         self.et_formato.pack(side="left", fill="y")
         self.et_inizio = tk.Label(self.riga_stato, text="", bg=STATO, fg=TESTO)
         self.et_ora_seguente = tk.Label(self.riga_stato, text="", bg=STATO, fg=TESTO)
@@ -9732,7 +9732,7 @@ class TV(object):
         finestra.grab_set()
         tk.Label(
             finestra,
-            text=_("*  System default output") + "\n" + _("GNOME manages audio routing."),
+            text=_("*  System default output") + "\n" + _("manages audio routing."),
             bg=PANNELLO,
             fg=TESTO,
             justify="left",
@@ -9971,31 +9971,31 @@ class TV(object):
             c.create_line(11, 1, 8, 4, fill=col, width=2)
 
     def anima_livello(self):
-        """Equalizzatore in barra di stato: cinque bande vere (basso ->
-        alto) misurate da astats nella catena af, etichetta lvl."""
-        liv = [0.0] * 5
+        """Equalizzatore in barra di stato: dieci LED sui dieci canali."""
+        liv = [0.0] * 10
         try:
             m = self.mpv
             if not (m.pause or m.mute):
                 md = m._get_property("af-metadata/lvl") or {}
-                for k in range(5):
-                    p = max(float(md.get("lavfi.astats.%d.Peak_level"
-                                         % (2 * k + n), "-inf"))
-                            for n in (1, 2))
+                for k in range(10):
+                    p = float(md.get(
+                        "lavfi.astats.%d.Peak_level" % (k + 1), "-inf"))
                     if p > -45.0:
                         liv[k] = min(1.0, (p + 45.0) / 45.0)
         except Exception:
-            liv = [0.0] * 5
+            liv = [0.0] * 10
+
         b = self.livello_barre
-        for k in range(5):
+        for k in range(10):
             b[k] = max(liv[k], b[k] * 0.7)
+
         c = self.livello
         c.delete("all")
         col = schiarisci(self.colore_barra) if self.colore_barra else ACCENTO
         for i, x in enumerate(b):
             for j in range(max(1, int(round(x * 5)))):
                 y = 14 - j * 3
-                c.create_rectangle(i * 5, y - 2, i * 5 + 4, y,
+                c.create_rectangle(i * 4, y - 2, i * 4 + 3, y,
                                    fill=col, outline="")
         self.root.after(35, self.anima_livello)
 
