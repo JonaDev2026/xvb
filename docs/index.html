@@ -380,7 +380,7 @@ h2 { font-size: clamp(30px, 4vw, 40px); font-weight: 700; letter-spacing: -1px; 
 .detail h3 { font-size: 15px; font-weight: 600; margin-bottom: 6px; color: var(--text-main); }
 
 /* Installation */
-.installgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.installgrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; }
 .installbox { display: flex; flex-direction: column; justify-content: space-between; }
 .installbox h3 { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
 .installbox pre {
@@ -1018,6 +1018,28 @@ html[lang="it"] [data-lang="it"] { display: revert; }
         </div>
       </div>
 
+      <!-- Windows Installer -->
+      <div class="installbox" id="windows-install">
+        <div>
+          <span class="tag">Windows 10 / 11 · Testing</span>
+          <h3><span data-lang="en">Windows Installer</span><span data-lang="it">Installazione Windows</span><span data-lang="es">Instalador de Windows</span><span data-lang="fr">Installateur Windows</span><span data-lang="de">Windows-Installationsprogramm</span><span data-lang="pt">Instalador Windows</span><span data-lang="ru">Установщик Windows</span></h3>
+          <p data-lang="en">Download the latest Windows testing installer. Run XVB-Setup.exe to install the application.</p>
+          <p data-lang="it">Scarica l'ultimo programma di installazione Windows in testing. Avvia XVB-Setup.exe per installare l'applicazione.</p>
+          <p data-lang="es">Descarga el instalador de Windows en pruebas más reciente. Ejecuta XVB-Setup.exe para instalar la aplicación.</p>
+          <p data-lang="fr">Téléchargez le dernier installateur Windows en test. Lancez XVB-Setup.exe pour installer l’application.</p>
+          <p data-lang="de">Laden Sie das neueste Windows-Testinstallationsprogramm herunter. Starten Sie XVB-Setup.exe, um die Anwendung zu installieren.</p>
+          <p data-lang="pt">Descarregue o instalador Windows de teste mais recente. Execute XVB-Setup.exe para instalar a aplicação.</p>
+          <p data-lang="ru">Загрузите последнюю тестовую версию установщика Windows. Запустите XVB-Setup.exe для установки приложения.</p>
+        </div>
+        <div>
+          <a class="btn primary" id="windows-install-download" href="https://github.com/JonaDev2026/xvb_lab_win/releases/latest" style="width:100%">
+            <span data-lang="en">Download Windows Installer</span><span data-lang="it">Scarica Installer Windows</span><span data-lang="es">Descargar instalador Windows</span><span data-lang="fr">Télécharger l’installateur Windows</span><span data-lang="de">Windows-Installer herunterladen</span><span data-lang="pt">Descarregar instalador Windows</span><span data-lang="ru">Скачать установщик Windows</span> ↗
+          </a>
+          <p class="note" data-lang="en">Testing build · Latest installer from GitHub Releases.</p>
+          <p class="note" data-lang="it">Versione in testing · Ultimo installer disponibile su GitHub Releases.</p>
+        </div>
+      </div>
+
       <!-- Fedora Package -->
       <div class="installbox" id="fedora-install">
         <div>
@@ -1196,6 +1218,14 @@ html[lang="it"] [data-lang="it"] { display: revert; }
   var saved = null;
   try { saved = localStorage.getItem("xvb-lang"); } catch(e){}
   setLang(saved || "en");
+
+  fetch("https://api.github.com/repos/JonaDev2026/xvb_lab_win/releases/latest")
+    .then(function(r){ if(!r.ok) throw Error(); return r.json(); })
+    .then(function(d){
+      var assets = d && d.assets ? d.assets : [];
+      var installer = assets.find(function(a){ return /^XVB-Setup.*\\.exe$/i.test(a.name); });
+      if(installer) document.getElementById("windows-install-download").href = installer.browser_download_url;
+    }).catch(function(){});
 
   fetch("https://api.github.com/repos/JonaDev2026/xvb/releases/latest")
     .then(function(r){ if(!r.ok) throw Error(); return r.json(); })
