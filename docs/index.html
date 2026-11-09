@@ -11,6 +11,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:opsz,wght@6..144,400..700&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,400,0,0&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.3.1/css/brands.min.css">
 <style>
 :root {
   color-scheme: dark;
@@ -88,6 +89,9 @@ nav { display: flex; align-items: center; gap: 24px; font-size: 14px; font-weigh
 .navlink { color: var(--text-muted); transition: color 0.2s; }
 .navlink:hover { color: var(--text-main); }
 .navright { display: flex; align-items: center; gap: 16px; }
+.windows-nav { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border: 1px solid var(--surface-border); border-radius: var(--radius-sm); background: var(--surface); color: var(--text-main); font-size: 13px; font-weight: 600; white-space: nowrap; transition: all 0.2s; }
+.windows-nav:hover { border-color: var(--accent); background: var(--surface-hover); color: var(--accent-light); }
+.fa-brands { font-size: 1.15em; line-height: 1; vertical-align: -0.05em; }
 
 .lang {
   display: flex;
@@ -519,6 +523,7 @@ html[lang="it"] [data-lang="it"] { display: revert; }
       <a class="navlink" href="#install"><span data-lang="en">Installation</span><span data-lang="it">Installazione</span><span data-lang="es">Instalación</span><span data-lang="fr">Installation</span><span data-lang="de">Installation</span><span data-lang="pt">Instalação</span><span data-lang="ru">Установка</span></a>
       <a class="navlink" href="#documentation"><span data-lang="en">Technical Docs</span><span data-lang="it">Documentazione</span><span data-lang="es">Documentación</span><span data-lang="fr">Documentation</span><span data-lang="de">Dokumentation</span><span data-lang="pt">Documentação</span><span data-lang="ru">Документация</span></a>
     </nav>
+    <a class="windows-nav" href="#windows-install"><i class="fa-brands fa-windows" aria-hidden="true"></i><span data-lang="en">Windows</span><span data-lang="it">Windows</span><span data-lang="es">Windows</span><span data-lang="fr">Windows</span><span data-lang="de">Windows</span><span data-lang="pt">Windows</span><span data-lang="ru">Windows</span></a>
     <div class="lang" aria-label="Language">
       <span class="lang-icon" aria-hidden="true">◎</span>
       <select id="language" aria-label="Select language">
@@ -561,7 +566,7 @@ html[lang="it"] [data-lang="it"] { display: revert; }
       <a class="primary-link" href="#debian-install">Debian <span class="material-symbol" aria-hidden="true">arrow_downward</span></a>
       <a class="primary-link" href="#arch-install">Arch <span class="material-symbol" aria-hidden="true">arrow_downward</span></a>
       <a class="primary-link" href="#fedora-install">Fedora <span class="material-symbol" aria-hidden="true">arrow_downward</span></a>
-      <a href="https://github.com/JonaDev2026/xvb" target="_blank" rel="noopener">GitHub Repository <span class="material-symbol" aria-hidden="true">open_in_new</span></a>
+      <a href="https://github.com/JonaDev2026/xvb" target="_blank" rel="noopener"><i class="fa-brands fa-github" aria-hidden="true"></i> GitHub Repository <span class="material-symbol" aria-hidden="true">open_in_new</span></a>
     </div>
     <div class="version" id="ver" aria-live="polite"></div>
 
@@ -975,7 +980,7 @@ html[lang="it"] [data-lang="it"] { display: revert; }
       <!-- Debian Package -->
       <div class="installbox" id="debian-install">
         <div>
-          <span class="tag">Debian / Ubuntu / Mint</span>
+          <span class="tag"><i class="fa-brands fa-debian" aria-hidden="true"></i> Debian / Ubuntu / Mint</span>
           <h3><span data-lang="en">Install .deb package</span><span data-lang="it">Installa pacchetto .deb</span><span data-lang="es">Instalar paquete .deb</span><span data-lang="fr">Installer paquet .deb</span><span data-lang="de">.deb-Paket installieren</span><span data-lang="pt">Instalar pacote .deb</span><span data-lang="ru">Установка пакета .deb</span></h3>
           <p data-lang="en">Download the latest release and run the following command in your terminal:</p>
           <p data-lang="it">Scarica l'ultima release ed esegui questo comando nel terminale:</p>
@@ -998,7 +1003,7 @@ html[lang="it"] [data-lang="it"] { display: revert; }
       <!-- Arch Package -->
       <div class="installbox" id="arch-install">
         <div>
-          <span class="tag">Arch Linux / Manjaro</span>
+          <span class="tag"><i class="fa-brands fa-linux" aria-hidden="true"></i> Arch Linux / Manjaro</span>
           <h3><span data-lang="en">Install Arch package</span><span data-lang="it">Installa pacchetto Arch</span><span data-lang="es">Instalar paquete Arch</span><span data-lang="fr">Installer paquet Arch</span><span data-lang="de">Arch-Paket installieren</span><span data-lang="pt">Instalar pacote Arch</span><span data-lang="ru">Установка пакета Arch</span></h3>
           <p data-lang="en">Download the prebuilt Arch package (.pkg.tar.zst) and install it via pacman:</p>
           <p data-lang="it">Scarica il pacchetto Arch precompilato (.pkg.tar.zst) ed installalo con pacman:</p>
@@ -1021,7 +1026,7 @@ html[lang="it"] [data-lang="it"] { display: revert; }
       <!-- Windows Installer -->
       <div class="installbox" id="windows-install">
         <div>
-          <span class="tag">Windows 10 / 11 · Testing</span>
+          <span class="tag"><i class="fa-brands fa-windows" aria-hidden="true"></i> Windows 10 / 11 · Testing</span>
           <h3><span data-lang="en">Windows Installer</span><span data-lang="it">Installazione Windows</span><span data-lang="es">Instalador de Windows</span><span data-lang="fr">Installateur Windows</span><span data-lang="de">Windows-Installationsprogramm</span><span data-lang="pt">Instalador Windows</span><span data-lang="ru">Установщик Windows</span></h3>
           <p data-lang="en">Download the latest Windows testing installer. Run XVB-Setup.exe to install the application.</p>
           <p data-lang="it">Scarica l'ultimo programma di installazione Windows in testing. Avvia XVB-Setup.exe per installare l'applicazione.</p>
@@ -1043,7 +1048,7 @@ html[lang="it"] [data-lang="it"] { display: revert; }
       <!-- Fedora Package -->
       <div class="installbox" id="fedora-install">
         <div>
-          <span class="tag">Fedora / RHEL</span>
+          <span class="tag"><i class="fa-brands fa-fedora" aria-hidden="true"></i> Fedora / RHEL</span>
           <h3><span data-lang="en">Install Fedora RPM</span><span data-lang="it">Installa RPM Fedora</span><span data-lang="es">Instalar RPM Fedora</span><span data-lang="fr">Installer RPM Fedora</span><span data-lang="de">Fedora-RPM installieren</span><span data-lang="pt">Instalar RPM Fedora</span><span data-lang="ru">Установка RPM Fedora</span></h3>
           <p data-lang="en">Download the official RPM package and install it using dnf package manager:</p>
           <p data-lang="it">Scarica il pacchetto RPM ufficiale ed installalo utilizzando dnf:</p>
@@ -1185,7 +1190,7 @@ html[lang="it"] [data-lang="it"] { display: revert; }
     <span data-lang="it">Realizzato per gli utenti desktop Linux.</span>
   </div>
   <div class="links">
-    <a href="https://github.com/JonaDev2026/xvb" target="_blank" rel="noopener"><span data-lang="en">Source Code</span><span data-lang="it">Codice Sorgente</span></a>
+    <a href="https://github.com/JonaDev2026/xvb" target="_blank" rel="noopener"><i class="fa-brands fa-github" aria-hidden="true"></i> <span data-lang="en">Source Code</span><span data-lang="it">Codice Sorgente</span></a>
     <a href="https://github.com/JonaDev2026/xvb/issues" target="_blank" rel="noopener"><span data-lang="en">Report Issue</span><span data-lang="it">Segnala Problema</span></a>
     <a href="https://github.com/JonaDev2026/xvb/releases" target="_blank" rel="noopener"><span data-lang="en">Releases</span><span data-lang="it">Tutte le Release</span></a>
   </div>
