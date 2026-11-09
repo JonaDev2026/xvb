@@ -357,7 +357,7 @@ def avvia_mpris(app):
     threading.Thread(target=GLib.MainLoop().run, daemon=True).start()
     return m
 
-VERSIONE = "4.5.0"
+VERSIONE = "4.5.1"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"
@@ -10070,6 +10070,58 @@ class TV(object):
             font=(CARATTERE, 10, STILE_CARATTERE)
         ).pack(padx=16, pady=(14, 8))
 
+        preset = (
+            ("Flat", (0, 0, 0, 0, 0, 0, 0, 0, 0, 0)),
+            ("Rock", (5, 4, 3, 1, -1, -1, 1, 3, 4, 5)),
+            ("Pop", (-1, 2, 4, 5, 3, 0, -1, -1, -1, -1)),
+            ("Jazz", (3, 2, 1, 2, -2, -2, 0, 1, 2, 3)),
+            ("Classical", (0, 0, 0, 0, 0, 0, -4, -4, -4, -6)),
+            ("Dance", (6, 5, 3, 0, 0, -3, -4, -4, 0, 0)),
+            ("Club", (0, 0, 4, 3, 3, 3, 2, 0, 0, 0)),
+            ("Party", (6, 6, 0, 0, 0, 0, 0, 0, 6, 6)),
+            ("Live", (-3, 0, 3, 4, 4, 4, 3, 2, 2, 2)),
+            ("Reggae", (0, 0, -1, -4, 0, 4, 4, 0, 0, 0)),
+            ("Techno", (6, 5, 0, -4, -4, 0, 6, 8, 8, 7)),
+            ("Soft", (4, 2, 0, -2, 0, 3, 6, 7, 8, 9)),
+            ("Vocal", (-3, -3, -1, 2, 4, 4, 3, 1, 0, -1)),
+            ("Full Bass", (10, 8, 6, 3, 1, 0, 0, 0, 0, 0)),
+            ("Full Treble", (0, 0, 0, 0, 0, 2, 5, 8, 10, 11)),
+            ("Full Bass & Treble", (7, 5, 0, -4, -3, 1, 4, 7, 9, 10)),
+            ("Laptop Speakers", (5, 10, 5, -2, -2, 1, 3, 6, 8, 9)),
+        )
+
+        def nome_per(valori):
+            valori = tuple(int(x) for x in valori)
+            for n, v in preset:
+                if v == valori:
+                    return n
+            return _("Custom")
+
+        scelto = tk.StringVar(value=nome_per(originali))
+        bloccato = [False]
+
+        riga_preset = tk.Frame(finestra, bg=PANNELLO)
+        riga_preset.pack(padx=16, pady=(0, 8))
+        tk.Label(
+            riga_preset,
+            text=_("Preset"),
+            bg=PANNELLO,
+            fg=GRIGIO,
+            font=(CARATTERE, 9, STILE_CARATTERE)
+        ).pack(side="left", padx=(0, 8))
+        menu_preset = tk.OptionMenu(
+            riga_preset, scelto, *[n for n, _v in preset],
+            command=lambda n: applica_preset(n))
+        menu_preset.config(
+            bg=IN_ONDA, fg=TESTO, activebackground=ACCENTO,
+            activeforeground=TESTO, relief="flat", highlightthickness=0,
+            bd=0, width=18, font=(CARATTERE, 9, STILE_CARATTERE))
+        menu_preset["menu"].config(
+            bg=PANNELLO, fg=TESTO, activebackground=ACCENTO,
+            activeforeground=TESTO, bd=0,
+            font=(CARATTERE, 9, STILE_CARATTERE))
+        menu_preset.pack(side="left")
+
         frequenze = (
             "31", "62", "125", "250", "500",
             "1k", "2k", "4k", "8k", "16k"
@@ -10085,6 +10137,21 @@ class TV(object):
                 int(round(v.get())) for v in variabili
             ]
             self.applica_filtri_audio()
+            if not bloccato[0]:
+                scelto.set(nome_per(self.cfg["eq_bande"]))
+
+        def applica_preset(nome):
+            for n, valori in preset:
+                if n == nome:
+                    bloccato[0] = True
+                    try:
+                        for v, g in zip(variabili, valori):
+                            v.set(g)
+                        aggiorna()
+                    finally:
+                        bloccato[0] = False
+                    scelto.set(nome)
+                    break
 
         for i, frequenza in enumerate(frequenze):
             colonna = tk.Frame(contenitore, bg=PANNELLO)
