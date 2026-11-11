@@ -357,7 +357,7 @@ def avvia_mpris(app):
     threading.Thread(target=GLib.MainLoop().run, daemon=True).start()
     return m
 
-VERSIONE = "4.5.2"
+VERSIONE = "4.5.3"
 AUTORE = "Jonathan Sanfilippo"
 ANNO = "2026"
 REPO = "JonaDev2026/xvb"
@@ -413,9 +413,9 @@ VELOCITA = (1, 1.25, 1.5, 2, 0.5, 0.75)
 PROPORZIONI = (("Auto", "-1"), ("16:9", "16:9"), ("4:3", "4:3"), ("21:9", "21:9"))
 
 
-LARGA_BARRA = 220
+LARGA_BARRA = 250
 RIDOTTE = 18
-IN_RIPRODUZIONE = "#42414d"
+
 PREFERITI = "favorite"
 
 
@@ -443,7 +443,7 @@ SCALA_FILE = ("#ff5257", "#30d158", "#ff7f11", "#42a0ff",
               "#c19272", "#66e3b0", "#d4af37", "#9190f9",
               "#e23179", "#b4e04a", "#ff9670", "#c0c7d0")
 
-
+IN_RIPRODUZIONE = "#42414d"
 FONDO = "#1c1b22"
 PANNELLO = "#1c1b22"
 BARRA = PANNELLO
@@ -452,7 +452,7 @@ TASTO = "#2c2c2c"
 SCELTO = "#42414d"
 ZEBRA = "#2b2a33"
 TESTO = "#e0e0e0"
-GRIGIO = "#9e9e9e"
+GRIGIO = "#FFD4A8"
 ACCENTO = "#bb86fc"
 IN_ONDA = "#42414d"
 IN_ONDA2 = "#2b2338" #colore bg della notifica nuova versione
@@ -821,6 +821,7 @@ FILE_TAG = os.path.join(CASA, ".cache", "xvb", "tag.json")
 RIGA_ELENCO = 64
 LOGO_L, LOGO_A = 72, 56
 COLONNA = LOGO_L
+RAGGIO = 10  # raggio degli angoli delle card nell'elenco
 CACHE_ANTEPRIME = os.path.join(CASA, ".cache", "xvb", "anteprime")
 CACHE_VINILI = os.path.join(CASA, ".cache", "xvb", "vinili")
 CACHE_ARTISTI = os.path.join(CASA, ".cache", "xvb", "artisti")
@@ -3212,12 +3213,16 @@ class Elenco(tk.Text):
                     self.poster_lbl.append(self._nuovo_poster())
                 e = self.poster_lbl[usati]
                 usati += 1
+                _n = self.tag_names("%d.0" % self.riga(self.voci[i]))
+                e.config(bg=(self.tag_cget("scelto", "background") if ("scelto" in _n or "sopra" in _n)
+                             else self.tag_cget("onda", "background") if "onda" in _n else ZEBRA) or ZEBRA)
                 if img is not None:
                     e.config(image=img, text="")
                 else:
                     e.config(image="", text=titolo)
                 e.image = img
                 e.place(x=4, y=riga[1] + 3, width=larg - 8, height=hh)
+                tk.Misc.lift(e)
         for e in self.poster_lbl[usati:]:
             e.place_forget()
 
@@ -3266,11 +3271,24 @@ class Elenco(tk.Text):
         della sua voce (nome + sottotitolo); dove non c'e' logo, il pallino."""
         self.colonna_dopo = None
         c = self.colonna
+        dx = getattr(self, "colonna_dx", None)
+        if dx is None:
+            dx = self.colonna_dx = tk.Canvas(self, bg=PANNELLO, highlightthickness=0, bd=0,
+                                             width=RAGGIO, cursor="arrow")
+            dx.bind("<Button-1>", lambda e: self.clic_y(e.y, attiva=True))
+            dx.bind("<Motion>", lambda e: self.passa_y(e.y))
+            dx.bind("<Leave>", self.esci_sopra)
+            dx.bind("<Button-4>", lambda e: self.yview_scroll(-3, "units"))
+            dx.bind("<Button-5>", lambda e: self.yview_scroll(3, "units"))
+            dx.bind("<MouseWheel>", lambda e: self.yview_scroll(-3 if e.delta > 0 else 3, "units"))
         if self.segno != "logo":
             c.place_forget()
+            dx.place_forget()
             return
         c.place(x=0, y=0, width=COLONNA, relheight=1)
         c.delete("all")
+        dx.delete("all")
+        dx.place(relx=1.0, x=0, y=0, anchor="ne", width=RAGGIO, relheight=1)
         if not self.voci:
             return
         try:
@@ -3311,6 +3329,23 @@ class Elenco(tk.Text):
             elif "onda" in nomi:
                 fondo = self.tag_cget("onda", "background") or ZEBRA
             c.create_rectangle(0, y0, COLONNA, y1, fill=fondo, outline="")
+            if iid in self.fisici:
+                _d1 = self.dlineinfo("%d.0 lineend" % (r + 2))
+                if _d1:
+                    y1 = _d1[1] + _d1[3] - 1
+            dx.create_rectangle(0, y0, RAGGIO, y1, fill=fondo, outline="")
+            for _cv, _sx in ((c, True), (dx, False)):
+                for _yy, _su in ((y0, True), (y1, False)):
+                    _px, _cx = (0, RAGGIO) if _sx else (RAGGIO, 0)
+                    _cy = _yy + RAGGIO if _su else _yy - RAGGIO
+                    _hx = -1 if _sx else 1
+                    _hy = -1 if _su else 1
+                    _pt = [(_px, _yy)]
+                    for _k in range(9):
+                        _t = 1.5707963 * _k / 8
+                        _pt.append((_cx + RAGGIO * math.sin(_t) * _hx,
+                                    _cy + RAGGIO * math.cos(_t) * _hy))
+                    _cv.create_polygon(_pt, fill=PANNELLO, outline="")
             if img is not None:
                 c.create_image(COLONNA // 2, (y_logo + y1) // 2, image=img,
                                tags=("lg_" + iid,))
@@ -6868,7 +6903,12 @@ class TV(object):
         x0, y0 = (im.width - w) // 2, int((im.height - h) * 0.3)
         if len(self.poster_tk) > 300:
             self.poster_tk.clear()
-        img = ImageTk.PhotoImage(im.crop((x0, y0, x0 + w, y0 + h)))
+        from PIL import ImageDraw
+        im = im.crop((x0, y0, x0 + w, y0 + h)).convert("RGBA")
+        _m = Image.new("L", (w * 3, h * 3), 0)
+        ImageDraw.Draw(_m).rounded_rectangle([0, 0, w * 3 - 1, h * 3 - 1], radius=RAGGIO * 3 - 6, fill=255)
+        im.putalpha(_m.resize((w, h), Image.LANCZOS))
+        img = ImageTk.PhotoImage(im)
         self.poster_tk[chiave] = img
         return img
 
