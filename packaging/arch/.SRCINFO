@@ -1,6 +1,6 @@
 pkgbase = xvb
 	pkgdesc = Media player for videos, music, discs and IPTV
-	pkgver = 4.5.2
+	pkgver = 4.5.4
 	pkgrel = 1
 	url = https://github.com/JonaDev2026/xvb
 	arch = any
@@ -17,7 +17,7 @@ pkgbase = xvb
 	optdepends = python-dbus: MPRIS desktop media-player integration
 	optdepends = python-gobject: MPRIS desktop media-player integration
 	optdepends = tkdnd: drag-and-drop support
-	source = xvb-4.5.2.tar.gz::https://github.com/JonaDev2026/xvb/archive/refs/tags/v4.5.2.tar.gz
-	sha256sums = ec2ff4d06e082a429426c1a2a7d28cccb8d87f05d4bca9f64ead28c7a4377def
+	source = xvb-4.5.4.tar.gz::https://github.com/JonaDev2026/xvb/archive/refs/tags/v4.5.4.tar.gz
+	sha256sums = a1c249eff180a7000e687c936a278338dc502e46ae317189e7790042cc128ac4
 
 pkgname = xvb
